@@ -329,7 +329,22 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
             if (Array.isArray(inputRoutines) && cycle.routines.length !== inputRoutines.length) {
                 throw new Error('Routine ciclo: impossibile conservare tutte le routine');
             }
+            const current = data.trainingCycles ?? [];
+            if (operation.expected !== undefined) {
+                if (operation.expected === null) {
+                    if (current.some(item => item.id === cycle.id)) throw new Error('Ciclo già esistente');
+                } else {
+                    if (operation.expected.id !== cycle.id) throw new Error('Identità del ciclo cambiata');
+                    requireObservedCycle(data, operation.expected);
+                }
+                for (const item of cycle.routines) findRoutine(data, item.routineId);
+            }
             data.trainingCycles = upsertById(data.trainingCycles, cycle, item => requireId(item.id, 'Ciclo'), 'Cicli');
+            // Activate the first cycle only when creating from an explicitly
+            // empty target and the archive still has no active cycle.
+            if (operation.expected === null && current.length === 0 && (data.activeCycleId ?? null) === null) {
+                data.activeCycleId = cycle.id;
+            }
             break;
         }
         case 'training-cycle.delete':

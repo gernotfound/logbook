@@ -1,13 +1,13 @@
 import { addDays, differenceInCalendarDays, parseISO, format, isValid, startOfDay } from 'date-fns';
-import { MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from '../../../lib/calc/cycleLimits';
-import { parseDateInput } from '../../../lib/utils/date';
+import { MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from './calc/cycleLimits';
+import { formatItalianDate, getLocalDateString, parseDateInput } from './utils/date';
 import type {
     TrainingCycle,
     TrainingCycleIntent,
     TrainingCycleProgressionFocus,
     TrainingCycleRoutineItem,
     TrainingCycleStrategy,
-} from '../../../types';
+} from '../types';
 
 export function computeEndDate(startIso: string, weeks: number): string {
     try {
@@ -46,6 +46,28 @@ export interface CycleFormSubmissionInput {
     notes: string;
     primaryMuscles: string[];
     secondaryMuscles: string[];
+}
+
+export type CycleEditorDraft = CycleFormSubmissionInput & { startDate: string; endDate: string };
+
+export function initialCycleForm(cycle?: TrainingCycle | null): CycleEditorDraft {
+    const startDate = cycle?.startDate || getLocalDateString();
+    const durationWeeks = cycle?.durationWeeks ?? 6;
+    const endDate = cycle?.endDate || computeEndDate(startDate, durationWeeks);
+    return {
+        name: cycle?.name ?? '',
+        cycleRoutines: structuredClone(cycle?.routines ?? []),
+        strategyIntent: cycle?.strategy?.intent ?? '',
+        progressionFocus: cycle?.strategy?.progressionFocus ?? '',
+        durationWeeks: String(durationWeeks),
+        sessionsPerWeek: String(cycle?.sessionsPerWeek ?? (cycle?.routines?.length || 4)),
+        startDate, endDate,
+        dateTextInput: formatItalianDate(startDate),
+        endDateTextInput: formatItalianDate(endDate),
+        notes: cycle?.notes ?? '',
+        primaryMuscles: [...(cycle?.strategy?.primaryMuscles ?? [])],
+        secondaryMuscles: [...(cycle?.strategy?.secondaryMuscles ?? [])],
+    };
 }
 
 type EditableCycleFields = Pick<

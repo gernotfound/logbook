@@ -5,16 +5,14 @@
 import { useState, useRef, useMemo } from 'react';
 import { Logic } from '../../../lib/logic';
 import { MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK, previewCycleCount } from '../../../lib/calc/cycleLimits';
-import { computeEndDate, computeWeeksFromDates, prepareCycleSubmission } from './cycleFormModel';
+import { computeEndDate, computeWeeksFromDates, initialCycleForm, prepareCycleSubmission } from '../../../lib/trainingCycleForm';
 import type {
     TrainingCycle,
     TrainingCycleIntent,
-    TrainingCycleProgressionFocus,
-    TrainingCycleRoutineItem,
     WorkoutRoutine,
 } from '../../../types';
 
-export { computeEndDate, computeWeeksFromDates } from './cycleFormModel';
+export { computeEndDate, computeWeeksFromDates } from '../../../lib/trainingCycleForm';
 
 export interface UseCycleFormProps {
     initialCycle?: TrainingCycle | null;
@@ -29,31 +27,20 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
     const [isSaving, setIsSaving] = useState(false);
     const endDatePickerRef = useRef<HTMLInputElement>(null);
 
-    const initialIso = initialCycle?.startDate || Logic.getLocalDateString();
-    const initialWeeksNum = initialCycle?.durationWeeks !== undefined ? initialCycle.durationWeeks : 6;
-    const initialEndIso = initialCycle?.endDate || computeEndDate(initialIso, initialWeeksNum);
-
-    const [name, setName] = useState(initialCycle?.name || '');
-    const [startDate, setStartDate] = useState(initialIso);
-    const [dateTextInput, setDateTextInput] = useState(Logic.formatItalianDate(initialIso));
-    const [endDate, setEndDate] = useState(initialEndIso);
-    const [endDateTextInput, setEndDateTextInput] = useState(Logic.formatItalianDate(initialEndIso));
-    const [durationWeeks, setDurationWeeks] = useState(String(initialWeeksNum));
-    const [sessionsPerWeek, setSessionsPerWeek] = useState(
-        initialCycle?.sessionsPerWeek !== undefined
-            ? String(initialCycle.sessionsPerWeek)
-            : String(initialCycle?.routines?.length || 4)
-    );
-    const [notes, setNotes] = useState(initialCycle?.notes || '');
-    const [strategyIntent, setStrategyIntent] = useState<TrainingCycleIntent | ''>(
-        initialCycle?.strategy?.intent ?? ''
-    );
-    const [progressionFocus, setProgressionFocus] = useState<TrainingCycleProgressionFocus | ''>(initialCycle?.strategy?.progressionFocus ?? '');
-    const [primaryMuscles, setPrimaryMuscles] = useState<string[]>([...(initialCycle?.strategy?.primaryMuscles ?? [])]);
-    const [secondaryMuscles, setSecondaryMuscles] = useState<string[]>([...(initialCycle?.strategy?.secondaryMuscles ?? [])]);
-    const [cycleRoutines, setCycleRoutines] = useState<TrainingCycleRoutineItem[]>(
-        initialCycle?.routines ? structuredClone(initialCycle.routines) : []
-    );
+    const [initial] = useState(() => initialCycleForm(initialCycle));
+    const [name, setName] = useState(initial.name);
+    const [startDate, setStartDate] = useState(initial.startDate);
+    const [dateTextInput, setDateTextInput] = useState(initial.dateTextInput);
+    const [endDate, setEndDate] = useState(initial.endDate);
+    const [endDateTextInput, setEndDateTextInput] = useState(initial.endDateTextInput);
+    const [durationWeeks, setDurationWeeks] = useState(initial.durationWeeks);
+    const [sessionsPerWeek, setSessionsPerWeek] = useState(initial.sessionsPerWeek);
+    const [notes, setNotes] = useState(initial.notes);
+    const [strategyIntent, setStrategyIntent] = useState(initial.strategyIntent);
+    const [progressionFocus, setProgressionFocus] = useState(initial.progressionFocus);
+    const [primaryMuscles, setPrimaryMuscles] = useState(initial.primaryMuscles);
+    const [secondaryMuscles, setSecondaryMuscles] = useState(initial.secondaryMuscles);
+    const [cycleRoutines, setCycleRoutines] = useState(initial.cycleRoutines);
     const [showSchedulePreview, setShowSchedulePreview] = useState(false);
 
     const handleDurationWeeksChange = (val: string) => {

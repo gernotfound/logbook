@@ -18,7 +18,7 @@ export async function openKindeCatalogDraft<T extends { submitted: boolean }>({
     owner, key, revision, permitted, parse, initialize,
 }: {
     owner: string;
-    key: 'draft_routine' | 'draft_exercise' | 'draft_measurement' | 'draft_sleep';
+    key: 'draft_routine' | 'draft_exercise' | 'draft_measurement' | 'draft_sleep' | 'draft_training_cycle';
     revision: number;
     permitted: () => boolean;
     parse: (value: unknown) => T;
@@ -59,11 +59,11 @@ export async function openKindeCatalogDraft<T extends { submitted: boolean }>({
                 return value;
             },
             persist,
-            prepareCommit: (submitted: T, operation: DomainOperation, verify: (envelope: LocalEnvelope) => void) => ({
+            prepareCommit: (submitted: T, operation: DomainOperation, verify?: (envelope: LocalEnvelope) => void) => ({
                 operation,
                 beforeCommit: (envelope: LocalEnvelope | undefined) => {
                     if (current() !== submitted || envelope?.consentRevision !== revision || envelope.owner !== owner) return false;
-                    verify(envelope);
+                    verify?.(envelope);
                     // The exact attempt survives a crash or an ambiguous outcome
                     // without permitting the same user intent to be sent twice.
                     persist({ ...submitted, submitted: true });

@@ -8,6 +8,7 @@ import { openKindeCandidateMeasurementDraft, type KindeMeasurementDraft } from '
 import { openKindeCandidateSleepDraft, type KindeSleepDraft } from './kindeCandidateSleepDraft';
 import { openKindeCandidateStepsDraft, type KindeStepsDraft } from './kindeCandidateStepsDraft';
 import { openKindeCandidateCardioDraft, type KindeCardioDraft } from './kindeCandidateCardioDraft';
+import { openKindeCandidateCycleDraft, type KindeCycleDraft } from './kindeCandidateCycleDraft';
 import type { KindeCatalogDraftController } from './kindeCandidateCatalogDraft';
 import { authenticatedIdentitySource } from '../sync/authenticatedIdentitySource';
 import { isKindeAccountLocalFitnessClear } from '../sync/kindeOwnerLocalFitnessFence';
@@ -34,7 +35,7 @@ export type KindeCandidateFitnessSnapshot = Readonly<{
 
 type MutationOutcome = Awaited<ReturnType<typeof submitKindeCandidateDomainIntent>>;
 type DraftHandle = KindeRoutineDraft | KindeExerciseDraft | KindeMeasurementDraft
-    | KindeSleepDraft | KindeStepsDraft | KindeCardioDraft;
+    | KindeSleepDraft | KindeStepsDraft | KindeCardioDraft | KindeCycleDraft;
 type DraftSave = { outcome: MutationOutcome; draftCleared: boolean };
 
 type SessionPermit = Readonly<{
@@ -71,6 +72,8 @@ export type KindeCandidateFitnessRealm = {
     saveStepsDraft: (draft: KindeStepsDraft) => Promise<DraftSave>;
     openCardioDraft: (date: string, sessionId: string | null) => Promise<KindeCardioDraft>;
     saveCardioDraft: (draft: KindeCardioDraft) => Promise<DraftSave>;
+    openCycleDraft: (id?: string) => Promise<KindeCycleDraft>;
+    saveCycleDraft: (draft: KindeCycleDraft) => Promise<DraftSave>;
     close: () => void;
 };
 
@@ -99,6 +102,7 @@ export async function openKindeCandidateFitnessRealm({
     let sleepDraft: KindeCatalogDraftController<KindeSleepDraft> | null = null;
     let stepsDraft: KindeCatalogDraftController<KindeStepsDraft> | null = null;
     let cardioDraft: KindeCatalogDraftController<KindeCardioDraft> | null = null;
+    let cycleDraft: KindeCatalogDraftController<KindeCycleDraft> | null = null;
     let needsReconciliation = false;
     let sessionPermit: SessionPermit | null = null;
     const offline = () => navigator.onLine === false;
@@ -128,12 +132,14 @@ export async function openKindeCandidateFitnessRealm({
         sleepDraft?.handle.close();
         stepsDraft?.handle.close();
         cardioDraft?.handle.close();
+        cycleDraft?.handle.close();
         routineDraft = null;
         exerciseDraft = null;
         measurementDraft = null;
         sleepDraft = null;
         stepsDraft = null;
         cardioDraft = null;
+        cycleDraft = null;
     };
 
     const load = async (): Promise<KindeCandidateFitnessSnapshot> => {
@@ -242,7 +248,7 @@ export async function openKindeCandidateFitnessRealm({
     };
 
     const saveDraft = async (handle: DraftHandle): Promise<DraftSave> => {
-        const active = [routineDraft, exerciseDraft, measurementDraft, sleepDraft, stepsDraft, cardioDraft]
+        const active = [routineDraft, exerciseDraft, measurementDraft, sleepDraft, stepsDraft, cardioDraft, cycleDraft]
             .find(draft => draft?.handle === handle);
         if (busy || !visible || !viewPermitted() || !active) throw new KindeCandidateBoundaryError();
         const { operation, beforeCommit, clearAfterCommit } = active.prepare(visible.data);
@@ -326,5 +332,11 @@ export async function openKindeCandidateFitnessRealm({
             return openKindeCandidateCardioDraft({ ...scope, date, sessionId, day: data.nutrition?.[date] });
         }, draft => { cardioDraft = draft; }),
         saveCardioDraft: saveDraft,
+        openCycleDraft: cycleId => openDraft((data, scope) => {
+            cycleDraft?.handle.close();
+            cycleDraft = null;
+            return openKindeCandidateCycleDraft({ ...scope, cycleId, cycles: data.trainingCycles ?? [] });
+        }, draft => { cycleDraft = draft; }),
+        saveCycleDraft: saveDraft,
     };
 }

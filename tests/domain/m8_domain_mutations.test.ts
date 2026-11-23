@@ -146,6 +146,31 @@ describe('M8 Domain Operations V4 — mutations, reordering and patch semantics'
         expect(replayCycles?.find(item => item.id === cycle.id)?.strategy).toEqual(cycle.strategy);
     });
 
+    it('creates and activates the first observed cycle in one replay, preserving later selections', () => {
+        const before = base({ routines: [{ id: 'r1', name: 'Seduta', exercises: [] }] });
+        const cycle = {
+            id: 'cycle-first', name: 'Forza', durationWeeks: 4,
+            routines: [{ routineId: 'r1', frequencyPerWeek: 1 }],
+        };
+        const create = { type: 'training-cycle.upsert', cycle, expected: null } as const;
+        const { after, operations, replay } = compile(before, create);
+        expect(after.activeCycleId).toBe(cycle.id);
+        expect(operations.map(item => item.path[0])).toEqual(expect.arrayContaining(['trainingCycles', 'activeCycleId']));
+        expect(replay.get('')?.activeCycleId).toBe(cycle.id);
+        expect(replay.get('')?.trainingCycles).toMatchObject([cycle]);
+        expect(() => applyDomainOperations(after, create)).toThrow('Ciclo già esistente');
+        expect(() => applyDomainOperations({ ...before, routines: [] }, create)).toThrow('Routine non trovata');
+
+        const second = compile(after, { ...create, cycle: { ...cycle, id: 'cycle-second' } });
+        expect(second.after.activeCycleId).toBe(cycle.id);
+        expect(second.operations.every(item => item.path[0] === 'trainingCycles')).toBe(true);
+        const observed = after.trainingCycles![0];
+        const edit = { type: 'training-cycle.upsert', cycle: { ...observed, name: 'Forza 2' }, expected: observed } as const;
+        expect(applyDomainOperations(second.after, edit).trainingCycles?.[0]?.name).toBe('Forza 2');
+        const changed = applyDomainOperations(second.after, { ...edit, cycle: { ...observed, name: 'Forza 3' } });
+        expect(() => applyDomainOperations(changed, edit)).toThrow('ciclo è cambiato');
+    });
+
     it('duplicates the observed cycle and atomically replaces the active pointer on removal', () => {
         const before = base({
             trainingCycles: [

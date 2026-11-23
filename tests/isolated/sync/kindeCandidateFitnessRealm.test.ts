@@ -97,6 +97,40 @@ afterEach(() => {
 });
 
 describe('isolated Kinde fitness realm with trusted owner, no Firebase/global grant', () => {
+    it('restores a sealed cycle draft and creates and selects the first cycle as one intent', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        const slot = protectedDeviceKey('draft_training_cycle', owner);
+        try {
+            await fixture.consent(uid);
+            const first = await openKindeCandidateFitnessRealm({ ...browser(fixture), expected });
+            try {
+                await first.submit({ type: 'routine.create', routine: { id: 'cycle-routine', name: 'Scheda', exercises: [] } });
+                const draft = await first.openCycleDraft();
+                draft.write({
+                    ...draft.initial.values, name: 'Primo ciclo', durationWeeks: '4',
+                    dateTextInput: '12/10/2026', endDateTextInput: '08/11/2026',
+                    cycleRoutines: [{ routineId: 'cycle-routine', frequencyPerWeek: 1 }],
+                });
+                expect(localStorage.getItem(slot)).toMatch(/^tlb-sealed:v1:/);
+                expect(localStorage.getItem(slot)).not.toContain('Primo ciclo');
+            } finally { first.close(); }
+            const reopened = await openKindeCandidateFitnessRealm({ ...browser(fixture), expected });
+            try {
+                const resumed = await reopened.openCycleDraft();
+                expect(resumed.initial.values.name).toBe('Primo ciclo');
+                expect(resumed.initial.stale).toBe(false);
+                await expect(reopened.saveCycleDraft(resumed)).resolves.toMatchObject({
+                    outcome: { kind: 'cloud-acknowledged' }, draftCleared: true,
+                });
+                const data = reopened.snapshot()?.data;
+                expect(data?.trainingCycles).toMatchObject([{ name: 'Primo ciclo', startDate: '2026-10-12' }]);
+                expect(data?.activeCycleId).toBe(data?.trainingCycles?.[0]?.id);
+                expect(fixture.count('sync_receipts', uid)).toBe(2);
+                expect(localStorage.getItem(slot)).toBeNull();
+            } finally { reopened.close(); }
+        } finally { fixture.close(); }
+    });
+
     it('recovers a Kinde cardio draft and saves it without replacing steps or sleep', async () => {
         const fixture = await createCloudKeyHttpFixture([uid]);
         const date = '2026-10-12';

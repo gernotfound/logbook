@@ -4,7 +4,7 @@ import {
     computeWeeksFromDates,
     prepareCycleSubmission,
     type CycleFormSubmissionInput,
-} from '../../../src/components/Training/planning/cycleFormModel';
+} from '../../../src/lib/trainingCycleForm';
 
 const validInput: CycleFormSubmissionInput = {
     name: '  Mesociclo  ',

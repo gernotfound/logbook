@@ -56,7 +56,7 @@ export type DomainOperation =
     | { type: 'routine-exercise.upsert'; routineId: string; exercise: RoutineExercise }
     | { type: 'routine-exercise.delete'; routineId: string; exId: string }
     | { type: 'routine-exercise.reorder'; routineId: string; exIds: string[] }
-    | { type: 'training-cycle.upsert'; cycle: TrainingCycle }
+    | { type: 'training-cycle.upsert'; cycle: TrainingCycle; expected?: TrainingCycle | null }
     | { type: 'training-cycle.delete'; id: string }
     | { type: 'training-cycle.duplicate'; source: TrainingCycle; id: string; createdAt: number }
     | { type: 'training-cycle.remove'; expected: TrainingCycle; expectedActiveId: string | null }
