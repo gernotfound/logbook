@@ -1,5 +1,48 @@
 import { expect, test } from '../fixtures';
 import { loadKindeReplica, mountKindePlanning, withKindeReplicaDevices } from './kindeReplicaFixture';
+import type { DomainOperation } from '../../src/lib/sync/domainOperations';
+
+test('a Kinde routine edit cannot recreate a routine after the local archive reconciles its deletion', async ({ browser }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
+        const id = 'rtn-stale-edit-e2e';
+        expect(await second.evaluate(id => window.kindeReplicaFixture!.submit({
+            type: 'routine.upsert', routine: { id, name: 'Scheda originale', exercises: [] },
+        }), id)).toMatchObject({ kind: 'cloud-acknowledged' });
+
+        const snapshot = await first.evaluate(() => window.kindeReplicaFixture!.refresh());
+        expect(snapshot.data.routines).toContainEqual(expect.objectContaining({ id, name: 'Scheda originale' }));
+        const edit: DomainOperation = { type: 'routine.edit', id, name: 'Nome dall’editor', exercises: [] };
+        const staleEdit = { ...edit, name: 'Modifica in ritardo' };
+        allowFirstCommit();
+        expect(await first.evaluate(edit => window.kindeReplicaFixture!.submit(edit), edit))
+            .toMatchObject({ kind: 'cloud-acknowledged' });
+        expect(firstCommitStatuses).toEqual([200]);
+
+        const current = await second.evaluate(() => window.kindeReplicaFixture!.refresh());
+        expect(current.data.routines).toContainEqual(expect.objectContaining({ id, name: edit.name }));
+        expect(await second.evaluate(id => window.kindeReplicaFixture!.submit({ type: 'routine.delete', id }), id))
+            .toMatchObject({ kind: 'cloud-acknowledged' });
+
+        const afterDelete = await first.evaluate(() => window.kindeReplicaFixture!.refresh());
+        expect(afterDelete.data.routines?.map(routine => routine.id)).not.toContain(id);
+        const beforeRejectedEdit = receipts();
+        const failure = await first.evaluate(async edit => {
+            try {
+                await window.kindeReplicaFixture!.submit(edit);
+                return null;
+            } catch (error) {
+                return error instanceof Error ? error.message : String(error);
+            }
+        }, staleEdit);
+        expect(failure).toContain('Routine non trovata');
+        expect(firstCommitStatuses).toEqual([200]);
+        expect(receipts()).toBe(beforeRejectedEdit);
+
+        const observed = await first.evaluate(() => window.kindeReplicaFixture!.refresh());
+        expect(observed.data.routines?.map(routine => routine.id)).not.toContain(id);
+        expect(receipts()).toBe(beforeRejectedEdit);
+    });
+});
 
 test('reads owner-scoped Kinde routines without legacy actions or a new D1 receipt', async ({ browser }) => {
     await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses }) => {

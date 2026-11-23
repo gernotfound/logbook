@@ -57,6 +57,7 @@ function collectScope(before: UserData, after: UserData, operations: readonly Do
             case 'supplement.delete':
             case 'supplement.reorder': root('supplements'); break;
             case 'routine.upsert':
+            case 'routine.edit':
             case 'routine.delete':
             case 'routine.reorder':
             case 'routine-exercise.upsert':
