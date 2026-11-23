@@ -109,7 +109,7 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
 
     useEffect(() => {
         if (initialRecovery.error) blockReadinessPersistence(initialRecovery.error, initialRecovery.session);
-    }, [initialRecovery.error]);
+    }, [initialRecovery.error, initialRecovery.session]);
 
     const persistDraft = useCallback(() => {
         const activeSession = session.current;
