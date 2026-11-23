@@ -189,21 +189,6 @@ details[open] > .technique-summary::after {
     box-sizing: border-box;
 }
 
-#top-timer-bar {
-    display: none;
-    position: sticky;
-    top: var(--sticky-top);
-    left: 0;
-    width: 100%;
-    background: var(--bg-color);
-    z-index: 50;
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid var(--glass-border);
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-}
-
 .timer-display {
     font-size: var(--font-size-timer);
     font-weight: 700;
@@ -233,15 +218,6 @@ details[open] > .technique-summary::after {
 .timer-btn.pause { background: var(--warning-soft); color: var(--warning-color); border-color: var(--warning-color); }
 .timer-btn.stop { background: var(--danger-soft); color: var(--danger-color); border-color: var(--danger-color); }
 .timer-btn.reset { background: var(--primary-soft); color: var(--primary-color); border-color: var(--primary-color); }
-
-#global-timer-bar {
-    background: var(--surface-color);
-    padding: 1.25rem;
-    border-radius: 1rem;
-    text-align: center;
-    margin-top: 1.5rem;
-    border: 1px solid var(--glass-border);
-}
 
 .bottom-nav {
     position: fixed !important;
