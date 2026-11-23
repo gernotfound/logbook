@@ -15,7 +15,7 @@ describe('activity cardio timestamp presentation', () => {
         expect(startTime).not.toBe('');
         expect(timestampToLocalTime(1e200)).toBe('');
 
-        render(<ActivityCardioSection activity={{
+        const { container } = render(<ActivityCardioSection activity={{
             cardioForm: EMPTY_CARDIO_DRAFT,
             cardioSessions,
             editingCardioId: null,
@@ -27,7 +27,10 @@ describe('activity cardio timestamp presentation', () => {
             cancelCardio: vi.fn(),
             saveCardio: vi.fn(),
         }} />);
-        expect(screen.getByText(`Ore ${startTime}`)).toBeDefined();
+        const cards = container.querySelectorAll('.activity-cardio-item');
+        expect(cards).toHaveLength(2);
+        expect(cards[0].querySelector('small')?.textContent).toBe(`Ore ${startTime}`);
+        expect(cards[1].querySelector('small')).toBeNull();
         expect(screen.queryByText(/Invalid Date/i)).toBeNull();
         expect(screen.getByText('10 min · Intensità bassa')).toBeDefined();
         expect(screen.getByText('30 min · Intensità moderata')).toBeDefined();
