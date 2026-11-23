@@ -62,7 +62,7 @@ function measurementPatch(values: KindeMeasurementValues, profile?: UserProfile)
             ? 'Inserisci un valore valido per il peso.'
             : 'Inserisci misure numeriche valide.');
     }
-    if (values.measureTime !== '' && !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(values.measureTime)) {
+    if (values.measureTime !== '' && !/^([01]\d|2[0-3]):[0-5]\d$/.test(values.measureTime)) {
         throw new Error('Orario della misurazione non valido.');
     }
     const measures = prepared.values;
