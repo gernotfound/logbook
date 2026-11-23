@@ -9,7 +9,7 @@ import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { getCachedCatalog } from '../lib/catalog/catalogService';
 import { filterMuscles } from './trainingExercises/muscleSelection';
 import { toggleExerciseMuscle, removeExerciseMuscle, resolveExerciseMuscles } from './trainingExercises/exerciseMuscleEditor';
-import { hasDuplicateExerciseName, buildExerciseSavePayload } from '../lib/exerciseEditorModel';
+import { hasDuplicateExerciseName, buildExerciseSavePayload, exerciseDraftProblem } from '../lib/exerciseEditorModel';
 import {
     clearExerciseDraft,
     persistExerciseDraft,
@@ -192,7 +192,7 @@ export function useTrainingExercises() {
             return false;
         }
 
-        const savedExercise = buildExerciseSavePayload(library, editingExId, {
+        const draft = {
             name: exName,
             notes: exNotes,
             trackingType,
@@ -200,7 +200,14 @@ export function useTrainingExercises() {
             secondaryMuscles,
             isBodyweight,
             equipmentWeight,
-        }, () => Logic.generateId('ex'));
+        };
+        const validationError = exerciseDraftProblem(library, editingExId, draft);
+        if (validationError) {
+            await showAlert(validationError);
+            return false;
+        }
+
+        const savedExercise = buildExerciseSavePayload(library, editingExId, draft, () => Logic.generateId('ex'));
 
         try {
             assertCurrentDraft();

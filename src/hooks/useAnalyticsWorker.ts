@@ -202,6 +202,7 @@ export function useAnalyticsWorker(enabled = true, latestOnly = false) {
 
     const calculateCorrelationStats = useCallback(async (history: any, nutrition: any, library: any, userWeight: any, numWeeks: any, referenceDate?: any) => {
         const serial = beginRequest();
+        const requestGeneration = generationRef.current;
         const day = referenceDate === undefined ? getLocalDateString() : referenceDate;
         const key = `${userWeight}:${numWeeks}:${day}`;
         const shared = referenceDate === undefined ? volumeRequests(history, library)?.get(key) : undefined;
@@ -209,7 +210,8 @@ export function useAnalyticsWorker(enabled = true, latestOnly = false) {
             let volume: VolumeResult | null = null;
             try { volume = await shared; }
             catch { /* The correlation chart must recover independently from a failed volume chart. */ }
-            if (!mounted.current || (latestOnly && requestSerialRef.current !== serial)) {
+            if (!mounted.current || generationRef.current !== requestGeneration
+                || (latestOnly && requestSerialRef.current !== serial)) {
                 throw new Error('Calcolo annullato: richiesta superata');
             }
             if (volume) {
