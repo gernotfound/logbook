@@ -59,26 +59,40 @@ describe('failed domain result preserves user edits', () => {
         let saved: unknown;
         await act(async () => { saved = await hook.result.current.calculateAndSave(); });
         expect(saved).toBe(false);
+        expect(useAppStore.getState().dispatchDomainOperation).toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'nutrition-day.patch', date: DAY, patch: expect.objectContaining({ weight: 75 }) }),
+        );
         expect(hook.result.current.weight).toBe('75');
         expect(readDeviceValueStrict('draft:measurement:' + DAY, storageOwner())).toContain('75');
         expect(localStorage.getItem(key)).toMatch(/^tlb-sealed:v1:/);
         expect(useDialogStore.getState().showAlert).toHaveBeenCalled();
     });
 
-    it('keeps sleep and activity drafts on a non-throwing failure', async () => {
+    it('keeps encrypted sleep and activity drafts after a failed domain dispatch', async () => {
+        const owner = storageOwner();
         const sleep = renderHook(() => useSleepMeasurements());
+        act(() => sleep.result.current.setSelectedDate(DAY));
         act(() => sleep.result.current.setSleepHours('07:30'));
         let sleepSaved: unknown;
         await act(async () => { sleepSaved = await sleep.result.current.saveSleep(); });
         expect(sleepSaved).toBe(false);
+        expect(useAppStore.getState().dispatchDomainOperation).toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'nutrition-day.patch', date: DAY, patch: expect.objectContaining({ sleepHours: '07:30' }) }),
+        );
         expect(sleep.result.current.sleepHours).toBe('07:30');
+        expect(readDeviceValueStrict('draft:sleep:' + DAY, owner)).toContain('07:30');
 
         const activity = renderHook(() => useActivityTracking());
+        act(() => activity.result.current.setSelectedDate(DAY));
         act(() => activity.result.current.setSteps('7900'));
         let stepsSaved: unknown;
         await act(async () => { stepsSaved = await activity.result.current.saveSteps(); });
         expect(stepsSaved).toBe(false);
+        expect(useAppStore.getState().dispatchDomainOperation).toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'activity-steps.set', date: DAY, steps: 7900 }),
+        );
         expect(activity.result.current.steps).toBe('7900');
+        expect(readDeviceValueStrict('draft:activity-steps:' + DAY, owner)).toContain('7900');
     });
 
     it('retains routine input rather than clearing the form on a rejected result', async () => {
@@ -87,6 +101,9 @@ describe('failed domain result preserves user edits', () => {
         let saved: unknown;
         await act(async () => { saved = await hook.result.current.handleSave(); });
         expect(saved).toBe(false);
+        expect(useAppStore.getState().dispatchDomainOperation).toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'routine.create', routine: expect.objectContaining({ name: 'Bozza importante' }) }),
+        );
         expect(hook.result.current.routineName).toBe('Bozza importante');
     });
 
@@ -116,7 +133,7 @@ describe('failed domain result preserves user edits', () => {
         expect(dialog).toHaveBeenCalledTimes(2);
         expect((screen.getByLabelText('Nome ciclo') as HTMLInputElement).value).toBe('Ciclo B');
     });
-    it('cancels sleep and cardio edits only after the device draft is cleared', async () => {
+    it('cancels sleep edits only after the device draft is cleared', async () => {
         const sleep = renderHook(() => useSleepMeasurements());
         act(() => sleep.result.current.setEditingDate(DAY));
         act(() => sleep.result.current.setSleepHours('07:30'));
@@ -165,7 +182,7 @@ describe('failed domain result preserves user edits', () => {
         expect(readDeviceValueStrict(name, owner)).toContain('"values":null');
     });
 
-    it('persists edits to an existing cardio record with a generated underscore ID', () => {
+    it('preserves and clears the encrypted edit draft for a cardio record with an underscore ID', () => {
         const id = 'cardio_12345678-1234-1234-1234-123456789abc';
         const owner = storageOwner();
         useAppStore.setState({
