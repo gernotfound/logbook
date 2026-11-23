@@ -14,9 +14,9 @@ interface CycleCardProps {
     routines: WorkoutRoutine[];
     onSetActive: (cycleId: string) => void | Promise<void>;
     onDeactivate: (cycleId: string) => void | Promise<void>;
-    onEdit: (cycle: TrainingCycle) => void | Promise<void>;
-    onDuplicate: (cycle: TrainingCycle) => void | Promise<void>;
-    onDelete: (cycle: TrainingCycle) => void | Promise<void>;
+    onEdit?: (cycle: TrainingCycle) => void | Promise<void>;
+    onDuplicate?: (cycle: TrainingCycle) => void | Promise<void>;
+    onDelete?: (cycle: TrainingCycle) => void | Promise<void>;
 }
 
 export const CycleCard: React.FC<CycleCardProps> = ({
@@ -64,9 +64,9 @@ export const CycleCard: React.FC<CycleCardProps> = ({
         ? String(timeline.totalWeeks) : '—';
 
     const menuItems: ContextMenuItem[] = [
-        { id: 'edit-cycle', label: 'Modifica', icon: <Pencil size={16} />, disabled: actionPending, onClick: () => { void runAction(() => onEdit(cycle)); } },
-        { id: 'duplicate-cycle', label: 'Duplica', icon: <Copy size={16} />, disabled: actionPending, onClick: () => { void runAction(() => onDuplicate(cycle)); } },
-        { id: 'delete-cycle', label: 'Elimina', icon: <Trash2 size={16} />, variant: 'danger', disabled: actionPending, onClick: () => { void runAction(() => onDelete(cycle)); } }
+        { id: 'edit-cycle', label: 'Modifica', icon: <Pencil size={16} />, hidden: !onEdit, disabled: actionPending, onClick: () => { void runAction(() => onEdit?.(cycle)); } },
+        { id: 'duplicate-cycle', label: 'Duplica', icon: <Copy size={16} />, hidden: !onDuplicate, disabled: actionPending, onClick: () => { void runAction(() => onDuplicate?.(cycle)); } },
+        { id: 'delete-cycle', label: 'Elimina', icon: <Trash2 size={16} />, variant: 'danger', hidden: !onDelete, disabled: actionPending, onClick: () => { void runAction(() => onDelete?.(cycle)); } }
     ];
 
     return (
@@ -82,6 +82,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                     <span className="planning-cycle-copy">
                         <strong>{cycle.name}</strong>
                         <span>{weeksLabel} settimane · {sessionsPerWeek ?? '—'} {sessionsPerWeek === 1 ? 'seduta' : 'sedute'} / sett. (stima)</span>
+                        {isActive && <span>Ciclo attivo</span>}
                     </span>
                     <ChevronDown className={isExpanded ? 'is-open' : ''} size={20} aria-hidden="true" />
                 </button>
@@ -111,7 +112,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                 ) : null}
 
                 <div className="planning-cycle-actions">
-                    <button type="button" className="btn" disabled={actionPending} onClick={() => { void runAction(() => onEdit(cycle)); }}>Modifica</button>
+                    {onEdit && <button type="button" className="btn" disabled={actionPending} onClick={() => { void runAction(() => onEdit(cycle)); }}>Modifica</button>}
                     {isActive ? (
                         <button type="button" className="btn" disabled={actionPending} onClick={() => { void runAction(() => onDeactivate(cycle.id)); }}>Disattiva ciclo</button>
                     ) : (
