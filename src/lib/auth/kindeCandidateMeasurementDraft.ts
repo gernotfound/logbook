@@ -144,8 +144,9 @@ export async function openKindeCandidateMeasurementDraft({
                     if (basisForDay(envelope.data.nutrition?.[submitted.date]) !== submitted.basis) {
                         throw new Error('La misurazione è cambiata: bozza conservata.');
                     }
-                    if (submitted.values.calculateBf
-                        && basisForProfile(envelope.data.profile) !== submitted.profileBasis) {
+                    // The profile also controls which circumferences are retained,
+                    // even when the optional BF calculation is disabled.
+                    if (basisForProfile(envelope.data.profile) !== submitted.profileBasis) {
                         throw new Error('Il profilo biometrico è cambiato: bozza conservata.');
                     }
                 });
