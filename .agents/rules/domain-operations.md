@@ -110,6 +110,11 @@ Per nutrition/history, la DomainOperation individua esplicitamente data/ID e qui
 
 `meals`, `supplementsIntake` e `cardioSessions` restano collezioni mensili identificate da ID stabile; edit concorrenti su entità diverse non devono collassare l'intero array.
 
+`measurement.delete` confronta al commit i soli campi della misura
+mostrata alla conferma, inclusi ora e provenienza BF. Rifiuta una misura
+mancante o modificata e conserva pasti, totali, sonno, passi, cardio e
+integratori dello stesso giorno. I tombstone riguardano soltanto la misura.
+
 `nutrition-meal.edit` applica soltanto quantità e gruppo richiesti al pasto
 presente nel dato corrente. Il pasto deve esistere quando il reducer esegue
 il commit. Un editor obsoleto non crea un pasto eliminato e non riscrive

@@ -2,7 +2,7 @@ import type { MeasurementHistoryDay } from '../../types';
 
 // Presence is deliberately distinct from numerical validity: a corrupt or
 // unfamiliar stored value must not silently turn a recorded day into "empty".
-const MEASUREMENT_FIELDS = [
+export const MEASUREMENT_FIELDS = [
     'weight', 'bf', 'waist', 'neck', 'hip', 'chest',
     'shoulders', 'biceps', 'thighs', 'calves',
 ] as const satisfies readonly (keyof MeasurementHistoryDay)[];

@@ -86,6 +86,7 @@ function collectScope(before: UserData, after: UserData, operations: readonly Do
             case 'legal-consent.set': root('legalConsent'); break;
             case 'nutrition-day.patch':
             case 'nutrition-day.delete':
+            case 'measurement.delete':
             case 'activity-steps.set':
             case 'activity-steps.clear':
             case 'cardio-session.upsert':

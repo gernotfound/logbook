@@ -10,7 +10,7 @@ import { formatDecimal, hasFiniteValue, hasMeasurementData } from './dataHistory
 interface DataHistoryDetailProps {
     day: MeasurementHistoryDay;
     onClose: () => void;
-    onSelectEdit: (day: MeasurementHistoryDay) => void;
+    onSelectEdit?: (day: MeasurementHistoryDay) => void;
 }
 
 // Mount the modal lifecycle only while open so focus returns to its actual trigger.
@@ -61,7 +61,7 @@ export default function DataHistoryDetail({ day, onClose, onSelectEdit }: DataHi
                 </div>
                 <div className="data-action-row">
                     <button type="button" className="btn" onClick={onClose}>Chiudi</button>
-                    {hasMeasurementData(day) && (
+                    {onSelectEdit && hasMeasurementData(day) && (
                         <button
                             type="button"
                             className="btn btn-primary"

@@ -21,6 +21,12 @@ ed eliminazione usano lo stesso journal verificato. La conferma di
 eliminazione comprende le schede collegate e rifiuta una modifica a tali
 riferimenti avvenuta prima del commit.
 
+Lo storico candidato delle rilevazioni mostra misure e sonno dallo snapshot
+Kinde. Si può eliminare una misurazione dopo conferma. Il journal verifica
+che i valori confermati siano ancora correnti e conserva sonno, pasti e
+attività dello stesso giorno. L'inserimento e la modifica con bozza datata
+restano da completare.
+
 ## Lettura del provider — 22 novembre 2026
 
 Il connettore Cloudflare ha restituito quattro Worker TheLogBook: `thelogbook-frontend`, `thelogbook-api-isolated`, `thelogbook-cf03-auth-gate-isolated` e `thelogbook-cf03-kinde-http-isolated`. Il frontend ha `APP_ORIGIN`, `ASSETS`, `KINDE_HTTP` e **non** `D1_API`; l'API privata ha `DB`, `RECOVERY_DB`, `AUTH_GATE` e `CLOUD_ACCOUNT_KEK_V1` come `secret_text`. Entrambi i database D1 isolati riportano `jurisdiction=eu`. Il Worker frontend riporta modifica del 22/11; gli altri tre del 21/11. Lettura GET dei Cron Trigger con risposta `success:true`: nessuno schedulato su tutti e quattro i Worker. Questa lettura **non** certifica commit distribuito, valori di segreti, restore, rotte, Cron Trigger, sicurezza effettiva delle API, collocazione di ogni trattamento o GDPR.

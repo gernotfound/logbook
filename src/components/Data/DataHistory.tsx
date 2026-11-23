@@ -10,7 +10,7 @@ import { HistoryMonthCalendar, HistoryPeriodButton, HistoryPeriodPicker } from '
 interface DataHistoryProps {
     measurementsHistory: MeasurementHistoryDay[];
     editingDate: string | null;
-    onSelectEdit: (day: MeasurementHistoryDay) => void;
+    onSelectEdit?: (day: MeasurementHistoryDay) => void;
     onDeleteMeasurement?: (date: string) => void;
 }
 

@@ -1,3 +1,4 @@
+import equal from 'fast-deep-equal';
 import type {
     Exercise,
     NutritionDay,
@@ -9,9 +10,11 @@ import { UserDataSchema } from '../../schema';
 import { CardioSessionSchema } from '../../schemas/schema_nutrition';
 import { TrainingCycleWriteSchema } from '../../schemas/schema_training';
 import { hasValidCycleWriteFrequencies, isBoundedCycleCount, MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from '../../calc/cycleLimits';
-import { calculateLoggedMealTotals } from '../../nutrition/calculateLoggedMealTotals';
-import { getLocalDateString } from '../../utils/date';
 import { exerciseRoutineReferences } from '../../exerciseRoutineReferences';
+import { calculateLoggedMealTotals } from '../../nutrition/calculateLoggedMealTotals';
+import { captureMeasurement, MEASUREMENT_CLEAR_PATCH } from '../../nutrition/measurementHistory';
+import { hasMeasurementData } from '../../nutrition/measurementPresence';
+import { getLocalDateString } from '../../utils/date';
 import type { DomainOperation, DomainOperationBatch } from './contracts';
 import {
     applyPatch,
@@ -102,6 +105,15 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
             const nutrition = { ...(data.nutrition ?? {}) };
             delete nutrition[date];
             data.nutrition = nutrition;
+            break;
+        }
+        case 'measurement.delete': {
+            const date = requireDate(operation.date);
+            const day = data.nutrition?.[date];
+            if (!day || !hasMeasurementData(day) || !equal(captureMeasurement(day), operation.expected)) {
+                throw new Error('Misurazione cambiata dopo la conferma.');
+            }
+            data.nutrition = { ...data.nutrition, [date]: applyPatch(day, MEASUREMENT_CLEAR_PATCH) };
             break;
         }
         case 'activity-steps.set': {
