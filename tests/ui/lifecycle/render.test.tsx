@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAppStore } from '../../../src/store/useAppStore';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { renderWithAuthenticatedTestOwner, renderWithProviders, emptyUserData } from '../../setup';
 import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
 
@@ -41,13 +41,14 @@ describe('Render Test Suite - Zero Crash Verification', () => {
     expect(screen.getByText(/TheLogBook/i)).toBeDefined();
   });
 
-  test('renders TrainingView with session subtab', () => {
+  test('renders TrainingView with its active session panel', () => {
     const setSubTabMock = vi.fn();
-    const { container } = renderWithProviders(
+    renderWithProviders(
       <TrainingView subTab="session" setSubTab={setSubTabMock} />
     );
-    expect(container).toBeDefined();
-    expect(screen.getAllByText(/Sessione/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole('tab', { name: 'Sessione' }).getAttribute('aria-selected')).toBe('true');
+    const panel = screen.getByRole('tabpanel', { name: 'Sessione' });
+    expect(within(panel).getByText('Scegli dall’archivio')).toBeDefined();
   });
 
   test('renders TrainingView with routines subtab', async () => {
