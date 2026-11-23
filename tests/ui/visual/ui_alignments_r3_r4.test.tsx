@@ -10,6 +10,8 @@ import { useDialogStore } from '../../../src/store/useDialogStore';
 import { Logic } from '../../../src/lib/logic';
 import { storageOwner } from '../../../src/lib/sync/session';
 import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { readLocal } from '../../../src/lib/sync/localRepository';
+import { idbStore } from '../../setup';
 
 function renderMeasurements(overrides: Partial<React.ComponentProps<typeof DataMeasurements>>) {
     return render(
@@ -169,7 +171,7 @@ describe('UI Alignments - R3 & R4', () => {
             expect(result.current.hasExistingData).toBe(true);
         });
 
-        it('useNutritionMeasurements saves to selectedDate without a blocking success dialog', async () => {
+        it('useNutritionMeasurements durably saves to selectedDate without a blocking success dialog', async () => {
             const showAlertSpy = vi.spyOn(useDialogStore.getState(), 'showAlert');
             const { result } = renderHook(() => useNutritionMeasurements('2026-08-05'));
             
@@ -189,6 +191,18 @@ describe('UI Alignments - R3 & R4', () => {
             expect(updatedNutrition?.['2026-08-05'].waist).toBe(80);
             expect(updatedNutrition?.['2026-08-05'].neck).toBe(37);
             expect(updatedNutrition?.['2026-08-05'].bf).toBeUndefined();
+
+            const owner = storageOwner();
+            const durable = await readLocal(owner);
+            expect(durable?.owner).toBe(owner);
+            expect(durable?.data.nutrition?.['2026-08-05']).toMatchObject({
+                date: '2026-08-05',
+                weight: 75.2,
+                waist: 80,
+                neck: 37,
+            });
+            expect(durable?.data.nutrition?.['2026-08-05'].bf).toBeUndefined();
+            expect(idbStore[`logbook:v2:${owner}`]).toMatch(/^tlb-sealed:v1:/);
             expect(showAlertSpy).not.toHaveBeenCalled();
         });
 
