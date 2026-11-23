@@ -48,6 +48,8 @@ function mockRealm() {
         saveSleepDraft: vi.fn<KindeCandidateFitnessRealm['saveSleepDraft']>(),
         openStepsDraft: vi.fn<KindeCandidateFitnessRealm['openStepsDraft']>(),
         saveStepsDraft: vi.fn<KindeCandidateFitnessRealm['saveStepsDraft']>(),
+        openCardioDraft: vi.fn<KindeCandidateFitnessRealm['openCardioDraft']>(),
+        saveCardioDraft: vi.fn<KindeCandidateFitnessRealm['saveCardioDraft']>(),
         close: vi.fn(),
     };
     return mock;

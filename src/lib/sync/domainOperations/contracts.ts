@@ -38,7 +38,7 @@ export type DomainOperation =
     | { type: 'activity-steps.set'; date: string; steps: number; source?: 'manual' | 'imported'; capturedAt?: number }
     | { type: 'activity-steps.clear'; date: string; expected?: ActivitySteps }
     | { type: 'cardio-session.upsert'; date: string; session: CardioSession }
-    | { type: 'cardio-session.delete'; date: string; sessionId: string }
+    | { type: 'cardio-session.delete'; date: string; sessionId: string; expected?: CardioSession }
     | { type: 'nutrition-meal.upsert'; date: string; meal: LoggedMealItem }
     | { type: 'nutrition-meal.edit'; date: string; mealId: string; quantity?: number; meal?: string }
     | { type: 'nutrition-meal.delete'; date: string; mealId: string }

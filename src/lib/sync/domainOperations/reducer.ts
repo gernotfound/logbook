@@ -162,6 +162,9 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
             const date = requireDate(operation.date);
             const sessionId = requireId(operation.sessionId, 'Sessione cardio');
             const day = data.nutrition?.[date];
+            if (operation.expected && !equal(day?.cardioSessions?.find(item => item.id === sessionId), operation.expected)) {
+                throw new Error('La sessione cardio è cambiata dopo la conferma.');
+            }
             if (!day) break;
             const cardioSessions = deleteById(day.cardioSessions, sessionId, item => requireId(item.id, 'Sessione cardio'), 'Sessioni cardio');
             data.nutrition = { ...(data.nutrition ?? {}), [date]: { ...day, date, cardioSessions } };
