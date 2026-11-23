@@ -4,13 +4,13 @@
 
 #view-data .data-sub-view,
 #view-data .data-page-grid,
-#view-data .activity-view,
+:is(#view-data, .kinde-candidate-activity) .activity-view,
 :is(#view-data, .kinde-measurement-history) .data-history {
     min-width: 0;
 }
 
 #view-data .data-page-grid,
-#view-data .activity-view,
+:is(#view-data, .kinde-candidate-activity) .activity-view,
 :is(#view-data, .kinde-measurement-history) .data-history {
     display: grid;
     gap: .75rem;
@@ -37,7 +37,7 @@
 }
 
 #view-data .data-panel-head,
-#view-data .activity-heading-row {
+:is(#view-data, .kinde-candidate-activity) .activity-heading-row {
     display: flex;
     min-width: 0;
     align-items: flex-start;
@@ -46,13 +46,13 @@
 }
 
 #view-data .data-panel-head > div,
-#view-data .activity-heading-row > div {
+:is(#view-data, .kinde-candidate-activity) .activity-heading-row > div {
     min-width: 0;
 }
 
 #view-data .data-panel-title,
-#view-data .activity-view h2,
-#view-data .activity-view h3 {
+:is(#view-data, .kinde-candidate-activity) .activity-view h2,
+:is(#view-data, .kinde-candidate-activity) .activity-view h3 {
     margin: 0;
     color: var(--text-main);
 }
@@ -67,18 +67,18 @@
 }
 
 #view-data .data-panel-head p,
-#view-data .activity-view p {
+:is(#view-data, .kinde-candidate-activity) .activity-view p {
     margin: .3rem 0 0;
     color: var(--text-muted);
     font-size: var(--font-size-meta);
     line-height: 1.4;
 }
 
-#view-data .activity-view h2 {
+:is(#view-data, .kinde-candidate-activity) .activity-view h2 {
     font-size: var(--font-size-section);
 }
 
-#view-data .activity-view h3 {
+:is(#view-data, .kinde-candidate-activity) .activity-view h3 {
     font-size: var(--font-size-control);
 }
 
@@ -185,12 +185,12 @@
 #view-data .data-field input,
 #view-data .data-field select,
 #view-data .data-field textarea,
-#view-data .activity-steps-form input,
-#view-data .activity-primary-fields input,
-#view-data .activity-primary-fields select,
-#view-data .activity-detail-fields input,
-#view-data .activity-detail-fields select,
-#view-data .activity-detail-fields textarea {
+:is(#view-data, .kinde-candidate-activity) .activity-steps-form input,
+:is(#view-data, .kinde-candidate-activity) .activity-primary-fields input,
+:is(#view-data, .kinde-candidate-activity) .activity-primary-fields select,
+:is(#view-data, .kinde-candidate-activity) .activity-detail-fields input,
+:is(#view-data, .kinde-candidate-activity) .activity-detail-fields select,
+:is(#view-data, .kinde-candidate-activity) .activity-detail-fields textarea {
     width: 100%;
     min-width: 0;
     min-height: 2.75rem;
@@ -208,12 +208,12 @@
 #view-data .data-field input:focus,
 #view-data .data-field select:focus,
 #view-data .data-field textarea:focus,
-#view-data .activity-steps-form input:focus,
-#view-data .activity-primary-fields input:focus,
-#view-data .activity-primary-fields select:focus,
-#view-data .activity-detail-fields input:focus,
-#view-data .activity-detail-fields select:focus,
-#view-data .activity-detail-fields textarea:focus {
+:is(#view-data, .kinde-candidate-activity) .activity-steps-form input:focus,
+:is(#view-data, .kinde-candidate-activity) .activity-primary-fields input:focus,
+:is(#view-data, .kinde-candidate-activity) .activity-primary-fields select:focus,
+:is(#view-data, .kinde-candidate-activity) .activity-detail-fields input:focus,
+:is(#view-data, .kinde-candidate-activity) .activity-detail-fields select:focus,
+:is(#view-data, .kinde-candidate-activity) .activity-detail-fields textarea:focus {
     border-color: var(--primary-color);
     box-shadow: 0 0 0 2px var(--primary-soft);
     outline: 0;

@@ -15,7 +15,7 @@ test('recovers Kinde steps after reload, then confirms save and removal on anoth
         const open = async () => {
             await mountKindePlanning(first);
             await first.getByRole('button', { name: 'Apri archivio account' }).click();
-            await steps.getByLabel('Giorno dei passi').fill(date);
+            await first.getByLabel('Giorno attività').fill(date);
         };
         const edit = steps.getByRole('button', { name: 'Modifica o riprendi passi' });
         const input = steps.getByRole('spinbutton', { name: 'Numero di passi' });
