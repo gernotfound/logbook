@@ -23,6 +23,7 @@ function MeasurementDraftEditor({ editor, profile, realm, onClose }: {
     const latest = useRef(values);
     const busy = useRef(false);
     const blocked = useRef(false);
+    const [blockedUi, setBlockedUi] = useState(false);
     const [failed, setFailed] = useState(false);
     const [working, setWorking] = useState(false);
     const showConfirm = useDialogStore(state => state.showConfirm);
@@ -39,6 +40,7 @@ function MeasurementDraftEditor({ editor, profile, realm, onClose }: {
             setValues(next);
         } catch {
             blocked.current = true;
+            setBlockedUi(true);
             setFailed(true);
         }
     };
@@ -97,7 +99,7 @@ function MeasurementDraftEditor({ editor, profile, realm, onClose }: {
                 <button type="button" className="btn btn-danger" disabled={working}
                     onClick={() => { void discard(); }}>Elimina bozza</button>
             </div>
-            {!submitted && !blocked.current && (
+            {!submitted && !blockedUi && (
                 <DataMeasurements
                     profile={profile}
                     targetDateStr={date}
