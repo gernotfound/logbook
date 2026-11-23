@@ -31,7 +31,7 @@ export type DatedWriterEvidence = {
     revisionId?: string;
     parent?: WriterLineageReference;
 };
-export type DatedRecoveryEntry = {
+type DatedRecoveryEntry = {
     name: string;
     draftName: string;
     value: string;

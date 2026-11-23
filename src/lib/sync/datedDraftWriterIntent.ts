@@ -8,7 +8,7 @@ import { ordinaryDatedDraftStorage } from './datedDraftStorage';
 import type { WriterLineageReference } from './writerLineage';
 
 export {
-    createDatedWriterIntentName, DatedWriterConsumedError, type DatedRecoveryEntry, type DatedWriterEvidence,
+    createDatedWriterIntentName, DatedWriterConsumedError, type DatedWriterEvidence,
 } from './datedDraftWriterRecords';
 
 export function readDatedWriterEvidence(owner: string, draftName: string) {
