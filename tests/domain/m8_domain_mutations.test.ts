@@ -102,6 +102,26 @@ describe('M8 Domain Operations V4 — mutations, reordering and patch semantics'
         expect((replay.get('history_months/2026-09')!['w-2'] as any).globalEndTime).toBe(200);
     });
 
+    it('switches only the active cycle pointer and rejects stale or deleted targets', () => {
+        const before = base({
+            activeCycleId: 'previous-cycle',
+            trainingCycles: [
+                { id: 'previous-cycle', name: 'Prima fase', durationWeeks: 4, routines: [] },
+                { id: 'next-cycle', name: 'Seconda fase', durationWeeks: 6, routines: [] },
+            ],
+        });
+        const activate = { type: 'active-cycle.switch', id: 'next-cycle', expectedActiveId: 'previous-cycle' } as const;
+        const { after, operations, replay } = compile(before, activate);
+        expect(after.trainingCycles).toEqual(before.trainingCycles);
+        expect(after.activeCycleId).toBe('next-cycle');
+        expect(operations).toMatchObject([{ docPath: '', path: ['activeCycleId'], value: 'next-cycle' }]);
+        expect(replay.get('')?.activeCycleId).toBe('next-cycle');
+        expect(() => applyDomainOperations(after, { ...activate, id: null })).toThrow('ciclo attivo è cambiato');
+        expect(() => applyDomainOperations(before, { ...activate, id: 'deleted-cycle' })).toThrow('Ciclo non trovato');
+        expect(applyDomainOperations(after, { ...activate, id: null, expectedActiveId: 'next-cycle' }).activeCycleId)
+            .toBeNull();
+    });
+
     it('persists and semantically syncs structured training-cycle strategy', () => {
         const before = base({ trainingCycles: [] });
         const cycle = {

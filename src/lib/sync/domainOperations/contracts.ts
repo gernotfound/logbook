@@ -62,6 +62,7 @@ export type DomainOperation =
     | { type: 'training-cycle-routine.delete'; cycleId: string; routineId: string }
     | { type: 'training-cycle-routine.reorder'; cycleId: string; routineIds: string[] }
     | { type: 'active-cycle.set'; id: string | null }
+    | { type: 'active-cycle.switch'; id: string | null; expectedActiveId: string | null }
     | { type: 'history.upsert'; workout: WorkoutSession }
     | { type: 'history.delete'; id: string }
     | { type: 'active-workout.set'; workout: WorkoutSession | null; deletedWorkoutId?: string }

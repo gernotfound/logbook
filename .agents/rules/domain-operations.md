@@ -66,6 +66,11 @@ Le operazioni su collezioni keyed richiedono una identità stabile e valida.
 
 Il fallback atomico storico di `diffDocuments()` resta disponibile esclusivamente per i boundary snapshot bulk esplicitamente consentiti, nel formato supportato.
 
+`active-cycle.switch` confronta il ciclo attivo osservato e richiede che
+il nuovo riferimento esista nella transazione. L'intento modifica solo
+`activeCycleId`. Il percorso Kinde usa questa operazione anche per la
+disattivazione confermata, senza modificare le schede o i cicli salvati.
+
 Identità correnti:
 
 - routine/supplement/workout/meal/intake/exercise: `id`;

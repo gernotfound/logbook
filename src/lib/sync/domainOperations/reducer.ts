@@ -350,6 +350,13 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
         case 'active-cycle.set':
             data.activeCycleId = operation.id === null ? null : requireId(operation.id, 'Ciclo attivo');
             break;
+        case 'active-cycle.switch': {
+            if ((data.activeCycleId ?? null) !== operation.expectedActiveId) {
+                throw new Error('Il ciclo attivo è cambiato. Verifica l’archivio.');
+            }
+            data.activeCycleId = operation.id === null ? null : findCycle(data, operation.id).value.id;
+            break;
+        }
         case 'history.upsert': {
             const workout = { ...operation.workout, id: requireId(operation.workout.id, 'Allenamento') };
             assertWorkoutSessionIdentities(workout, 'Allenamento storico');
