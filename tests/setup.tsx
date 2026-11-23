@@ -468,10 +468,15 @@ beforeEach(() => {
 
 vi.mock('firebase/firestore', () => {
   const refPath = (ref: any) => typeof ref?.path === 'string' ? ref.path : '';
-  const snapshot = (data: any) => ({
-    exists: () => data !== undefined,
-    data: () => data,
-  });
+  // Firestore snapshots freeze the version read, not a live pointer to the
+  // mock store. Both separate data() calls and subsequent writes are isolated.
+  const snapshot = (data: any) => {
+    const captured = data === undefined ? undefined : structuredClone(data);
+    return {
+      exists: () => captured !== undefined,
+      data: () => captured === undefined ? undefined : structuredClone(captured),
+    };
+  };
   const defaultControl = () => {
     const now = Date.now();
     return {
