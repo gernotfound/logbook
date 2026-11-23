@@ -77,8 +77,12 @@ it('rejects a stale replica registration after reacceptance', async () => {
       checkpointAtMs: now, leaseUntilMs: now + 30_000, checkpointClock: {} } },
     mutation: { slot: 's00', action: 'register' },
   };
-  await assertFails(setDoc(doc(db, 'users/u/sync_control/state'), base));
-  await assertSucceeds(setDoc(doc(db, 'users/u/sync_control/state'), { ...base, consentRevision: 2 }));
+  const controlRef = doc(db, 'users/u/sync_control/state');
+  await assertFails(setDoc(controlRef, base));
+  await assertFails(setDoc(controlRef, { ...base, consentRevision: 1 }));
+  expect((await getDoc(controlRef)).exists()).toBe(false);
+  await assertSucceeds(setDoc(controlRef, { ...base, consentRevision: 2 }));
+  expect((await getDoc(controlRef)).data()?.consentRevision).toBe(2);
 });
 
 it('denies reads for malformed server consent records rather than treating them as active', async () => {
