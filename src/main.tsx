@@ -3,7 +3,8 @@ import { createRoot } from 'react-dom/client'
 import { readLocal } from './lib/sync/localRepository'
 import { ensureLocalVaultReady } from './lib/sync/secureArchiveUnlockFlow'
 import { readBrowserValueStrict } from './lib/sync/browserStorage'
-import { captureSession, GUEST_REVOCATION_KEY } from './lib/sync/session'
+import { captureSession, GUEST_REVOCATION_KEY, isActiveGuestSession, isCurrentSession } from './lib/sync/session'
+import { isVaultUnlocked } from './lib/sync/secureArchiveSession'
 import { readAuthenticatedOwnerHint } from './lib/sync/authOwnerHint'
 import App from './App'
 import { GuestOnlyAuthProvider } from './contexts/GuestOnlyAuthProvider'
@@ -81,6 +82,8 @@ export const initApp = async () => {
   let isGuest = false;
   try {
     isGuest = readBrowserValueStrict('logbook_is_guest') === 'true' && readBrowserValueStrict(GUEST_REVOCATION_KEY) === null;
+    // A persisted flag without an active guest generation is not an identity.
+    if (isGuest && !isActiveGuestSession()) throw new Error('Generazione della sessione guest non verificabile.');
   } catch (error) {
     console.warn('Bootstrap bloccato: ownership storage non leggibile.', error);
     renderStorageUnavailable(rootElement);
@@ -95,6 +98,7 @@ export const initApp = async () => {
 
   let marker: ReturnType<typeof getStorageMarker> = null;
   let bootstrapOwner: string | null = null;
+  let bootstrapGuestSession: ReturnType<typeof captureSession> | null = null;
   let cached: UserData | undefined = undefined;
   let readError: unknown = null;
 
@@ -104,22 +108,46 @@ export const initApp = async () => {
     // this cold boot remains guest-only and never adopts a stale account.
     if (!isGuest) readAuthenticatedOwnerHint(); // strict validation only
     bootstrapOwner = isGuest ? 'guest' : null;
+    if (bootstrapOwner) {
+      bootstrapGuestSession = captureSession();
+      if (bootstrapGuestSession.owner !== bootstrapOwner || !isCurrentSession(bootstrapGuestSession)) {
+        throw new Error('Sessione guest non valida durante il bootstrap.');
+      }
+    }
   } catch (error) {
     console.warn('Bootstrap bloccato: owner autenticato locale non leggibile.', error);
     renderStorageUnavailable(rootElement);
     return;
   }
 
-  // Never expose cached health data, workout recovery or start React auth
-  // hydration until the owner-scoped device vault is explicitly unlocked.
-  if (bootstrapOwner) await ensureLocalVaultReady(bootstrapOwner);
+  // A cancelled readiness Promise may resolve without an unlocked vault.
+  // Subsequent awaits also permit another tab to revoke this exact guest session.
+  const assertBootstrapGuestCurrent = () => {
+    if (bootstrapOwner && (!bootstrapGuestSession || !isCurrentSession(bootstrapGuestSession)
+      || !isVaultUnlocked(bootstrapOwner))) {
+      throw new Error('Sessione guest o archivio locale cambiati durante il bootstrap.');
+    }
+  };
+
+  // No health data may enter memory before the original guest generation is verified.
+  if (bootstrapOwner) {
+    await ensureLocalVaultReady(bootstrapOwner);
+    try { assertBootstrapGuestCurrent(); }
+    catch (error) {
+      console.warn('Bootstrap guest annullato: sessione o vault non più validi.', error);
+      renderStorageUnavailable(rootElement);
+      return;
+    }
+  }
 
   try {
     const catalog = await getCachedCatalog();
+    assertBootstrapGuestCurrent();
     try {
       if (bootstrapOwner) {
         marker = getStorageMarker(undefined, bootstrapOwner);
         const localEnvelope = await readLocal(bootstrapOwner);
+        assertBootstrapGuestCurrent();
         cached = localEnvelope?.data;
         useAppStore.setState({
           localWorkout: getInitialLocalWorkout(bootstrapOwner, cached?.activeWorkout ?? null, cached?.history, localEnvelope?.lastClosedWorkoutId, localEnvelope?.closedWorkoutIds),
@@ -132,6 +160,7 @@ export const initApp = async () => {
       console.warn("Errore recupero cache da IndexedDB:", err);
     }
 
+    assertBootstrapGuestCurrent();
     const status = diagnoseStorageState({
       cachedData: cached,
       readError,
@@ -173,6 +202,7 @@ export const initApp = async () => {
       // prima che Zod congeli il thread con la validazione sincrona massiva
       await new Promise(resolve => setTimeout(resolve, 0));
       
+      assertBootstrapGuestCurrent();
       const initialData = parseInitialUserData(cached);
       if (!initialData) {
         renderStorageUnavailable(rootElement);
