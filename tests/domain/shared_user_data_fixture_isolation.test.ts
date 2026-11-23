@@ -1,5 +1,10 @@
+import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
-import { createMockUserData } from '../setup';
+import { useAppStore } from '../../src/store/useAppStore';
+import {
+  createMockUserData, defaultMockUserData,
+  renderWithAuthenticatedTestOwner, renderWithProviders,
+} from '../setup';
 
 describe('shared UserData fixture factory', () => {
   it('does not leak nested mutations from one generated snapshot into another', () => {
@@ -27,6 +32,33 @@ describe('shared UserData fixture factory', () => {
       first.history[0].routineName = untouched.history[0].routineName;
       first.nutrition['2026-07-26'].weight = untouched.nutrition['2026-07-26'].weight;
       first.catalogOverrides.hiddenFoodIds.pop();
+    }
+  });
+
+  it.each([
+    { label: 'authenticated test context', mount: renderWithAuthenticatedTestOwner },
+    { label: 'legacy AuthProvider', mount: renderWithProviders },
+  ])('gives each $label render independent default business objects', ({ mount }) => {
+    const view = mount(createElement('div'));
+    try {
+      const installed = useAppStore.getState().userData;
+      expect(installed).toEqual(defaultMockUserData);
+      expect(installed).not.toBe(defaultMockUserData);
+      expect(installed?.library).not.toBe(defaultMockUserData.library);
+      expect(installed?.history?.[0]).not.toBe(defaultMockUserData.history?.[0]);
+      expect(installed?.nutrition?.['2026-07-26']).not.toBe(defaultMockUserData.nutrition?.['2026-07-26']);
+    } finally {
+      view.unmount();
+    }
+  });
+
+  it('preserves the explicit snapshot passed to an authenticated render fixture', () => {
+    const provided = createMockUserData();
+    const view = renderWithAuthenticatedTestOwner(createElement('div'), { userData: provided });
+    try {
+      expect(useAppStore.getState().userData).toBe(provided);
+    } finally {
+      view.unmount();
     }
   });
 });

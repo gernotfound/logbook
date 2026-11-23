@@ -7,9 +7,11 @@ const SLEEP_FIELDS = ['sleepHours', 'sleepDeep', 'sleepLight', 'sleepRem', 'slee
 export type MeasurementSnapshot = Pick<NutritionDay, typeof MEASUREMENT_SNAPSHOT_FIELDS[number]>;
 
 export function captureMeasurement(day: NutritionDay): MeasurementSnapshot {
-    return Object.fromEntries(MEASUREMENT_SNAPSHOT_FIELDS
+    // The deletion witness must not change when the originating day's
+    // nested BF provenance is edited while confirmation is pending.
+    return structuredClone(Object.fromEntries(MEASUREMENT_SNAPSHOT_FIELDS
         .filter(field => day[field] !== undefined)
-        .map(field => [field, day[field]])) as MeasurementSnapshot;
+        .map(field => [field, day[field]]))) as MeasurementSnapshot;
 }
 
 export const MEASUREMENT_CLEAR_PATCH: Readonly<MeasurementSnapshot> = Object.freeze(

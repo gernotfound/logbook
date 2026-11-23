@@ -12,6 +12,12 @@ export function formatProgressionReference(exposure?: NormalizedExposure): strin
             : '';
         return [main, segments].filter(Boolean).join(' · ') || 'tempo non disponibile';
     }
+    if (exposure?.trackingType === 'cardio') {
+        const minutes = set.timeSeconds !== undefined && set.timeSeconds > 0
+            ? `${set.timeSeconds / 60} min` : '';
+        const repetitions = set.reps !== undefined && set.reps > 0 ? `${set.reps} ripetizioni` : '';
+        return [minutes, repetitions].filter(Boolean).join(' · ') || 'dati cardio insufficienti';
+    }
     const load = set.effectiveKg ?? set.kg;
     const output = `${load !== undefined ? load : '?'} kg × ${set.reps ?? '?'}`;
     return set.rir === undefined ? output : `${output} · RIR ${set.rir}`;

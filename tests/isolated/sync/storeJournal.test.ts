@@ -27,7 +27,8 @@ import { createDataSlice } from '../../../src/store/slices/createDataSlice';
 import { createWorkoutSlice } from '../../../src/store/slices/createWorkoutSlice';
 import { createSyncSlice } from '../../../src/store/slices/createSyncSlice';
 import type { AppState } from '../../../src/store/useAppStore';
-import { readLocal, initializeLocal, acknowledgeThrough, adoptReplicaCheckpoint, commitDomainOperations, advanceLocalConsentRevisionIfClean } from '../../../src/lib/sync/localRepository';
+import { readLocal, initializeLocal, acknowledgeThrough, adoptReplicaCheckpoint, commitDomainOperations, advanceLocalConsentRevisionIfClean, markCloudIntegrityBlocked } from '../../../src/lib/sync/localRepository';
+import * as localRepository from '../../../src/lib/sync/localRepository';
 import { UserDataSchema } from '../../../src/lib/schema';
 import type { UserData } from '../../../src/types';
 import { getNutritionConflictFingerprint } from '../../../src/lib/utils/object';
@@ -250,6 +251,66 @@ describe('store with real IndexedDB commits', () => {
         expect(replayedEnvelope?.data.history?.filter(item => item.id === workout.id)).toHaveLength(1);
         expect(store.getState().syncHealth).toBe('synced');
         expect(store.getState().saveError).toBeNull();
+    });
+
+    it('does not treat an empty journal as cloud-verified when an integrity fence is durable', async () => {
+        await markCloudIntegrityBlocked('user:A');
+        const fenced = await readLocal('user:A');
+        const ciphertext = await get('logbook:v2:user:A');
+        expect(fenced?.cloudIntegrityFence).toBeTruthy();
+        expect(fenced?.pending).toEqual([]);
+
+        store.setState({
+            syncHealth: 'local-pending', syncing: true, cloudIntegrityBlocked: false,
+            saveError: 'Salvato localmente. Sincronizzazione in attesa.',
+        });
+        await store.getState().flushPendingSyncs();
+
+        expect(store.getState()).toMatchObject({
+            syncHealth: 'failed', syncing: false, syncPresentation: 'normal',
+            cloudIntegrityBlocked: true,
+        });
+        expect(store.getState().saveError).toContain('Snapshot cloud non verificato');
+        expect(sdk.save).not.toHaveBeenCalled();
+        expect(await readLocal('user:A')).toEqual(fenced);
+        expect(await get('logbook:v2:user:A')).toBe(ciphertext);
+    });
+
+    it('ignores an idle read superseded by an offline local edit in the same session', async () => {
+        expect((await readLocal('user:A'))?.pending).toEqual([]);
+        store.setState({
+            syncHealth: 'local-pending',
+            saveError: 'Salvato localmente. Sincronizzazione in attesa.',
+        });
+        const actualRead = localRepository.readLocal;
+        const observed = deferred<void>();
+        const release = deferred<void>();
+        vi.spyOn(localRepository, 'readLocal').mockImplementationOnce(async owner => {
+            const previous = await actualRead(owner);
+            observed.resolve(undefined);
+            await release.promise;
+            return previous;
+        });
+
+        const idleFlush = store.getState().flushPendingSyncs();
+        await observed.promise;
+        sdk.save.mockResolvedValueOnce({
+            ok: false, status: 'local-pending', error: new Error('Connessione assente'),
+        });
+        const saving = store.getState().saveUserData(data(171));
+        await store.getState().flushPendingSyncs();
+        await expect(saving).resolves.toMatchObject({ ok: false, status: 'local-pending' });
+        const durable = await readLocal('user:A');
+        expect(durable?.pending.length).toBeGreaterThan(0);
+        expect(durable?.data.profile?.height).toBe('171');
+        expect(store.getState().syncHealth).toBe('local-pending');
+
+        release.resolve(undefined);
+        await idleFlush;
+        expect(store.getState().syncHealth).toBe('local-pending');
+        expect(store.getState().saveError).toContain('Sincronizzazione in attesa');
+        expect(await readLocal('user:A')).toEqual(durable);
+        expect(sdk.save).toHaveBeenCalledTimes(1);
     });
 
     it('clears stale local-pending feedback after durable acknowledgement already drained the journal', async () => {

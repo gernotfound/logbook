@@ -662,7 +662,7 @@ function authenticatedFixtureOwner(): string {
  * must not transiently present the guest timer while an account vault is active.
  */
 export function renderWithAuthenticatedTestOwner(ui: React.ReactElement, options: RenderOptions = {}) {
-  const initialUserData = options.userData !== undefined ? options.userData : defaultMockUserData;
+  const initialUserData = options.userData !== undefined ? options.userData : createMockUserData();
   const initialLocalWorkout = options.localWorkout !== undefined ? options.localWorkout : null;
   setOwnerBoundUserData(initialUserData, options.dataOwner ?? authenticatedFixtureOwner());
   useAppStore.setState({
@@ -685,7 +685,7 @@ export function renderWithAuthenticatedTestOwner(ui: React.ReactElement, options
 }
 
 export function renderWithProviders(ui: React.ReactElement, options: RenderOptions = {}) {
-  const initialUserData = options.userData !== undefined ? options.userData : defaultMockUserData;
+  const initialUserData = options.userData !== undefined ? options.userData : createMockUserData();
   const initialLocalWorkout = options.localWorkout !== undefined ? options.localWorkout : null;
   setOwnerBoundUserData(initialUserData, options.dataOwner ?? authenticatedFixtureOwner());
 

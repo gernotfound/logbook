@@ -147,6 +147,62 @@ describe('browser storage boundary', () => {
         ]);
     });
 
+    it('rejects a replaced deletion receipt even when its storage key remains unchanged', () => {
+        const storageKey = 'logbook:v2:' + OWNER + ':account-deletion';
+        const initial = markAccountDeletion(OWNER, { receiptToken: 'receipt-A' });
+        const updatedRaw = JSON.stringify({ ...initial, receiptToken: 'receipt-B', serverAcceptedAt: Date.now() });
+        const originalRead = localStorageMock.getItem.getMockImplementation();
+        if (!originalRead) throw new Error('Missing localStorage mock read implementation');
+        let replaced = false;
+        localStorageMock.getItem.mockImplementation((readKey: string) => {
+            const observed = originalRead(readKey);
+            if (!replaced && readKey === storageKey) {
+                replaced = true;
+                localStorage.setItem(storageKey, updatedRaw);
+            }
+            return observed;
+        });
+        try {
+            expect(() => listPendingAccountDeletions()).toThrow('Inventario marker cancellazione account');
+        } finally {
+            localStorageMock.getItem.mockImplementation(originalRead);
+        }
+        expect(replaced).toBe(true);
+        expect(localStorage.getItem(storageKey)).toBe(updatedRaw);
+        expect(listPendingAccountDeletions().markers).toEqual([
+            expect.objectContaining({ owner: OWNER, receiptToken: 'receipt-B' }),
+        ]);
+    });
+
+    it('rejects a new deletion marker inserted during the final receipt-value recheck', () => {
+        const firstKey = 'logbook:v2:' + OWNER + ':account-deletion';
+        const otherOwner = 'user:concurrent';
+        const secondKey = 'logbook:v2:' + otherOwner + ':account-deletion';
+        markAccountDeletion(OWNER, { receiptToken: 'receipt-A' });
+        const originalRead = localStorageMock.getItem.getMockImplementation();
+        if (!originalRead) throw new Error('Missing localStorage mock read implementation');
+        let reads = 0;
+        localStorageMock.getItem.mockImplementation((readKey: string) => {
+            const observed = originalRead(readKey);
+            if (readKey === firstKey && ++reads === 2) {
+                localStorage.setItem(secondKey, JSON.stringify({
+                    owner: otherOwner, uid: 'concurrent', startedAt: Date.now(), receiptToken: 'receipt-B',
+                }));
+            }
+            return observed;
+        });
+        try {
+            expect(() => listPendingAccountDeletions()).toThrow('Inventario marker cancellazione account');
+        } finally {
+            localStorageMock.getItem.mockImplementation(originalRead);
+        }
+        expect(reads).toBeGreaterThanOrEqual(2);
+        expect(readAccountDeletionMarker(OWNER)?.receiptToken).toBe('receipt-A');
+        expect(readAccountDeletionMarker(otherOwner)?.receiptToken).toBe('receipt-B');
+        expect(listPendingAccountDeletions().markers.map(marker => marker.uid).sort())
+            .toEqual(['concurrent', 'test-user']);
+    });
+
     it('rejects an account-deletion marker whose UID does not match its owner key', () => {
         localStorage.setItem('logbook:v2:' + OWNER + ':account-deletion', JSON.stringify({
             uid: 'other-user',
