@@ -79,6 +79,20 @@ describe('SettingsView hierarchical navigation', () => {
         expect(screen.getByText(/Versione .* build/i)).toBeDefined();
     });
 
+    it('updates the offline notice on connectivity events without leaving application settings', () => {
+        renderWithProviders(<SettingsView />);
+        fireEvent.click(screen.getByRole('button', { name: /Aspetto e applicazione/i }));
+
+        fireEvent(window, new Event('offline'));
+        const notice = screen.getByText('Connessione assente').closest('[role="status"]');
+        expect(notice?.classList.contains('settings-offline-card')).toBe(true);
+        expect(screen.getByRole('heading', { name: 'Aspetto e applicazione' })).toBeDefined();
+
+        fireEvent(window, new Event('online'));
+        expect(screen.queryByText('Connessione assente')).toBeNull();
+        expect(screen.getByRole('heading', { name: 'Aspetto e applicazione' })).toBeDefined();
+    });
+
     it('returns to Home from the settings landing', () => {
         const onClose = vi.fn();
         renderWithProviders(<SettingsView onClose={onClose} />);
