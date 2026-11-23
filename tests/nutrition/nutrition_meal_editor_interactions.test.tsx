@@ -62,6 +62,42 @@ describe('Nutrition meal editor identity and pending mutations', () => {
         expect(onUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'meal-1', quantity: 75 }));
     });
 
+    it('keeps a portion draft editable after a rejected save promise and permits retry', async () => {
+        const meal: LoggedMealItem = {
+            id: 'meal-retry', name: 'Avena', meal: 'Colazione',
+            quantity: 100, baseQty: 100, kcal: 100, carbs: 10, pro: 5, fat: 4,
+        };
+        const failure = new Error('IndexedDB unavailable');
+        const onUpdate = vi.fn().mockRejectedValueOnce(failure).mockResolvedValueOnce(true);
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        function Harness() {
+            const [editing, setEditing] = useState<LoggedMealItem | null>(meal);
+            return <NutritionMealSection mealType="Colazione" mealItems={[meal]}
+                editingMealItem={editing} onEditingMealItemChange={setEditing}
+                onUpdateMealItem={onUpdate} onRemoveFood={vi.fn().mockResolvedValue(true)} />;
+        }
+
+        try {
+            render(<Harness />);
+            fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '75' } });
+            fireEvent.click(screen.getByRole('button', { name: 'Salva' }));
+
+            await waitFor(() => expect(consoleError).toHaveBeenCalledWith('Modifica del pasto non completata:', failure));
+            expect((screen.getByRole('spinbutton') as HTMLInputElement).value).toBe('75');
+            expect((screen.getByRole('button', { name: 'Salva' }) as HTMLButtonElement).disabled).toBe(false);
+            expect(screen.getByRole('heading', { name: 'Modifica porzione' })).toBeDefined();
+            expect(onUpdate).toHaveBeenCalledExactlyOnceWith({ id: 'meal-retry', quantity: 75 });
+
+            fireEvent.click(screen.getByRole('button', { name: 'Salva' }));
+            await waitFor(() => expect(screen.queryByRole('heading', { name: 'Modifica porzione' })).toBeNull());
+            expect(onUpdate).toHaveBeenCalledTimes(2);
+            expect(onUpdate).toHaveBeenLastCalledWith({ id: 'meal-retry', quantity: 75 });
+        } finally {
+            consoleError.mockRestore();
+        }
+    });
+
     it('shows quick-add entries with ID-based edit and deletion instead of hiding their calories', async () => {
         const quick: LoggedMealItem = {
             id: 'quick-1', name: 'Pasto veloce', meal: 'quick', quantity: 1,
