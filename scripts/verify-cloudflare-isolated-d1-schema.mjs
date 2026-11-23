@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { D1_NOW_MS } from '../cloudflare/sql/d1-time.mjs';
 
 // Explicitly reviewed migration set: new SQL requires another review before
 // this on-demand operational workflow can apply it to the isolated D1.
@@ -16,6 +17,7 @@ export const MIGRATIONS = Object.freeze(`
 0008_kinde_oauth_attempts.sql
 0009_require_cloud_key_for_replica_writes.sql
 0010_atomic_health_erasure_finalization.sql
+0011_integer_cloud_key_clock.sql
 `.trim().split('\n'));
 const DATABASE = 'thelogbook-cf02-eu-isolated-20261113';
 const DATABASE_ID = '9aa51833-8adc-495f-bdfc-93b5542e8023';
@@ -46,8 +48,8 @@ export function verifyLocalMigrationTarget(config, names) {
 export function verifyMigrationLedger(rows, phase) {
   assert.ok(phase === 'before' || phase === 'after', 'invalid migration phase');
   assert.ok(Array.isArray(rows), 'missing D1 migration ledger');
-  // The isolated database has received 0001-0008. An interrupted official
-  // migration may have applied 0009; retry must not replay or skip a file.
+  // The minimum supported isolated checkpoint is 0008. Resume only from
+  // a contiguous known prefix so retry cannot replay or skip files.
   assert.ok(rows.length >= 8 && rows.length <= MIGRATIONS.length,
     'unexpected remote migration count');
   for (let i = 0; i < rows.length; i += 1) {
@@ -128,16 +130,22 @@ export async function verifyRemoteIsolatedD1({
 
   if (phase === 'after') {
     const schema = unpackQuery(await call('/query', [
-      "SELECT name, type FROM sqlite_master WHERE name IN (",
+      "SELECT name, type, sql FROM sqlite_master WHERE name IN (",
+      "'cloud_key_first_issuance',",
       "'sync_writable_cloud_key',",
       "'health_erasure_finalizations',",
       "'health_erasure_finalization_fence') ORDER BY name",
     ].join(' ')));
     assert.deepEqual(schema.map(row => [row.name, row.type]), [
+      ['cloud_key_first_issuance', 'trigger'],
       ['health_erasure_finalization_fence', 'trigger'],
       ['health_erasure_finalizations', 'table'],
       ['sync_writable_cloud_key', 'view'],
     ], 'final D1 schema objects missing');
+    for (const row of schema.filter(({ name }) => name === 'cloud_key_first_issuance' || name === 'sync_writable_cloud_key')) {
+      assert.ok(typeof row.sql === 'string' && row.sql.includes(D1_NOW_MS), 'missing integer consent clock in ' + row.name);
+      assert.doesNotMatch(row.sql, /julianday/i, 'legacy consent clock in ' + row.name);
+    }
   }
 
   return { phase, applied, expected: MIGRATIONS.length,
