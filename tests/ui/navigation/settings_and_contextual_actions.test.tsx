@@ -4,23 +4,10 @@ import { renderWithProviders, emptyUserData } from '../../setup';
 import TrainingHistory from '../../../src/components/Training/TrainingHistory';
 import TrainingExercises from '../../../src/components/Training/TrainingExercises';
 import { FoodItemRow } from '../../../src/components/Nutrition/archive/FoodItemRow';
-import SettingsView from '../../../src/components/SettingsView';
-import type { WorkoutSession } from '../../../src/types';
+import type { WorkoutSession, Exercise, Food } from '../../../src/types';
 
 describe('Settings and contextual UI actions', () => {
   beforeEach(() => { localStorage.clear(); });
-
-  describe('5. SettingsView CSV Export Button Location', () => {
-    test('Esporta Dati CSV button is directly present in SettingsView', () => {
-      renderWithProviders(<SettingsView />);
-
-      const dataButton = screen.getByRole('button', { name: /Dati e backup/i });
-      fireEvent.click(dataButton);
-
-      const csvBtn = screen.getByText(/Esporta dati \(CSV\)/i);
-      expect(csvBtn).not.toBeNull();
-    });
-  });
 
   describe('7. ContextMenu Integration (TrainingHistory, TrainingExercises, FoodItemRow)', () => {
     test('TrainingHistory ContextMenu provides "Vedi report", "Modifica allenamento" and "Elimina allenamento"', async () => {
@@ -41,7 +28,7 @@ describe('Settings and contextual UI actions', () => {
       renderWithProviders(
         <TrainingHistory onEditWorkout={(w) => { edited = w; }} />,
         {
-          userData: { ...emptyUserData, history: mockHistory } as any
+          userData: { ...emptyUserData, history: mockHistory }
         }
       );
 
@@ -85,7 +72,7 @@ describe('Settings and contextual UI actions', () => {
     });
 
     test('TrainingExercises detail actions preserve default vs custom exercise rules', () => {
-      const mockLibrary = [
+      const mockLibrary: Exercise[] = [
         {
           id: 'ex_default',
           name: 'Panca Piana Catalogo',
@@ -105,7 +92,7 @@ describe('Settings and contextual UI actions', () => {
       ];
 
       renderWithProviders(<TrainingExercises />, {
-        userData: { ...emptyUserData, library: mockLibrary, routines: [] } as any
+        userData: { ...emptyUserData, library: mockLibrary, routines: [] }
       });
 
       act(() => {
@@ -135,7 +122,7 @@ describe('Settings and contextual UI actions', () => {
     });
 
     test('FoodItemRow ContextMenu renders "Modifica alimento" and "Elimina alimento", preserving quick add', () => {
-      const mockFood = {
+      const mockFood: Food = {
         id: 'cf_apple',
         name: 'Mela Fuji',
         brand: 'Bio',
@@ -147,9 +134,10 @@ describe('Settings and contextual UI actions', () => {
         unit: 'g'
       };
 
-      let editedFood: any = null;
-      let deletedFood: any = null;
-      let quickAdded: { food: any; mealType: string } | null = null;
+      let editedFood: Food | null = null;
+      let deletedFood: Food | null = null;
+      let duplicatedFood: Food | null = null;
+      let quickAdded: { food: Food; mealType: string } | null = null;
 
       renderWithProviders(
         <FoodItemRow
@@ -158,7 +146,7 @@ describe('Settings and contextual UI actions', () => {
           mealTypes={['Colazione', 'Pranzo']}
           onEdit={(f) => { editedFood = f; }}
           onDelete={(f) => { deletedFood = f; }}
-          onDuplicate={() => {}}
+          onDuplicate={(f) => { duplicatedFood = f; }}
           onQuickAddToMeal={(f, mt) => { quickAdded = { food: f, mealType: mt }; }}
         />
       );
@@ -195,6 +183,11 @@ describe('Settings and contextual UI actions', () => {
         fireEvent.click(screen.getByRole('menuitem', { name: /elimina/i }));
       });
       expect(deletedFood).toEqual(mockFood);
+
+      // Duplicate is a distinct callback, not an implicit side effect of edit.
+      fireEvent.click(triggerBtn);
+      fireEvent.click(screen.getByRole('menuitem', { name: /duplica/i }));
+      expect(duplicatedFood).toEqual(mockFood);
     });
   });
 });

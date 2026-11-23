@@ -62,6 +62,20 @@ describe('useScrollLock', () => {
     view.unmount();
   });
 
+  it('preserves unrelated body style updates made while a scroll lock is active', () => {
+    const property = '--test-scroll-lock-unrelated';
+    document.body.style.setProperty(property, 'before');
+    const view = render(<Lock />);
+
+    document.body.style.setProperty(property, 'updated');
+    expect(document.body.style.overflow).toBe('hidden');
+    view.unmount();
+
+    expect(document.body.style.getPropertyValue(property)).toBe('updated');
+    expect(document.body.style.overflow).toBe('');
+    document.body.style.removeProperty(property);
+  });
+
   it('balances effect replays in StrictMode', () => {
     const view = render(<StrictMode><Lock /></StrictMode>);
     expect(document.body.style.overflow).toBe('hidden');
