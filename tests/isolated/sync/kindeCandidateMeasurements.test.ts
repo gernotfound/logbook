@@ -180,6 +180,27 @@ describe('candidate-only measurement editor, authenticated encrypted device draf
         } finally { fixture.close(); }
     });
 
+    it('rejects a profile change before commit even with BF disabled, preserving the female hip measurement draft', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const client = browser(fixture);
+            const first = await openKindeCandidateFitnessRealm({ ...client, expected });
+            await first.submit({ type: 'profile.patch', patch: { height: '165', gender: 'F' } });
+            const second = await openKindeCandidateFitnessRealm({ ...client, expected });
+            const draft = await first.openMeasurementDraft(DATE);
+            draft.write({ ...draft.initial.values, weight: '65', hip: '94', calculateBf: false });
+            const sealed = localStorage.getItem(slot);
+            await second.submit({ type: 'profile.patch', patch: { height: '180', gender: 'M' } });
+            await expect(first.saveMeasurementDraft(draft)).rejects.toThrow('profilo biometrico è cambiato');
+            expect(localStorage.getItem(slot)).toBe(sealed);
+            expect(fixture.count('sync_receipts', uid)).toBe(2);
+            expect((await readLocal(owner))?.data.nutrition?.[DATE]).toBeUndefined();
+            first.close();
+            second.close();
+        } finally { fixture.close(); }
+    });
+
     it('blocks two tabs from editing one draft and never adopts a modified device witness', async () => {
         const fixture = await createCloudKeyHttpFixture([uid]);
         try {
