@@ -1,6 +1,6 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
-**Stato:** ricognizione del 22 novembre 2026. Questa mappa distingue codice su [`main`](https://github.com/gernotfound/logbook/tree/main), runtime pubblico, letture Cloudflare e prove funzionali. Non è una certificazione Production e non autorizza GO, billing, cancellazioni, DNS, OAuth Production o modifiche irreversibili. Le versioni e i commit dei singoli interventi sono nelle [issue CF](https://github.com/gernotfound/logbook/issues/1053); rileggere sempre l'HEAD reale.
+**Stato:** inventario provider del 22 novembre 2026; aggiornamento del solo codice candidato al 23 novembre. Questa mappa distingue codice su [`main`](https://github.com/gernotfound/logbook/tree/main), runtime pubblico, letture Cloudflare e prove funzionali. Non è una certificazione Production e non autorizza GO, billing, cancellazioni, DNS, OAuth Production o modifiche irreversibili. Le versioni e i commit dei singoli interventi sono nelle [issue CF](https://github.com/gernotfound/logbook/issues/1053); rileggere sempre l'HEAD reale.
 
 ## Implementato, montato e verificato sono cose differenti
 
@@ -8,7 +8,7 @@
 | --- | --- | --- | --- |
 | PWA React e Static Assets | Guest locale, storage cifrato, app fitness legacy | Frontend Worker su `thelogbook.me`; `GuestOnlyAuthProvider` ancora montato | Installazione, aggiornamento, recovery e Safari/iOS su dispositivi reali |
 | Identità Kinde | Gateway OAuth/sessione, observer React condiviso, login/logout | Il pubblico usa `KindeAccountSessionProvider` e `KindeAccountEntry identityOnly`. Il proprietario ha osservato accesso Google, logout applicativo e rientro esplicito il 21/11 ([CF-03](https://github.com/gernotfound/logbook/issues/1057)) | Verifica/reset email, policy provider, account linking, sessioni, browser e UX complete |
-| Fitness account Kinde **isolato** | `KindeCandidateFitnessPanel`, realm con owner/fence, profilo biometrico, pianificazione macro, diario/storico pasti, integratori, storico allenamenti consultabile ed eliminabile, schede ed esercizi personali con recupero della bozza cifrata ([CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057)) | Disponibile come percorso candidato `candidateMode='fitness'`, non montato nel pubblico `identityOnly`; editor separati dal writer Firebase | Sessione attiva, editing storico, cicli, catalogo globale, bozze delle misurazioni, lifecycle account completo e prove su account/dispositivi reali |
+| Fitness account Kinde **isolato** | `KindeCandidateFitnessPanel`, realm con owner/fence, profilo biometrico, pianificazione macro, diario/storico pasti, integratori, storico allenamenti consultabile ed eliminabile, schede ed esercizi personali con recupero della bozza cifrata ([CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057)) | Disponibile come percorso candidato `candidateMode='fitness'`, non montato nel pubblico `identityOnly`; editor separati dal writer Firebase | Sessione attiva, editing storico, cicli, catalogo globale, lifecycle account completo e prove su account/dispositivi reali |
 | Replica Workers/D1 | Worker API/Auth Gate, schema SQL, journal cifrato e ricevute D1; percorso candidato con commit prima della rete | Worker API privato e frontend **senza** binding `D1_API`; prove isolate sintetiche del realm | Roundtrip reale multi-device, lost ACK, concorrenza, offline, quote e fail-safe |
 | Consenso, cifratura e diritti | Consenso iniziale, ADK/vault, export/restore, revoca e rights-only candidati | `CLOUD_ACCOUNT_KEK_V1` presente come `secret_text` nel Worker API privato; nessun grant fitness nel provider pubblico | Recuperabilità indipendente della KEK, consenso/revoca/restore/erasure reali, privacy e protezione anti-resurrection |
 | Erasure e inattività | Registro D1, finalizzatore, runner e [manifest CF-06 candidato](../../cloudflare/jobs/README.md) | GET Cloudflare del 22/11: elenco Cron Trigger vuoto per tutti e quattro i Worker TheLogBook; runner non schedulato | Esecuzione isolata, terminazione atomica, eliminazione Kinde per ultima, inattività 12 mesi |
@@ -24,8 +24,12 @@ riferimenti avvenuta prima del commit.
 Lo storico candidato delle rilevazioni mostra misure e sonno dallo snapshot
 Kinde. Si può eliminare una misurazione dopo conferma. Il journal verifica
 che i valori confermati siano ancora correnti e conserva sonno, pasti e
-attività dello stesso giorno. L'inserimento e la modifica con bozza datata
-restano da completare.
+attività dello stesso giorno. L'editor candidato ora prepara inserimento e
+modifica in una bozza cifrata owner-scoped, con data originale recuperabile,
+un solo writer per volta e verifica dei campi precedenti dentro il commit
+IndexedDB. La scelta US Navy viene salvata insieme agli input; un tentativo
+già avviato non può essere duplicato dopo una ricevuta incerta. Il flusso
+rimane non montato nel pubblico; CI e prove runtime sono gate distinti.
 
 ## Lettura del provider — 22 novembre 2026
 
