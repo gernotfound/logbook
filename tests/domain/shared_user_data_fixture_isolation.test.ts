@@ -6,6 +6,12 @@ describe('shared UserData fixture factory', () => {
     const first = createMockUserData();
     const second = createMockUserData();
     const untouched = structuredClone(second);
+    if (!first.library || !first.history || !first.nutrition
+      || !first.catalogOverrides?.hiddenFoodIds
+      || !untouched.library || !untouched.history || !untouched.nutrition
+      || !untouched.catalogOverrides?.hiddenFoodIds) {
+      throw new Error('Expected full shared fixture defaults');
+    }
 
     try {
       first.library[0].name = 'first fixture only';
