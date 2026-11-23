@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { verifyLocalMigrationTarget, verifyMigrationLedger,
+import { verifyExistingTestUpgradeSql, verifyLocalMigrationTarget, verifyMigrationLedger,
   verifyRemoteIsolatedD1, MIGRATIONS } from '../../scripts/verify-cloudflare-isolated-d1-schema.mjs';
 import { D1_NOW_MS } from '../../cloudflare/sql/d1-time.mjs';
 
@@ -22,8 +22,9 @@ function response(result, status = 200) {
   return new Response(JSON.stringify({ success: status === 200, result }), { status });
 }
 function syntheticProvider({
-  migrationCount = 8, principals = 0, sessions = 0, keys = 0,
-  erasureJobs = 0, objects = schema, jurisdiction = 'eu', replication = 'disabled',
+  migrationCount = 8, principals = 0, sessions = 0, keys = 0, consents = 0, erasureJobs = 0,
+  subjects = 0, states = 0, documents = 0, replicas = 0, receipts = 0, replicaMutations = 0,
+  objects = schema, jurisdiction = 'eu', replication = 'disabled',
   failedStatus = null,
 } = {}) {
   const calls = [];
@@ -39,7 +40,8 @@ function syntheticProvider({
       const sql = JSON.parse(options.body).sql;
       const rows = sql.includes('FROM d1_migrations') ? ledger(migrationCount)
         : sql.includes('FROM sqlite_master') ? objects
-        : [{ principals, sessions, keys, erasure_jobs: erasureJobs }];
+        : [{ principals, sessions, keys, consents, erasure_jobs: erasureJobs,
+          subjects, states, documents, replicas, receipts, replica_mutations: replicaMutations }];
       return response([{ success: true, results: rows }]);
     }
     return response({ uuid: ID, name: 'thelogbook-cf02-eu-isolated-20261113',
@@ -134,9 +136,48 @@ void test('fails closed on provider, migration and isolation drift without write
   }
 });
 
+void test('explicit 0011 test upgrade verifies unchanged identity and earlier replica fixtures', async () => {
+  const existing = { principals: 3, sessions: 29, subjects: 1, states: 1, documents: 1, replicas: 1, receipts: 1 };
+  const before = syntheticProvider({ migrationCount: 10, ...existing });
+  const after = syntheticProvider({ migrationCount: 11, ...existing });
+  const options = { account: ACCOUNT, token: 'test', existingTestDb0011: true };
+  const preflight = await verifyRemoteIsolatedD1({ ...options, phase: 'before', request: before.request });
+  assert.deepEqual(preflight.inventory, { ...existing, replica_mutations: 0 });
+  const verified = await verifyRemoteIsolatedD1({
+    ...options, phase: 'after', request: after.request, priorInventory: preflight.inventory,
+  });
+  assert.equal(verified.applied, 11);
+  assert.ok(after.calls.some(c => c.sql?.includes('sqlite_master')));
+  assertReadOnlyRequests([...before.calls, ...after.calls]);
+});
+
+void test('0011 test upgrade refuses a changed migration file, another ledger, health data or changed identity counts', async () => {
+  const sql = readFileSync(new URL('../../cloudflare/api/migrations/0011_integer_cloud_key_clock.sql', import.meta.url), 'utf8');
+  assert.doesNotThrow(() => verifyExistingTestUpgradeSql(sql));
+  assert.throws(() => verifyExistingTestUpgradeSql(sql + '\nDELETE FROM auth_sessions;'), /unreviewed SQL/);
+  const options = { account: ACCOUNT, token: 'test', existingTestDb0011: true };
+  for (const override of [
+    { migrationCount: 9 }, { migrationCount: 11 }, { keys: 1 }, { consents: 1 },
+    { erasureJobs: 1 }, { sessions: null }, { replicas: -1 },
+  ]) {
+    const before = syntheticProvider({ migrationCount: 10, principals: 3, sessions: 29, ...override });
+    await assert.rejects(verifyRemoteIsolatedD1({ ...options, phase: 'before', request: before.request }));
+    assertReadOnlyRequests(before.calls);
+  }
+  const existing = { principals: 3, sessions: 29, subjects: 1, states: 1, documents: 1, replicas: 1, receipts: 1 };
+  const inventory = { ...existing, replica_mutations: 0 };
+  for (const [override, priorInventory] of [[{}, undefined], [{ sessions: 30 }, inventory], [{ documents: 0 }, inventory]]) {
+    const after = syntheticProvider({ migrationCount: 11, ...existing, ...override });
+    await assert.rejects(verifyRemoteIsolatedD1({ ...options, phase: 'after', request: after.request, priorInventory }),
+      /existing test inventory changed/);
+    assertReadOnlyRequests(after.calls);
+  }
+});
+
 void test('manual workflow is main-only, version pinned and does not deploy Worker or DNS', () => {
   const yml = readFileSync(new URL('../../.github/workflows/cloudflare-d1-isolated-migrations.yml', import.meta.url), 'utf8');
   assert.match(yml, /workflow_dispatch:/);
+  assert.match(yml, /upgrade_existing_test_db_0011:[\s\S]+type: boolean\s+default: false/);
   assert.match(yml, /github\.ref == 'refs\/heads\/main'/);
   assert.match(yml, /git ls-remote --exit-code origin refs\/heads\/main/);
   assert.match(yml, /wrangler@4\.159\.0 d1 migrations apply/);

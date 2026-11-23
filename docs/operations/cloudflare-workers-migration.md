@@ -1,5 +1,26 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-05 — Applicare 0011 alla D1 di collaudo già usata per l'identità
+
+Il workflow manuale `cloudflare-d1-isolated-migrations.yml` verifica il
+`main` remoto e la riuscita del suo gate prima di qualsiasi scrittura.
+L'opzione `upgrade_existing_test_db_0011` è riservata alla D1 applicativa
+isolata EU già usata per il collaudo Kinde. Richiede ledger a 0010,
+bookmark Time Travel disponibile, repliche disabilitate, identità di test
+presenti e zero consensi salute, chiavi o job di cancellazione. Il codice
+verifica l'impronta della sola migrazione 0011, che sostituisce le due
+definizioni SQL del clock senza scrivere righe applicative.
+
+Dopo Wrangler, il verificatore rilegge il ledger fino a 0011, i trigger e
+la view e confronta i conteggi di identità, sessioni e replica sintetica
+con il preflight.
+Un cambiamento concorrente nei conteggi o una risposta incerta richiede
+una rilettura indipendente dello schema e del ledger prima di qualunque
+nuovo tentativo. Il reset di lancio rimane un'operazione distinta del
+proprietario. Il percorso predefinito continua a richiedere un database
+vuoto. Questa verifica di schema precede il collaudo di consenso, ADK e
+replica sul provider.
+
 ## CF-05 — Recupero ciphertext per export diritti dopo revoca (candidato v2.546.0, 19/11/2026)
 
 Il percorso separato `POST /v1/rights/scan` è una lettura di documenti **cifrati**, autorizzata da sessione Kinde e CSRF, consenso originale D1, job erasure non completato e registro esterno `RECOVERY_DB` ancora aperto senza cutoff. Un controllo SQL first-primary avviene insieme alla pagina bounded di 8 documenti, poi viene ripetuto prima della risposta, insieme al confronto del registro indipendente. La vecchia `/v1/sync/scan` resta vietata agli account ritirati: nessun fallback o grant fitness. Il client `withKindeCandidateRightsCheckpoint()` raccoglie solo una scansione **completa, revision-pinned e AEAD verificata** con ADK `rights-export` effimera, la azzera dopo l'operazione e consegna il checkpoint solo a un consumatore esplicito. Nessun documento in chiaro viene restituito dal server. Sono previste regressioni per una vera modifica cifrata sincronizzata e poi revocata, sessione scaduta, CSRF, owner, scope, cutoff, pagina malformata, cache ed errori di trasporto.
