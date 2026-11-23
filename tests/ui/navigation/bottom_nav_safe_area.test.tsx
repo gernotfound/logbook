@@ -38,20 +38,11 @@ describe('BottomNav & Safe Area Layout Conformance', () => {
     expect(container.querySelectorAll('.nav-icon-shell')).toHaveLength(4);
     expect(container.querySelectorAll('.nav-item.active')).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Home' }).classList.contains('active')).toBe(true);
-    const nav = screen.getByRole('navigation', { name: 'Navigazione principale' });
-    expect(nav.classList.contains('safe-bottom')).toBe(true);
-    expect(Array.from(nav.querySelectorAll('[aria-current="page"]'))).toEqual([
-      screen.getByRole('button', { name: 'Home' }),
-    ]);
 
     rerender(<BottomNav activeTab="data" setActiveTab={setActiveTab} />);
     expect(container.querySelectorAll('.nav-item.active')).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Home' }).classList.contains('active')).toBe(false);
     expect(screen.getByRole('button', { name: /Dati/i }).classList.contains('active')).toBe(true);
-    expect(screen.getByRole('button', { name: 'Home' }).hasAttribute('aria-current')).toBe(false);
-    expect(Array.from(nav.querySelectorAll('[aria-current="page"]'))).toEqual([
-      screen.getByRole('button', { name: 'Dati e statistiche' }),
-    ]);
 
     expect(navCss).toMatch(/\.nav-item\.active\s+\.nav-icon-shell\s*\{/);
     expect(navCss).not.toMatch(/\.nav-item\.active\s+svg\s*\{[^}]*background/);

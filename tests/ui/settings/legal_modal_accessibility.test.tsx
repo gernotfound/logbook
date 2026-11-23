@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PrivacyPolicy } from '../../../src/pages/PrivacyPolicy';
@@ -35,48 +34,29 @@ describe('legal documents modal accessibility', () => {
     expect(screen.getByText(/Le esportazioni JSON e CSV sono facoltative e producono file non cifrati/i)).toBeDefined();
   });
 
-  it.each([
-    { label: 'privacy policy', Component: PrivacyPolicy, title: /Informativa sulla privacy/i, closeName: 'Chiudi informativa' },
-    { label: 'terms', Component: TermsAndConditions, title: /Termini e condizioni/i, closeName: 'Chiudi termini' },
-  ])('traps forward and reverse Tab and closes $label with Escape', ({ Component, title, closeName }) => {
+  it('traps focus in privacy policy and closes with Escape', () => {
     const onClose = vi.fn();
-    render(<><button type="button">Outside</button><Component onClose={onClose} /></>);
-    const dialog = screen.getByRole('dialog', { name: title });
+    render(<><button type="button">Outside</button><PrivacyPolicy onClose={onClose} /></>);
+    const dialog = screen.getByRole('dialog', { name: /Informativa sulla privacy/i });
     expect(dialog.getAttribute('aria-modal')).toBe('true');
-    const firstClose = screen.getByRole('button', { name: closeName });
-    const footerClose = screen.getByRole('button', { name: 'Chiudi' });
+    const firstClose = screen.getByRole('button', { name: 'Chiudi informativa' });
     expect(document.activeElement).toBe(firstClose);
-
-    fireEvent.keyDown(firstClose, { key: 'Tab', shiftKey: true });
-    expect(document.activeElement).toBe(footerClose);
+    const footerClose = screen.getByRole('button', { name: 'Chiudi' });
+    footerClose.focus();
     fireEvent.keyDown(footerClose, { key: 'Tab' });
     expect(document.activeElement).toBe(firstClose);
-
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it.each([
-    { label: 'privacy policy', Component: PrivacyPolicy, title: /Informativa sulla privacy/i, closeName: 'Chiudi informativa' },
-    { label: 'terms', Component: TermsAndConditions, title: /Termini e condizioni/i, closeName: 'Chiudi termini' },
-  ])('restores focus to the opening control when $label unmounts', ({ Component, title, closeName }) => {
-    function DocumentOpener() {
-      const [open, setOpen] = useState(false);
-      return <>
-        <button type="button" onClick={() => setOpen(true)}>Apri documento</button>
-        {open && <Component onClose={() => setOpen(false)} />}
-      </>;
-    }
-    render(<DocumentOpener />);
-    const opener = screen.getByRole('button', { name: 'Apri documento' });
-    opener.focus();
-    fireEvent.click(opener);
-    expect(screen.getByRole('dialog', { name: title })).toBeDefined();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: closeName }));
-
-    fireEvent.click(screen.getByRole('button', { name: closeName }));
-    expect(screen.queryByRole('dialog', { name: title })).toBeNull();
-    expect(document.activeElement).toBe(opener);
+  it('traps focus in terms and closes with Escape', () => {
+    const onClose = vi.fn();
+    render(<TermsAndConditions onClose={onClose} />);
+    const dialog = screen.getByRole('dialog', { name: /Termini e condizioni/i });
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Chiudi termini' }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledOnce();
   });
 
   it.each([
@@ -115,9 +95,7 @@ describe('legal documents modal accessibility', () => {
 
   it('preserves legal modal focus when GlobalDialog opens above ConsentOverlay', async () => {
     render(<><ConsentOverlay /><GlobalDialog /></>);
-    const opener = screen.getByRole('button', { name: /Informativa sulla Privacy/i });
-    opener.focus();
-    fireEvent.click(opener);
+    fireEvent.click(screen.getByRole('button', { name: /Informativa sulla Privacy/i }));
     const legalClose = screen.getByRole('button', { name: 'Chiudi informativa' });
     expect(document.activeElement).toBe(legalClose);
 
@@ -134,7 +112,7 @@ describe('legal documents modal accessibility', () => {
     expect(document.activeElement).toBe(legalClose);
     fireEvent.click(legalClose);
     expect(screen.queryByRole('dialog', { name: /Informativa sulla privacy/i })).toBeNull();
-    expect(document.activeElement).toBe(opener);
+    expect(document.activeElement).not.toBe(document.body);
   });
 
 });

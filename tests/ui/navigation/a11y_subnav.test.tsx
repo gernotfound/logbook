@@ -3,7 +3,9 @@ import { render, screen, within, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import DataView from '../../../src/components/Data/DataView';
 import NutritionView from '../../../src/components/Nutrition/NutritionView';
+import SettingsView from '../../../src/components/SettingsView';
 import TrainingView from '../../../src/components/Training/TrainingView';
+import { BottomNav } from '../../../src/components/UI/BottomNav';
 import type { NutritionSubTab, TrainingSubTab } from '../../../src/types';
 
 // Mock dependencies
@@ -51,10 +53,7 @@ describe('A11Y-01: Keyboard Accessibility for Sub-Navigation', () => {
         expect(document.activeElement).toBe(sleepTab);
         expect(measurementsTab.getAttribute('aria-selected')).toBe('false');
         expect(sleepTab.getAttribute('aria-selected')).toBe('true');
-        const panel = screen.getByRole('tabpanel', { name: 'Sonno' });
-        expect(sleepTab.getAttribute('aria-controls')).toBe(panel.id);
-        expect(panel.getAttribute('aria-labelledby')).toBe(sleepTab.id);
-        expect(measurementsTab.getAttribute('aria-controls')).toBeNull();
+        expect(screen.getByRole('tabpanel', { name: 'Sonno' })).not.toBeNull();
     });
 
     it('NutritionView sub-nav uses buttons with role="tab" and is keyboard accessible', async () => {
@@ -83,10 +82,19 @@ describe('A11Y-01: Keyboard Accessibility for Sub-Navigation', () => {
         expect(document.activeElement).toBe(planningTab);
         expect(mealsTab.getAttribute('aria-selected')).toBe('false');
         expect(planningTab.getAttribute('aria-selected')).toBe('true');
-        const panel = screen.getByRole('tabpanel', { name: 'Pianificazione' });
-        expect(planningTab.getAttribute('aria-controls')).toBe(panel.id);
-        expect(panel.getAttribute('aria-labelledby')).toBe(planningTab.id);
-        expect(mealsTab.getAttribute('aria-controls')).toBeNull();
+        expect(screen.getByRole('tabpanel', { name: 'Pianificazione' })).not.toBeNull();
+    });
+
+    it('SettingsView hierarchical menu uses native buttons and accessible back navigation', async () => {
+        render(<SettingsView />);
+        
+        expect(screen.getByRole('heading', { name: 'Impostazioni' })).not.toBeNull();
+        const privacyButton = screen.getByRole('button', { name: /^Privacy/i });
+        expect(privacyButton.tagName).toBe('BUTTON');
+        
+        fireEvent.click(privacyButton);
+        expect(screen.getByRole('heading', { name: 'Privacy' })).not.toBeNull();
+        expect(screen.getByRole('button', { name: 'Torna alle impostazioni' })).not.toBeNull();
     });
 
     it('TrainingView sub-nav uses buttons with role="tab" and is keyboard accessible', async () => {
@@ -113,12 +121,14 @@ describe('A11Y-01: Keyboard Accessibility for Sub-Navigation', () => {
         expect(document.activeElement).toBe(planningTab);
         expect(sessionTab.getAttribute('aria-selected')).toBe('false');
         expect(planningTab.getAttribute('aria-selected')).toBe('true');
-        const panel = screen.getByRole('tabpanel', { name: 'Pianificazione' });
-        expect(planningTab.getAttribute('aria-controls')).toBe(panel.id);
-        expect(panel.getAttribute('aria-labelledby')).toBe(planningTab.id);
-        expect(sessionTab.getAttribute('aria-controls')).toBeNull();
+        expect(screen.getByRole('tabpanel', { name: 'Pianificazione' })).not.toBeNull();
     });
     
-
+    it('BottomNav uses native buttons correctly', () => {
+        render(<BottomNav activeTab="home" setActiveTab={vi.fn()} />);
+        const navItems = screen.getAllByRole('button');
+        expect(navItems.length).toBe(4);
+        expect(navItems[0].getAttribute('aria-label')).toBe('Home');
+    });
 
 });

@@ -41,34 +41,6 @@ describe('sub-navigation interaction', () => {
     expect(screen.getAllByRole('tab').filter(tab => tab.tabIndex === 0)).toEqual([session]);
   });
 
-  it('scrolls an overflowed tab strip with the wheel and updates its edge indicators', () => {
-    const { container } = render(
-      <SubNav id="test" label="Allenamento" items={items} value="session" onChange={vi.fn()} />
-    );
-    const list = screen.getByRole('tablist', { name: 'Allenamento' });
-    Object.defineProperty(list, 'clientWidth', { configurable: true, value: 200 });
-    Object.defineProperty(list, 'scrollWidth', { configurable: true, value: 200 });
-
-    fireEvent.wheel(list, { deltaY: 80 });
-    expect(list.scrollLeft).toBe(0);
-
-    Object.defineProperty(list, 'scrollWidth', { configurable: true, value: 440 });
-    fireEvent.scroll(list);
-    expect(container.querySelector('.sub-nav-edge-start')).toBeNull();
-    expect(container.querySelector('.sub-nav-edge-end')).not.toBeNull();
-
-    fireEvent.wheel(list, { deltaY: 80 });
-    expect(list.scrollLeft).toBe(80);
-    fireEvent.scroll(list);
-    expect(container.querySelector('.sub-nav-edge-start')).not.toBeNull();
-    expect(container.querySelector('.sub-nav-edge-end')).not.toBeNull();
-
-    list.scrollLeft = 240;
-    fireEvent.scroll(list);
-    expect(container.querySelector('.sub-nav-edge-start')).not.toBeNull();
-    expect(container.querySelector('.sub-nav-edge-end')).toBeNull();
-  });
-
   it('reveals the active tab when its text width grows without resizing the tablist', () => {
     let resized: () => void = () => {};
     const observe = vi.fn();

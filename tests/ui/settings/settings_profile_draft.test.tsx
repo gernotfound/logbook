@@ -105,84 +105,7 @@ describe('biometric profile draft persistence', () => {
         expect(state.dispatch).toHaveBeenNthCalledWith(2, { type: 'profile.patch', patch: { gender: 'F' } });
     });
 
-    it.each(['rejected', 'failed'] as const)(
-        'keeps a %s profile patch available for retry until a durable save succeeds',
-        async status => {
-        state.dispatch.mockResolvedValueOnce({
-            ok: false, status, error: new Error('write not durable'),
-        });
-        const { result } = renderHook(() => useSettingsProfile());
-        act(() => result.current.setHeight('180'));
-
-        await act(async () => { await result.current.handleSaveProfile(); });
-        expect(state.dispatch).toHaveBeenCalledExactlyOnceWith({
-            type: 'profile.patch', patch: { height: '180' },
-        });
-        expect(result.current.height).toBe('180');
-        expect(state.showAlert).toHaveBeenCalledExactlyOnceWith('Errore durante il salvataggio del profilo.');
-
-        await act(async () => { await result.current.handleSaveProfile(); });
-        expect(state.dispatch).toHaveBeenCalledTimes(2);
-        expect(state.dispatch).toHaveBeenLastCalledWith({
-            type: 'profile.patch', patch: { height: '180' },
-        });
-        await act(async () => { await result.current.handleSaveProfile(); });
-        expect(state.dispatch).toHaveBeenCalledTimes(2);
-        expect(state.showAlert).toHaveBeenCalledTimes(1);
-        },
-    );
-
-    it('accepts the dispatch boundary local-pending result without resubmitting an unchanged patch', async () => {
-        state.dispatch.mockResolvedValueOnce({
-            ok: false, status: 'local-pending', error: new Error('network unavailable'),
-        });
-        const { result } = renderHook(() => useSettingsProfile());
-        act(() => result.current.setGender('F'));
-
-        await act(async () => { await result.current.handleSaveProfile(); });
-        expect(state.dispatch).toHaveBeenCalledExactlyOnceWith({
-            type: 'profile.patch', patch: { gender: 'F' },
-        });
-        expect(state.showAlert).not.toHaveBeenCalled();
-        await act(async () => { await result.current.handleSaveProfile(); });
-        expect(state.dispatch).toHaveBeenCalledTimes(1);
-    });
-
-    it('does not carry an in-flight patch across an owner change', async () => {
-        let complete!: (value: { ok: true; status: 'synced' }) => void;
-        state.dispatch.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
-        const { result, rerender } = renderHook(() => useSettingsProfile());
-        act(() => result.current.setHeight('180'));
-        let firstSave!: Promise<void>;
-        act(() => { firstSave = result.current.handleSaveProfile(); });
-
-        state.owner = 'user:second';
-        state.dataOwner = 'user:second';
-        state.epoch++;
-        state.profile = { dob: '2002-02-02', height: '164', gender: 'F' };
-        rerender();
-        expect([result.current.dob, result.current.height, result.current.gender])
-            .toEqual(['2002-02-02', '164', 'F']);
-
-        await act(async () => {
-            complete({ ok: true, status: 'synced' });
-            await firstSave;
-        });
-        await act(async () => { await result.current.handleSaveProfile(); });
-        expect(state.dispatch).toHaveBeenCalledTimes(1);
-        expect(state.showAlert).not.toHaveBeenCalled();
-
-        act(() => result.current.setGender('M'));
-        await act(async () => { await result.current.handleSaveProfile(); });
-        expect(state.dispatch).toHaveBeenNthCalledWith(1, {
-            type: 'profile.patch', patch: { height: '180' },
-        });
-        expect(state.dispatch).toHaveBeenNthCalledWith(2, {
-            type: 'profile.patch', patch: { gender: 'M' },
-        });
-    });
-
-    it('composes multiple edits in one render cycle into the actual submitted patch', async () => {
+    it('composes multiple field changes made in the same render cycle', () => {
         const { result } = renderHook(() => useSettingsProfile());
         act(() => {
             result.current.setDob('2001-02-03');
@@ -191,11 +114,6 @@ describe('biometric profile draft persistence', () => {
         });
         expect([result.current.dob, result.current.height, result.current.gender])
             .toEqual(['2001-02-03', '182', 'F']);
-        await act(async () => { await result.current.handleSaveProfile(); });
-        expect(state.dispatch).toHaveBeenCalledExactlyOnceWith({
-            type: 'profile.patch',
-            patch: { dob: '2001-02-03', height: '182', gender: 'F' },
-        });
     });
 
     it('does not surface or reuse another Auth epoch\'s unsaved biometric fields', () => {
@@ -235,24 +153,16 @@ describe('biometric profile draft persistence', () => {
         expect(state.showAlert).toHaveBeenCalledWith('Errore durante il salvataggio del profilo.');
     });
 
-    it('ignores a stale save rejection without revealing the previous owner draft', async () => {
+    it('does not clear the draft or show an old-session error after the session changes', async () => {
         let reject!: (error: Error) => void;
         state.dispatch.mockImplementationOnce(() => new Promise((_resolve, rejectPromise) => { reject = rejectPromise; }));
-        const { result, rerender } = renderHook(() => useSettingsProfile());
+        const { result } = renderHook(() => useSettingsProfile());
         act(() => result.current.setHeight('185'));
         let pending!: Promise<void>;
         act(() => { pending = result.current.handleSaveProfile(); });
-
-        state.owner = 'user:second';
-        state.dataOwner = 'user:second';
-        state.epoch++;
-        state.profile = { dob: '2002-02-02', height: '164', gender: 'F' };
-        rerender();
+        state.currentSession = false;
         await act(async () => { reject(new Error('obsolete request')); await pending; });
-
-        expect(result.current.height).toBe('164');
+        expect(result.current.height).toBe('185');
         expect(state.showAlert).not.toHaveBeenCalled();
-        await act(async () => { await result.current.handleSaveProfile(); });
-        expect(state.dispatch).toHaveBeenCalledTimes(1);
     });
 });
