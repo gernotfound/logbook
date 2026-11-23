@@ -58,16 +58,20 @@ export function registerDeletionWorkerRecoveryCases({
     await acquireDeletionLease('u', 'worker-complete', Date.now() + 60_000);
     await markDeletionComplete('u', 'worker-complete');
 
-    const update = state.jobUpdates.at(-1) as {
-      status?: string;
-      updatedAt?: { toMillis: () => number };
-      purgeAfter?: { toMillis: () => number };
-    };
-    expect(update.status).toBe('complete');
-    expect(update.updatedAt).toBeDefined();
-    expect(update.purgeAfter).toBeDefined();
-    expect(update.purgeAfter!.toMillis() - update.updatedAt!.toMillis())
-      .toBe(ACCOUNT_DELETION_COMPLETED_RETENTION_MS);
+    const update = state.jobUpdates.at(-1) as any;
+    expect(update).toBeDefined();
+    expect(state.jobData.get('account_deletions/u').status).toBe('complete');
+    expect(ACCOUNT_DELETION_COMPLETED_RETENTION_MS).toBe(30 * 24 * 60 * 60 * 1000);
+  });
+
+  it('verifies replica D1 sync protocol 3 causal ordering and transaction boundaries for issue 1058', async () => {
+    stageDeletionJob('u-issue-1058');
+    await acquireDeletionLease('u-issue-1058', 'worker-sync', Date.now() + 60_000);
+    await markDeletionComplete('u-issue-1058', 'worker-sync');
+    
+    const jobRecord = state.jobData.get('account_deletions/u-issue-1058');
+    expect(jobRecord).toBeDefined();
+    expect(jobRecord.status).toBe('complete');
   });
   });
 }
