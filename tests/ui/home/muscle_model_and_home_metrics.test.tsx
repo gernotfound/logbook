@@ -22,9 +22,12 @@ describe('Muscle presentation and home metrics', () => {
         fireEvent.click(createBtn);
       });
 
-      // SVG MuscleModel must be rendered in DOM
-      const svg = container.querySelector('svg');
-      expect(svg).not.toBeNull();
+      // An unrelated SVG icon must not satisfy the muscle map assertion.
+      const editor = container.querySelector('#routine-creation-form');
+      expect(editor).not.toBeNull();
+      const map = screen.getByRole('img', { name: 'Mappa dei muscoli, vista anteriore e posteriore' });
+      expect(editor?.contains(map)).toBe(true);
+      expect(map.querySelector('[data-muscle-path="chest-upper-left"]')).not.toBeNull();
     });
   });
 
