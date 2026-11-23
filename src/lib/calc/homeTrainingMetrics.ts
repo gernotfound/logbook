@@ -5,10 +5,12 @@ import type { Exercise, WorkoutSession } from '../../types';
 
 function getHomeWorkoutTimestamp(workout: WorkoutSession | null | undefined): number | null {
     if (!workout) return null;
-    if (typeof workout.globalStartTime === 'number' && !isNaN(workout.globalStartTime)) {
+    const validTimestamp = (value: unknown): value is number =>
+        typeof value === 'number' && Number.isFinite(value) && !Number.isNaN(new Date(value).getTime());
+    if (validTimestamp(workout.globalStartTime)) {
         return workout.globalStartTime;
     }
-    if (typeof workout.globalEndTime === 'number' && !isNaN(workout.globalEndTime)) {
+    if (validTimestamp(workout.globalEndTime)) {
         return workout.globalEndTime;
     }
     if (workout.date) {
@@ -24,7 +26,7 @@ export function getHomeWorkoutDate(workout: WorkoutSession | null | undefined): 
     if (!workout) return null;
     if (workout.date) return workout.date;
     const timestamp = getHomeWorkoutTimestamp(workout);
-    return timestamp ? getLocalDateString(timestamp) : null;
+    return timestamp !== null ? getLocalDateString(timestamp) : null;
 }
 
 export function calculateHomeWorkoutStreak(history: WorkoutSession[], nowMs: number): number {
@@ -59,17 +61,19 @@ export function buildHomeMuscleExposureIndex(
     const entries: HomeMuscleExposure[] = [];
     for (const workout of history) {
         const time = getHomeWorkoutTimestamp(workout);
-        if (!time) continue;
+        if (time === null) continue;
         const muscles = new Set<string>();
         for (const exercise of workout.exercises || []) {
             const libraryExercise = library.get(exercise.exId);
             if (!libraryExercise) continue;
-            const hasWorkSet = (exercise.sets || []).some(set => {
-                const hasValues = (set.kg !== undefined && set.kg !== '')
-                    || (set.reps !== undefined && set.reps !== '')
-                    || (set.time !== undefined && set.time !== '');
-                return set.done === true || hasValues || set.done === undefined;
-            });
+            const hasRecordedValues = (part: { kg?: string | number; reps?: string | number; time?: string | number }) =>
+                (part.kg !== undefined && part.kg !== '')
+                    || (part.reps !== undefined && part.reps !== '')
+                    || (part.time !== undefined && part.time !== '');
+            const hasWorkSet = (exercise.sets || []).some(set =>
+                set.done === true || hasRecordedValues(set)
+                    || (set.segments ?? []).some(hasRecordedValues),
+            );
             if (!hasWorkSet) continue;
             for (const id of [...(libraryExercise.muscles || []), ...(libraryExercise.secondaryMuscles || [])]) {
                 if (!id || typeof id !== 'string') continue;

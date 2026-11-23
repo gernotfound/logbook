@@ -7,12 +7,15 @@ import type {
     WorkoutSession,
 } from '../../types';
 import { getSetSegments, getSetTechnique } from '../advancedSets';
+import { parseDateInput } from '../utils/date';
 import type {
     NormalizedExposure,
     NormalizedSet,
     ProgressionBodyweightContext,
     ProgressionExerciseRef,
 } from './progression';
+
+const isCanonicalDay = (day: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(day) && parseDateInput(day) === day;
 
 function numberValue(value: unknown): number | undefined {
     const raw = typeof value === 'string' ? value.trim().replace(',', '.') : value;
@@ -47,6 +50,15 @@ function parseTimeSeconds(value: unknown): number | undefined {
     return seconds !== undefined && Number.isFinite(seconds) ? seconds : undefined;
 }
 
+function parseCardioMinutesSeconds(value: unknown): number | undefined {
+    if (typeof value !== 'string') return undefined;
+    const raw = value.trim();
+    if (!/^\d+(?:[.,]\d+)?$/.test(raw)) return undefined;
+    const minutes = Number(raw.replace(',', '.'));
+    const seconds = minutes * 60;
+    return Number.isFinite(seconds) && seconds > 0 ? seconds : undefined;
+}
+
 function validRir(value: unknown): number | undefined {
     return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 10 ? value : undefined;
 }
@@ -56,11 +68,11 @@ export function historicalBodyweight(
     context: ProgressionBodyweightContext,
 ): number | undefined {
     if (Number.isFinite(context.explicitBodyweightKg) && (context.explicitBodyweightKg ?? 0) > 0) return context.explicitBodyweightKg;
-    if (!date || !context.nutrition) return undefined;
+    if (!isCanonicalDay(date) || !context.nutrition) return undefined;
     let latestDate = '';
     let latestWeight: number | undefined;
     for (const [day, entry] of Object.entries(context.nutrition)) {
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day > date || day <= latestDate) continue;
+        if (!isCanonicalDay(day) || day > date || day <= latestDate) continue;
         const weight = numberValue(entry?.weight);
         if (weight !== undefined && weight > 0) {
             latestDate = day;
@@ -75,14 +87,14 @@ export function createHistoricalBodyweightLookup(nutrition: ProgressionBodyweigh
     // Standalone normalisation keeps its existing lookup contract. A complete
     // report can index dated weigh-ins once rather than sort them per exercise.
     const measurements = Object.keys(nutrition ?? {})
-        .filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date))
+        .filter(isCanonicalDay)
         .sort()
         .flatMap(date => {
             const weight = numberValue(nutrition?.[date]?.weight);
             return weight !== undefined && weight > 0 ? [{ date, weight }] : [];
         });
     return (date: string) => {
-        if (!date) return undefined;
+        if (!isCanonicalDay(date)) return undefined;
         let low = 0;
         let high = measurements.length;
         while (low < high) {
@@ -110,11 +122,14 @@ function normalizeMeasurements(
     input: Pick<SessionExerciseSet, 'kg' | 'reps' | 'time'>,
     exercise: ProgressionExerciseRef | undefined,
     bodyweightKg: number | undefined,
+    trackingType: Exercise['trackingType'],
 ): Pick<NormalizedSet, 'kg' | 'effectiveKg' | 'reps' | 'timeSeconds'> {
     const kg = numberValue(input.kg);
     const effectiveKg = effectiveLoad(kg, exercise, bodyweightKg);
     const reps = positiveInt(input.reps);
-    const timeSeconds = parseTimeSeconds(input.time);
+    // The cardio editor records decimal minutes; timed strength sets record seconds.
+    const timeSeconds = trackingType === 'cardio'
+        ? parseCardioMinutesSeconds(input.time) : parseTimeSeconds(input.time);
     return {
         ...(kg !== undefined ? { kg } : {}),
         ...(effectiveKg !== undefined ? { effectiveKg } : {}),
@@ -127,10 +142,11 @@ function normalizeSegment(
     segment: SetSegment,
     exercise: ProgressionExerciseRef | undefined,
     bodyweightKg: number | undefined,
+    trackingType: Exercise['trackingType'],
 ): NormalizedSet['segments'][number] {
     return {
         ...(segment.technique ? { technique: segment.technique } : {}),
-        ...normalizeMeasurements(segment, exercise, bodyweightKg),
+        ...normalizeMeasurements(segment, exercise, bodyweightKg, trackingType),
         ...(segment.restBeforeSeconds !== undefined ? { restBeforeSeconds: segment.restBeforeSeconds } : {}),
         ...(segment.target?.type === 'reps' ? { targetReps: segment.target.reps } : {}),
     };
@@ -140,8 +156,9 @@ function normalizeSet(
     set: SessionExerciseSet,
     exercise: ProgressionExerciseRef | undefined,
     bodyweightKg: number | undefined,
+    trackingType: Exercise['trackingType'],
 ): NormalizedSet {
-    const { timeSeconds, ...measurements } = normalizeMeasurements(set, exercise, bodyweightKg);
+    const { timeSeconds, ...measurements } = normalizeMeasurements(set, exercise, bodyweightKg, trackingType);
     const rir = validRir(set.rir);
     return {
         technique: getSetTechnique(set),
@@ -149,7 +166,7 @@ function normalizeSet(
         ...measurements,
         ...(rir !== undefined ? { rir } : {}),
         ...(timeSeconds !== undefined ? { timeSeconds } : {}),
-        segments: getSetSegments(set).map(segment => normalizeSegment(segment, exercise, bodyweightKg)),
+        segments: getSetSegments(set).map(segment => normalizeSegment(segment, exercise, bodyweightKg, trackingType)),
         ...(set.target?.type === 'reps' ? { targetReps: set.target.reps } : {}),
     };
 }
@@ -187,7 +204,7 @@ export function normalizeExerciseExposureWithWeight(
 ): NormalizedExposure {
     const date = session.date ?? '';
     const trackingType = exercise?.trackingType ?? 'weight_reps';
-    const sets = (sessionExercise.sets ?? []).map(set => normalizeSet(set, exercise, bodyweightKg));
+    const sets = (sessionExercise.sets ?? []).map(set => normalizeSet(set, exercise, bodyweightKg, trackingType));
     const observedSets = sets.filter(set => hasObservedSet(set, trackingType));
     let totalReps = 0;
     let tonnage = 0;

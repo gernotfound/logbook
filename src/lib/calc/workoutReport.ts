@@ -79,6 +79,8 @@ function sumExerciseVolumes(
     let total = 0;
     let complete = true;
     for (const exposure of exposures) {
+        // Cardio and timed sets have no mechanical tonnage to complete.
+        if (exposure.trackingType === 'cardio' || exposure.trackingType === 'time') continue;
         if (!exposure.tonnageComplete || exposure.tonnageKg === undefined) {
             complete = false;
             continue;
