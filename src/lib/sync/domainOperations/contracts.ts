@@ -42,7 +42,7 @@ export type DomainOperation =
     | { type: 'supplement.edit'; supplement: Supplement }
     | { type: 'supplement.delete'; id: string }
     | { type: 'supplement.reorder'; ids: string[] }
-    | { type: 'routine.upsert'; routine: WorkoutRoutine }
+    | { type: 'routine.upsert' | 'routine.create'; routine: WorkoutRoutine }
     | { type: 'routine.edit'; id: string; name: string; exercises: RoutineExercise[] }
     | { type: 'routine.delete'; id: string }
     | { type: 'routine.reorder'; ids: string[] }

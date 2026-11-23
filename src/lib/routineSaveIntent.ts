@@ -1,7 +1,7 @@
 import { normalizeBusinessId } from './businessIdentity';
 import { MAX_ROUTINE_SEGMENTS, parseRoutineSetCount } from './routineSessionLimits';
 import { generateUniqueName } from './utils/string';
-import type { DomainOperation, DomainOperationBatch } from './sync/domainOperations';
+import type { DomainOperation } from './sync/domainOperations';
 import type { RoutineExercise, WorkoutRoutine } from '../types';
 
 export function routineDraftValidationError(name: string, exercises: readonly RoutineExercise[]): string | null {
@@ -36,7 +36,7 @@ export function buildRoutineSaveOperations({
     routines: readonly WorkoutRoutine[];
     editingRoutineId?: string | null;
     createId?: string;
-}): DomainOperationBatch {
+}): DomainOperation {
     const validation = routineDraftValidationError(name, exercises);
     if (validation) throw new Error(validation);
 
@@ -56,11 +56,7 @@ export function buildRoutineSaveOperations({
         throw new Error('Identificativo nuova scheda non valido o già presente');
     }
     const created: WorkoutRoutine = { id, name: savedName, exercises: savedExercises };
-    const orderIds = [...routines, created].sort((a, b) => a.name.localeCompare(b.name)).map(routine => routine.id);
-    return [
-        { type: 'routine.upsert', routine: created },
-        { type: 'routine.reorder', ids: orderIds },
-    ];
+    return { type: 'routine.create', routine: created };
 }
 
 export function buildRoutineDuplicateOperation(

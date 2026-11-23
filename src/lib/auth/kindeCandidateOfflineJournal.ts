@@ -3,7 +3,7 @@ import { KindeCandidateBoundaryError, type KindeCandidateAccess } from './kindeC
 import { normalizeKindeFitnessIntents } from './kindeCandidateDomainIntent';
 import type { DomainOperationBatch } from '../sync/domainOperations';
 import { readLocal } from '../sync/localArchiveBootstrap';
-import { commitDomainOperations } from '../sync/localDomainCommit';
+import { commitDomainOperations, type LocalWriteGuard } from '../sync/localDomainCommit';
 import type { LocalEnvelope } from '../sync/localEnvelopeValidation';
 import { assertNoLocalPurge } from '../sync/localPurgeFence';
 import { readVaultControl, unlockVaultForOwner } from '../sync/secureArchiveSession';
@@ -52,7 +52,7 @@ export function createKindeCandidateOfflineJournal(
 
     return {
         isCurrent,
-        submit: async (operation: DomainOperationBatch) => {
+        submit: async (operation: DomainOperationBatch, beforeCommit?: LocalWriteGuard) => {
             const intents = normalizeKindeFitnessIntents(operation);
             if (!isCurrent()) throw new KindeCandidateBoundaryError();
             const grant = await unlockVaultForOwner(owner, isCurrent);
@@ -61,7 +61,7 @@ export function createKindeCandidateOfflineJournal(
                 const before = await readLocal(owner);
                 if (!current() || !valid(before)) throw new KindeCandidateBoundaryError();
                 const committed = await commitDomainOperations(owner, intents, before.data,
-                    record => current() && valid(record));
+                    record => current() && valid(record) && (!beforeCommit || beforeCommit(record)));
                 const durable = await readLocal(owner);
                 if (!current() || !valid(durable) || !committed.operations.every(op =>
                     durable.pending.some(candidate => equal(candidate, op)))) throw new KindeCandidateBoundaryError();

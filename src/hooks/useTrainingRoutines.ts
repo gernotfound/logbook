@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
-import { parseRoutineRecovery } from './trainingRoutines/routineRecoverySchema';
+import { parseRoutineRecovery } from '../lib/routineRecoverySchema';
 import { readWorkoutRecoveryDraftImage, writeWorkoutRecoveryDraft } from '../lib/sync/workoutRecoveryDraft';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
 import type { Exercise, WorkoutRoutine } from '../types';

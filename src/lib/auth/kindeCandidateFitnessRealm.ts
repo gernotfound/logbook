@@ -2,11 +2,13 @@ import { captureKindeCandidateSessionFence, KindeCandidateBoundaryError, type Ki
 import { withKindeCandidateLocalReadiness } from './kindeCandidateLocalReadiness';
 import { submitKindeCandidateDomainIntent } from './kindeCandidateDomainIntent';
 import { createKindeCandidateOfflineJournal } from './kindeCandidateOfflineJournal';
+import { openKindeCandidateRoutineDraft, type KindeRoutineDraft } from './kindeCandidateRoutineDraft';
 import { authenticatedIdentitySource } from '../sync/authenticatedIdentitySource';
 import { isKindeAccountLocalFitnessClear } from '../sync/kindeOwnerLocalFitnessFence';
 import { readLocal } from '../sync/localArchiveBootstrap';
 import { userOwner } from '../sync/owner';
 import type { DomainOperationBatch } from '../sync/domainOperations';
+import type { LocalWriteGuard } from '../sync/localDomainCommit';
 import type { UserData } from '../../types';
 
 type Principal = Extract<KindeCandidateAccess, { kind: 'consent-confirmed' }>['principal'];
@@ -25,6 +27,7 @@ export type KindeCandidateFitnessSnapshot = Readonly<{
 }>;
 
 type MutationOutcome = Awaited<ReturnType<typeof submitKindeCandidateDomainIntent>>;
+type RoutineDraftController = Awaited<ReturnType<typeof openKindeCandidateRoutineDraft>>;
 
 type SessionPermit = Readonly<{
     verifiedAtMs: number;
@@ -48,6 +51,8 @@ export type KindeCandidateFitnessRealm = {
     snapshot: () => KindeCandidateFitnessSnapshot | null;
     refresh: () => Promise<KindeCandidateFitnessSnapshot>;
     submit: (operation: DomainOperationBatch) => Promise<MutationOutcome>;
+    openRoutineDraft: (routineId?: string) => Promise<KindeRoutineDraft>;
+    saveRoutineDraft: (draft: KindeRoutineDraft) => Promise<{ outcome: MutationOutcome; draftCleared: boolean }>;
     close: () => void;
 };
 
@@ -70,6 +75,7 @@ export async function openKindeCandidateFitnessRealm({
     let busy = false;
     let visible: KindeCandidateFitnessSnapshot | null = null;
     let offlineJournal: ReturnType<typeof createKindeCandidateOfflineJournal> = null;
+    let routineDraft: RoutineDraftController | null = null;
     let needsReconciliation = false;
     let sessionPermit: SessionPermit | null = null;
     const offline = () => navigator.onLine === false;
@@ -92,6 +98,10 @@ export async function openKindeCandidateFitnessRealm({
     // fence; using the view check inside the journal would make it recursive.
     const viewPermitted = () => permitted() && (!offline() || offlineJournal?.isCurrent() === true);
     const request = { expected: principal, stillCurrent: current, send, browserCookies };
+    const closeRoutineDraft = () => {
+        routineDraft?.handle.close();
+        routineDraft = null;
+    };
 
     const load = async (): Promise<KindeCandidateFitnessSnapshot> => {
         requireCurrent();
@@ -133,12 +143,59 @@ export async function openKindeCandidateFitnessRealm({
         throw error;
     }
 
+    const submit = async (operation: DomainOperationBatch, beforeCommit?: LocalWriteGuard, saved?: () => void) => {
+        if (busy) throw new KindeCandidateBoundaryError();
+        requirePermit();
+        busy = true;
+        // The previous plaintext snapshot becomes stale as soon as this
+        // operation starts, including when the remote response is lost.
+        visible = null;
+        try {
+            if (offline()) {
+                const journal = offlineJournal;
+                if (!journal) throw new KindeCandidateBoundaryError();
+                // Reconnect via refresh even if the tab loses the result
+                // of a local commit, so the original intent is never retried.
+                needsReconciliation = true;
+                offlineJournal = null;
+                const { data, outcome } = await journal.submit(operation, beforeCommit);
+                requirePermit();
+                saved?.();
+                if (journal.isCurrent()) {
+                    offlineJournal = journal;
+                    visible = { owner, principal, data };
+                }
+                return outcome;
+            }
+            if (needsReconciliation) throw new KindeCandidateBoundaryError();
+            offlineJournal = null;
+            const result = await submitKindeCandidateDomainIntent({
+                ...request, stillCurrent: permitted, operation, beforeCommit,
+            });
+            requirePermit();
+            saved?.();
+            // A pending journal is not a cloud checkpoint. Recover only
+            // through a later explicit trusted refresh, never fake success.
+            if (result.kind !== 'local-pending') {
+                try { await load(); } catch {
+                    visible = null;
+                    sessionPermit = null;
+                }
+            }
+            requirePermit();
+            return result;
+        } finally {
+            busy = false;
+        }
+    };
+
     return {
         isCurrent: viewPermitted,
         snapshot: () => viewPermitted() && visible && (offline() || !needsReconciliation)
             ? structuredClone(visible) : null,
         close: () => {
             closed = true;
+            closeRoutineDraft();
             visible = null;
             offlineJournal = null;
             sessionPermit = null;
@@ -146,6 +203,7 @@ export async function openKindeCandidateFitnessRealm({
         refresh: async () => {
             if (busy || offline()) throw new KindeCandidateBoundaryError();
             requireCurrent();
+            closeRoutineDraft();
             busy = true;
             visible = null;
             offlineJournal = null;
@@ -153,48 +211,41 @@ export async function openKindeCandidateFitnessRealm({
             try { return await load(); }
             finally { busy = false; }
         },
-        submit: async operation => {
-            if (busy) throw new KindeCandidateBoundaryError();
-            requirePermit();
+        submit: operation => {
+            if (!busy) closeRoutineDraft();
+            return submit(operation);
+        },
+        openRoutineDraft: async routineId => {
+            if (busy || !visible || !viewPermitted()) throw new KindeCandidateBoundaryError();
+            const routine = routineId === undefined ? undefined : visible.data.routines?.find(item => item.id === routineId);
+            if (routineId !== undefined && !routine) throw new KindeCandidateBoundaryError();
+            closeRoutineDraft();
             busy = true;
-            // The previous plaintext snapshot becomes stale as soon as this
-            // operation starts, including when the remote response is lost.
-            visible = null;
             try {
-                if (offline()) {
-                    const journal = offlineJournal;
-                    if (!journal) throw new KindeCandidateBoundaryError();
-                    // Reconnect via refresh even if the tab loses the result
-                    // of a local commit, so the original intent is never retried.
-                    needsReconciliation = true;
-                    offlineJournal = null;
-                    const { data, outcome } = await journal.submit(operation);
-                    requirePermit();
-                    if (journal.isCurrent()) {
-                        offlineJournal = journal;
-                        visible = { owner, principal, data };
-                    }
-                    return outcome;
-                }
-                if (needsReconciliation) throw new KindeCandidateBoundaryError();
-                offlineJournal = null;
-                const result = await submitKindeCandidateDomainIntent({
-                    ...request, stillCurrent: permitted, operation,
+                const journal = offlineJournal;
+                const draftCurrent = () => permitted() && (!offline() || journal?.isCurrent() === true);
+                const opened = await openKindeCandidateRoutineDraft({
+                    owner, revision: principal.healthConsentRevision, permitted: draftCurrent, routine,
                 });
-                requirePermit();
-                // A pending journal is not a cloud checkpoint. Recover only
-                // through a later explicit trusted refresh, never fake success.
-                if (result.kind !== 'local-pending') {
-                    try { await load(); } catch {
-                        visible = null;
-                        sessionPermit = null;
-                    }
+                if (!draftCurrent()) {
+                    opened.handle.close();
+                    throw new KindeCandidateBoundaryError();
                 }
-                requirePermit();
-                return result;
-            } finally {
-                busy = false;
-            }
+                routineDraft = opened;
+                return opened.handle;
+            } finally { busy = false; }
+        },
+        saveRoutineDraft: async handle => {
+            if (busy || !visible || !viewPermitted() || routineDraft?.handle !== handle) throw new KindeCandidateBoundaryError();
+            const { operation, beforeCommit, clearAfterCommit } = routineDraft.prepare(visible.data.routines ?? []);
+            let draftCleared = false;
+            try {
+                const outcome = await submit(operation, beforeCommit, () => {
+                    try { clearAfterCommit(); draftCleared = true; }
+                    catch { /* The business save is durable even if the exact draft cannot be cleared. */ }
+                });
+                return { outcome, draftCleared };
+            } finally { closeRoutineDraft(); }
         },
     };
 }

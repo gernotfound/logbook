@@ -21,6 +21,7 @@ import { isVaultUnlocked, lockAllVaults, unlockVaultForOwner } from '../../../sr
 import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
 import { beginLocalPurge } from '../../../src/lib/sync/localPurgeFence';
 import { createDefaultNutritionPlanning } from '../../../src/lib/nutritionDefaults';
+import { protectedDeviceKey } from '../../../src/lib/sync/deviceStorageKeys';
 
 const uid = 'k_' + 'P'.repeat(43);
 const otherUid = 'k_' + 'Q'.repeat(43);
@@ -71,8 +72,15 @@ beforeEach(async () => {
     await clear();
     localStorage.clear();
     catalogSource.read.mockReset().mockResolvedValue(catalog);
+    const held = new Set<string>();
     vi.stubGlobal('navigator', { get onLine() { return online; }, locks: {
-        request: async (_name: string, _opts: unknown, work: () => Promise<unknown>) => work(),
+        request: async (name: string, options: LockOptions, work: (lock: { name: string } | null) => Promise<unknown>) => {
+            // Web Locks dispatch the request after already scheduled releases.
+            await new Promise<void>(resolve => setImmediate(resolve));
+            if (options.ifAvailable && held.has(name)) return work(null);
+            held.add(name);
+            try { return await work({ name }); } finally { held.delete(name); }
+        },
     } });
 });
 afterEach(() => {
@@ -82,6 +90,137 @@ afterEach(() => {
 });
 
 describe('isolated Kinde fitness realm with trusted owner, no Firebase/global grant', () => {
+    it('recovers a sealed routine draft after close and submits it once without a global vault grant', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const client = browser(fixture);
+            const first = await openKindeCandidateFitnessRealm({ ...client, expected });
+            const second = await openKindeCandidateFitnessRealm({ ...client, expected });
+            const slot = protectedDeviceKey('draft_routine', owner);
+            const draft = await first.openRoutineDraft();
+            expect(isVaultUnlocked(owner)).toBe(false);
+            expect(localStorage.getItem(slot)).toBeNull();
+            draft.write({ name: 'Scheda privata', exercises: [] });
+            const raw = localStorage.getItem(slot);
+            expect(raw).toMatch(/^tlb-sealed:v1:/);
+            expect(raw).not.toContain('Scheda privata');
+            await expect(second.openRoutineDraft()).rejects.toThrow('un’altra scheda');
+            first.close();
+            expect(() => draft.write({ name: 'Stale', exercises: [] })).toThrow();
+            expect(localStorage.getItem(slot)).toBe(raw);
+
+            const recovered = await second.openRoutineDraft();
+            expect(recovered.initial).toMatchObject({ name: 'Scheda privata', routineId: draft.initial.routineId });
+            await expect(second.saveRoutineDraft(recovered))
+                .resolves.toMatchObject({ outcome: { kind: 'cloud-acknowledged' }, draftCleared: true });
+            expect(second.snapshot()?.data.routines).toEqual([{ id: draft.initial.routineId, name: 'Scheda privata', exercises: [] }]);
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+            expect(localStorage.getItem(slot)).toBeNull();
+            expect(isVaultUnlocked(owner)).toBe(false);
+            second.close();
+        } finally { fixture.close(); }
+    });
+
+    it('detects a replaced draft inside the offline transaction and preserves the observed ciphertext and journal', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const client = browser(fixture);
+            const realm = await openKindeCandidateFitnessRealm({ ...client, expected });
+            const draft = await realm.openRoutineDraft();
+            const slot = protectedDeviceKey('draft_routine', owner);
+            draft.write({ name: 'Prima versione', exercises: [] });
+            const replacement = localStorage.getItem(slot)!;
+            draft.write({ name: 'Seconda versione', exercises: [] });
+            const envelope = await get('logbook:v2:' + owner);
+            online = false;
+            catalogSource.read.mockImplementationOnce(async () => {
+                localStorage.setItem(slot, replacement);
+                return catalog;
+            });
+            await expect(realm.saveRoutineDraft(draft)).rejects.toThrow('Bozza cambiata');
+            expect(await get('logbook:v2:' + owner)).toBe(envelope);
+            expect(localStorage.getItem(slot)).toBe(replacement);
+            expect(fixture.count('sync_receipts', uid)).toBe(0);
+            expect(isVaultUnlocked(owner)).toBe(false);
+            realm.close();
+        } finally { fixture.close(); }
+    });
+
+    it('preserves a committed draft marker when cleanup fails and never sends that attempt twice', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const client = browser(fixture);
+            const realm = await openKindeCandidateFitnessRealm({ ...client, expected });
+            const draft = await realm.openRoutineDraft();
+            const slot = protectedDeviceKey('draft_routine', owner);
+            draft.write({ name: 'Una sola volta', exercises: [] });
+            const removeItem = localStorage.removeItem.bind(localStorage);
+            const removal = vi.spyOn(localStorage, 'removeItem').mockImplementation(key => {
+                if (key === slot) throw new Error('Device storage failure');
+                removeItem(key);
+            });
+            await expect(realm.saveRoutineDraft(draft))
+                .resolves.toMatchObject({ outcome: { kind: 'cloud-acknowledged' }, draftCleared: false });
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+            removal.mockRestore();
+            const recovered = await realm.openRoutineDraft();
+            expect(recovered.initial).toMatchObject({ name: 'Una sola volta', submitted: true });
+            await expect(realm.saveRoutineDraft(recovered)).rejects.toThrow('già tentato');
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+            recovered.discard();
+            expect(localStorage.getItem(slot)).toBeNull();
+            realm.close();
+        } finally { fixture.close(); }
+    });
+
+    it('preserves a draft after the consent generation changes and blocks the old editor from submitting or clearing it', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const client = browser(fixture);
+            const realm = await openKindeCandidateFitnessRealm({ ...client, expected });
+            const draft = await realm.openRoutineDraft();
+            draft.write({ name: 'Bozza prima della revoca', exercises: [] });
+            const slot = protectedDeviceKey('draft_routine', owner);
+            const raw = localStorage.getItem(slot);
+            localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '2');
+            expect(() => draft.write({ name: 'Non deve cambiare', exercises: [] })).toThrow();
+            expect(() => draft.discard()).toThrow();
+            await expect(realm.saveRoutineDraft(draft)).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+            expect(localStorage.getItem(slot)).toBe(raw);
+            expect(fixture.count('sync_receipts', uid)).toBe(0);
+            expect(realm.snapshot()).toBeNull();
+            realm.close();
+        } finally { fixture.close(); }
+    });
+
+    it('preserves the newer committed routine when an editor starts from older values', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const client = browser(fixture);
+            const first = await openKindeCandidateFitnessRealm({ ...client, expected });
+            const id = 'routine-already-editing';
+            await first.submit({ type: 'routine.create', routine: { id, name: 'Nome iniziale', exercises: [] } });
+            const second = await openKindeCandidateFitnessRealm({ ...client, expected });
+            const editor = await first.openRoutineDraft(id);
+            editor.write({ name: 'Nome dalla bozza vecchia', exercises: [] });
+            const slot = protectedDeviceKey('draft_routine', owner);
+            const raw = localStorage.getItem(slot);
+            await second.submit({ type: 'routine.edit', id, name: 'Nome già confermato', exercises: [] });
+            await expect(first.saveRoutineDraft(editor)).rejects.toThrow('Scheda cambiata');
+            expect(localStorage.getItem(slot)).toBe(raw);
+            const observed = await second.refresh();
+            expect(observed.data.routines).toEqual([{ id, name: 'Nome già confermato', exercises: [] }]);
+            expect(fixture.count('sync_receipts', uid)).toBe(2);
+            first.close();
+            second.close();
+        } finally { fixture.close(); }
+    });
+
     it('confirms a nutrition planning edit through encrypted local storage and a verified D1 receipt', async () => {
         const fixture = await createCloudKeyHttpFixture([uid]);
         try {

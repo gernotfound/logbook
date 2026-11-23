@@ -10,6 +10,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
     index,
     totalExercises,
     libDef,
+    includeExerciseNameInRemovalConfirmation = true,
     onMove,
     onRemove,
     onUpdateSetsCount,
@@ -22,9 +23,9 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
     const fieldId = useId();
     const showConfirm = useDialogStore(state => state.showConfirm);
     const requestRemove = async () => {
-        const exerciseName = libDef?.name || 'questo esercizio';
+        const target = includeExerciseNameInRemovalConfirmation && libDef?.name ? `“${libDef.name}”` : 'questo esercizio';
         const confirmed = await showConfirm(
-            `Vuoi rimuovere “${exerciseName}” da questa scheda? L’esercizio resterà disponibile nella libreria.`,
+            `Vuoi rimuovere ${target} da questa scheda? L’esercizio resterà disponibile nella libreria.`,
             'Rimuovi esercizio',
         );
         if (confirmed) onRemove(index, exercise);

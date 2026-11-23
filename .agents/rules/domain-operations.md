@@ -131,6 +131,10 @@ commit, conservando gli altri campi e la posizione nell'elenco. Se una
 cancellazione è già recepita nell'archivio locale, un intento di modifica
 preparato prima della cancellazione fallisce senza ricreare la scheda.
 
+`routine.create` richiede un ID assente al commit e ordina le schede per
+nome a partire dai dati correnti della transazione. Due creazioni che
+partono da copie diverse dell'elenco non sostituiscono l'elenco intero.
+
 ## Patch
 
 Per operazioni `*.patch`:
