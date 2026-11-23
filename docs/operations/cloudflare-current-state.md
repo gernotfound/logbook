@@ -31,6 +31,14 @@ IndexedDB. La scelta US Navy viene salvata insieme agli input; un tentativo
 già avviato non può essere duplicato dopo una ricevuta incerta. Il flusso
 rimane non montato nel pubblico; CI e prove runtime sono gate distinti.
 
+L'editor sonno candidato mantiene durata totale e fasi in una bozza
+device AEAD distinta dalla misurazione, datata e recuperabile dopo reload.
+Il `nutrition-day.patch` modifica soltanto i campi sonno ed esige che la
+baseline della notte sia rimasta invariata nella transazione locale; gli
+altri dati del giorno non sono toccati. Un esito offline resta un journal
+durevole in attesa di ricevuta D1, non un ACK cloud. Nessun accesso
+fitness pubblico è stato autorizzato da questa integrazione.
+
 ## Lettura del provider — 22 novembre 2026
 
 Il connettore Cloudflare ha restituito quattro Worker TheLogBook: `thelogbook-frontend`, `thelogbook-api-isolated`, `thelogbook-cf03-auth-gate-isolated` e `thelogbook-cf03-kinde-http-isolated`. Il frontend ha `APP_ORIGIN`, `ASSETS`, `KINDE_HTTP` e **non** `D1_API`; l'API privata ha `DB`, `RECOVERY_DB`, `AUTH_GATE` e `CLOUD_ACCOUNT_KEK_V1` come `secret_text`. Entrambi i database D1 isolati riportano `jurisdiction=eu`. Il Worker frontend riporta modifica del 22/11; gli altri tre del 21/11. Lettura GET dei Cron Trigger con risposta `success:true`: nessuno schedulato su tutti e quattro i Worker. Questa lettura **non** certifica commit distribuito, valori di segreti, restore, rotte, Cron Trigger, sicurezza effettiva delle API, collocazione di ogni trattamento o GDPR.
