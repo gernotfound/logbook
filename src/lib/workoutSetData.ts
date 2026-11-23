@@ -24,15 +24,8 @@ export function sessionSetHasMeaningfulData(set: Partial<SessionExerciseSet>): b
         return true;
     }
 
-    if (set.segments?.some(segment => (
-        hasEnteredValue(segment.kg)
-        || hasEnteredValue(segment.reps)
-        || hasEnteredValue(segment.time)
-        || segment.restBeforeSeconds !== undefined
-        || segment.target !== undefined
-    ))) {
-        return true;
-    }
+    // Adding an advanced segment is an intentional edit even before values are entered.
+    if (set.segments?.length) return true;
 
     return false;
 }
