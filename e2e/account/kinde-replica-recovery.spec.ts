@@ -406,6 +406,68 @@ test('manages supplements and dated intakes through the Kinde archive', async ({
     }, { planningUi: true });
 });
 
+test('edits and removes a Kinde archive food without removing its logged meal', async ({ browser }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
+        const name = 'Riso archivio';
+        expect(await second.evaluate(name => window.kindeReplicaFixture!.submit({
+            type: 'food.upsert', food: { id: 0, name, baseQty: 100, unit: 'g', kcal: 350, carbs: 75, pro: 7, fat: 1 },
+        }), name)).toMatchObject({ kind: 'cloud-acknowledged' });
+        await first.bringToFront();
+        await mountKindePlanning(first);
+        const diary = first.getByRole('region', { name: 'Diario pasti' });
+        await expect(diary).toHaveCount(0);
+        await first.getByRole('button', { name: 'Apri archivio account' }).click();
+        await diary.getByRole('tab', { name: 'Alimenti' }).click();
+        const archive = diary.getByRole('tabpanel', { name: 'Alimenti' });
+        const row = archive.getByRole('article', { name, exact: true });
+        const menu = (action: string) => first.getByRole('menuitem', { name: action, exact: true });
+        await archive.getByRole('textbox', { name: 'Cerca alimenti per nome o marca' }).fill(name);
+        await row.getByRole('button', { name: 'Opzioni' }).click();
+        await menu('Modifica').click();
+        await archive.getByLabel('Kcal', { exact: true }).fill('360');
+        await archive.getByRole('button', { name: 'Salva modifiche' }).click();
+        const pending = first.getByText('Conferma cloud in attesa', { exact: false });
+        await expect(pending).toBeVisible();
+        await expect(diary).toHaveCount(0);
+        expect(receipts()).toBe(1);
+        expect(firstCommitStatuses).toEqual([429]);
+
+        allowFirstCommit();
+        await first.getByRole('button', { name: 'Verifica salvataggio' }).click();
+        await expect(row.getByText('360 kcal')).toBeVisible();
+        await expect(archive.getByRole('textbox', { name: 'Cerca alimenti per nome o marca' })).toHaveValue(name);
+        const readData = () => second.evaluate(async () => (await window.kindeReplicaFixture!.refresh()).data);
+        expect((await readData()).customFoods).toMatchObject([{ id: '0', name, kcal: 360 }]);
+        expect(receipts()).toBe(2);
+
+        await row.getByRole('button', { name: 'Opzioni' }).click();
+        await menu('Duplica').click();
+        await expect(archive.getByRole('article', { name: name + ' - 1', exact: true })).toBeVisible();
+        await row.getByRole('button', { name: 'Aggiungi ' + name + ' a Pranzo' }).click();
+        await expect(archive).toBeVisible();
+        expect(receipts()).toBe(4);
+
+        await row.getByRole('button', { name: 'Opzioni' }).click();
+        await menu('Elimina').click();
+        const dialog = first.getByRole('alertdialog', { name: 'Conferma' });
+        await expect(dialog).not.toContainText(name);
+        await dialog.getByRole('button', { name: 'Annulla' }).click();
+        await expect(row).toBeVisible();
+        expect(receipts()).toBe(4);
+        await row.getByRole('button', { name: 'Opzioni' }).click();
+        await menu('Elimina').click();
+        await dialog.getByRole('button', { name: 'Conferma' }).click();
+        await expect(archive).toBeVisible();
+        await expect(row).toHaveCount(0);
+        const data = await readData();
+        expect(data.customFoods).toMatchObject([{ name: name + ' - 1' }]);
+        const meals = Object.values(data.nutrition ?? {}).flatMap(day => day.meals ?? []);
+        expect(meals).toMatchObject([{ name, foodId: '0', kcal: 360, meal: 'Pranzo' }]);
+        expect(receipts()).toBe(5);
+        expect(firstCommitStatuses).toEqual([429, 200, 200, 200, 200]);
+    }, { planningUi: true });
+});
+
 test('recovers a Kinde edit made offline after a competing browser save', async ({ browser }) => {
     await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
         allowFirstCommit();

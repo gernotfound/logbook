@@ -375,8 +375,13 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
             }));
             break;
         }
-        case 'food.upsert': {
-            requireId(operation.food.id, 'Alimento');
+        case 'food.upsert':
+        case 'food.edit': {
+            const id = requireId(operation.food.id, 'Alimento');
+            if (operation.type === 'food.edit'
+                && !data.customFoods?.some(item => requireId(item.id, 'Alimento') === id)) {
+                throw new Error('Alimento non più presente nell’archivio.');
+            }
             const food = { ...operation.food, id: operation.food.id };
             data.customFoods = upsertById(data.customFoods, food, item => requireId(item.id, 'Alimento'), 'Archivio alimenti');
             break;

@@ -121,6 +121,11 @@ ancora in libreria al commit. La rimozione della voce lascia intatte le
 assunzioni già registrate. Un editor obsoleto non può ricreare la voce o
 registrare una nuova assunzione per quell'ID.
 
+`food.edit` richiede un alimento già presente nell'archivio personale al
+momento del commit, anche con un ID numerico valido come zero. Crea e
+duplica tramite `food.upsert` con un nuovo ID. La rimozione della voce
+non cambia le copie nutrizionali già registrate nei pasti.
+
 ## Patch
 
 Per operazioni `*.patch`:
