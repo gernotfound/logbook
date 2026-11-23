@@ -190,7 +190,7 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
   // Transient errors auto-dismiss. A failed sync must remain visible until
   // a subsequent verified recovery; a toast timeout is not cloud evidence.
   useEffect(() => {
-    if (!saveError || syncHealth === 'failed' || localPersistenceBlocked || cloudIntegrityBlocked) return;
+    if (!saveError || syncHealth === 'failed' || syncHealth === 'rejected' || localPersistenceBlocked || cloudIntegrityBlocked) return;
     const timer = setTimeout(() => {
       setSaveError(null);
     }, 5000);
@@ -344,7 +344,7 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
         >
           <AlertTriangle className="sync-error-icon" size={20} aria-hidden="true" />
           <span className="sync-error-text">{saveError}</span>
-          {syncHealth !== 'failed' && !localPersistenceBlocked && !cloudIntegrityBlocked && (
+          {syncHealth !== 'failed' && syncHealth !== 'rejected' && !localPersistenceBlocked && !cloudIntegrityBlocked && (
             <button
               type="button"
               className="sync-error-close"
