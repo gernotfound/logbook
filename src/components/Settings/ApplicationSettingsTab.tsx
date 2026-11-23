@@ -16,13 +16,14 @@ interface ApplicationSettingsTabProps {
     isIOSInstallable: boolean;
     onInstall: () => void;
     isOffline: boolean;
+    isGuest: boolean;
     checkingForUpdate: boolean;
     onCheckUpdate: () => Promise<void>;
 }
 
 export function ApplicationSettingsTab({
     appearance, onAppearanceChange, appearanceNotSaved,
-    isInstallable, isIOSInstallable, onInstall, isOffline,
+    isInstallable, isIOSInstallable, onInstall, isOffline, isGuest,
     checkingForUpdate, onCheckUpdate,
 }: ApplicationSettingsTabProps) {
     return (
@@ -56,7 +57,9 @@ export function ApplicationSettingsTab({
             {isOffline && (
                 <div className="settings-detail-card settings-offline-card" role="status">
                     <h2><WifiOff size={20} aria-hidden="true" /> Connessione assente</h2>
-                    <p className="settings-help settings-help-last">Puoi continuare a usare TheLogBook: le modifiche restano sul dispositivo e verranno sincronizzate quando tornerà la connessione.</p>
+                    <p className="settings-help settings-help-last">{isGuest
+                        ? 'Puoi continuare a usare TheLogBook: i dati restano sul dispositivo e non vengono sincronizzati con il cloud.'
+                        : 'Puoi continuare a usare TheLogBook: le modifiche restano sul dispositivo e verranno sincronizzate quando tornerà la connessione.'}</p>
                 </div>
             )}
 

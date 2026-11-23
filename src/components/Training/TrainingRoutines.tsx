@@ -13,6 +13,8 @@ import './routines/routines.css';
 const TrainingRoutines: React.FC = () => {
     const [isCreating, setIsCreating] = useLocalStorage<boolean>(ownerUiPreferenceKey(storageOwner(), 'creating-routine'), false, z.boolean());
     const [isSaving, setIsSaving] = React.useState(false);
+    // A second click can enter before React renders the disabled save button.
+    const saveInFlight = React.useRef(false);
     const [searchQuery, setSearchQuery] = React.useState('');
     const {
         routineName, setRoutineName,
@@ -89,16 +91,19 @@ const TrainingRoutines: React.FC = () => {
                         onUpdateExerciseMetadata={handleUpdateExerciseMetadata}
                         isSaving={isSaving}
                         onSave={async () => {
-                            if (isSaving) return;
+                            if (saveInFlight.current) return;
+                            saveInFlight.current = true;
                             setIsSaving(true);
                             try {
                                 const success = await handleSave();
                                 if (success) setIsCreating(false);
                             } finally {
+                                saveInFlight.current = false;
                                 setIsSaving(false);
                             }
                         }}
                         onCancel={() => {
+                            if (saveInFlight.current) return;
                             if (handleCancelEdit()) setIsCreating(false);
                         }}
                     />

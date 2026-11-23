@@ -14,7 +14,7 @@ import { isVaultUnlocked, lockAllVaults, lockVault, vaultControlKey } from '../.
 import { initializeLocal } from '../../../src/lib/sync/localRepository';
 import { UserDataSchema } from '../../../src/lib/schema';
 import { deviceVaultKeyId } from '../../../src/lib/sync/secureArchiveKeys';
-import { activateGuestSession, GUEST_SESSION_KEY, invalidateSession } from '../../../src/lib/sync/session';
+import { activateGuestSession, GUEST_SESSION_KEY, invalidateSession, isActiveGuestSession } from '../../../src/lib/sync/session';
 
 vi.mock('react-dom/client', () => ({
   createRoot: vi.fn(() => ({
@@ -237,6 +237,39 @@ describe('Storage bootstrap and owner integrity checks', () => {
       props: { children: { props: { id: string } } };
     };
     expect(rendered.props.children.props.id).toBe('storage-unavailable');
+  });
+
+  it('refuses an orphan guest opt-in flag before opening the encrypted archive', async () => {
+    localStorage.removeItem('logbook_authenticated_owner');
+    // Provision under a real active generation, then simulate loss of that
+    // generation across a cold restart without deleting the encrypted archive.
+    localStorage.setItem('logbook_is_guest', 'true');
+    localStorage.setItem(GUEST_SESSION_KEY, 'original-cold-guest');
+    activateGuestSession('original-cold-guest');
+    await prepareUnlockedTestArchive('guest');
+    await initializeLocal('guest', UserDataSchema.parse({ profile: { height: '171' } }));
+    updateStorageMarker(1000, undefined, 'guest');
+    const archive = await idbKeyval.get('logbook:v2:guest');
+    const control = localStorage.getItem(vaultControlKey('guest'));
+    lockVault('guest');
+    localStorage.setItem('logbook_is_guest', 'true');
+    localStorage.removeItem(GUEST_SESSION_KEY);
+    expect(isActiveGuestSession()).toBe(false);
+
+    // The shared IDB fake is itself a vi.fn: spying after fixture setup does
+    // not erase the calls used to provision the genuine encrypted archive.
+    const getSpy = vi.spyOn(idbKeyval, 'get');
+    getSpy.mockClear();
+    await initApp();
+
+    expect(getSpy.mock.calls.some(([key]) => key === 'logbook:v2:guest')).toBe(false);
+    expect(isVaultUnlocked('guest')).toBe(false);
+    expect(useAppStore.getState().userData).toBeNull();
+    expect(useAppStore.getState().localWorkout).toBeNull();
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+    expect(getStorageMarker(undefined, 'guest')?.timestamp).toBe(1000);
+    expect(await idbKeyval.get('logbook:v2:guest')).toEqual(archive);
+    expect(localStorage.getItem(vaultControlKey('guest'))).toBe(control);
   });
 
   it('Flow 4: First launch without a marker or cache remains empty', async () => {
