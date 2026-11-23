@@ -241,6 +241,11 @@ describe('Storage bootstrap and owner integrity checks', () => {
 
   it('refuses an orphan guest opt-in flag before opening the encrypted archive', async () => {
     localStorage.removeItem('logbook_authenticated_owner');
+    // Provision under a real active generation, then simulate loss of that
+    // generation across a cold restart without deleting the encrypted archive.
+    localStorage.setItem('logbook_is_guest', 'true');
+    localStorage.setItem(GUEST_SESSION_KEY, 'original-cold-guest');
+    activateGuestSession('original-cold-guest');
     await prepareUnlockedTestArchive('guest');
     await initializeLocal('guest', UserDataSchema.parse({ profile: { height: '171' } }));
     updateStorageMarker(1000, undefined, 'guest');
