@@ -15,6 +15,7 @@ import { calculateLoggedMealTotals } from '../../nutrition/calculateLoggedMealTo
 import { captureMeasurement, MEASUREMENT_CLEAR_PATCH } from '../../nutrition/measurementHistory';
 import { hasMeasurementData } from '../../nutrition/measurementPresence';
 import { getLocalDateString } from '../../utils/date';
+import { generateUniqueName } from '../../utils/string';
 import type { DomainOperation, DomainOperationBatch } from './contracts';
 import {
     applyPatch,
@@ -81,6 +82,12 @@ function findCycle(data: UserData, id: string): { index: number; value: Training
     const index = cycles.findIndex(cycle => cycle.id === normalized);
     if (index < 0) throw new Error(`Ciclo non trovato: ${normalized}`);
     return { index, value: cycles[index] };
+}
+
+function requireObservedCycle(data: UserData, expected: TrainingCycle): TrainingCycle {
+    const { value } = findCycle(data, expected.id);
+    if (!equal(value, expected)) throw new Error('Il ciclo è cambiato. Verifica l’archivio.');
+    return value;
 }
 
 function applyOne(data: UserData, operation: DomainOperation): UserData {
@@ -321,6 +328,32 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
         case 'training-cycle.delete':
             data.trainingCycles = deleteById(data.trainingCycles, requireId(operation.id, 'Ciclo'), item => requireId(item.id, 'Ciclo'), 'Cicli');
             break;
+        case 'training-cycle.duplicate': {
+            const source = requireObservedCycle(data, operation.source);
+            const cycles = data.trainingCycles ?? [];
+            const id = requireId(operation.id, 'Ciclo');
+            if (cycles.some(cycle => cycle.id === id)) throw new Error('Ciclo già esistente');
+            if (!Number.isSafeInteger(operation.createdAt) || operation.createdAt < 0) {
+                throw new Error('Data di creazione del ciclo non valida');
+            }
+            const duplicate = TrainingCycleWriteSchema.parse({
+                ...source, id, name: generateUniqueName(source.name, cycles.map(cycle => cycle.name)),
+                createdAt: operation.createdAt, isActive: false,
+            });
+            for (const item of duplicate.routines) findRoutine(data, item.routineId);
+            data.trainingCycles = [...cycles, duplicate];
+            break;
+        }
+        case 'training-cycle.remove': {
+            const cycle = requireObservedCycle(data, operation.expected);
+            if ((data.activeCycleId ?? null) !== operation.expectedActiveId) {
+                throw new Error('Il ciclo attivo è cambiato. Verifica l’archivio.');
+            }
+            const remaining = (data.trainingCycles ?? []).filter(item => item.id !== cycle.id);
+            data.trainingCycles = remaining;
+            if (data.activeCycleId === cycle.id) data.activeCycleId = remaining[0]?.id ?? null;
+            break;
+        }
         case 'training-cycle.reorder':
             data.trainingCycles = reorderByIds(data.trainingCycles, operation.ids, item => requireId(item.id, 'Ciclo'), 'Cicli');
             break;

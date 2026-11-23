@@ -44,6 +44,9 @@ snapshot dell'account. Il cambio del ciclo attivo usa il journal e
 ricontrolla nella transazione la selezione di partenza e l'esistenza
 del ciclo. La consultazione non scrive dati. L'editor dei cicli e
 l'avvio di una seduta dal ciclo restano da portare nel realm.
+Duplicazione ed eliminazione verificano il ciclo osservato nel commit.
+Se viene eliminato il ciclo attivo, la selezione passa al primo dei
+rimanenti o si azzera. Schede e sedute registrate vengono conservate.
 
 ## Lettura del provider — 22 novembre 2026
 

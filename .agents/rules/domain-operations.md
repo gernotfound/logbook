@@ -71,6 +71,13 @@ il nuovo riferimento esista nella transazione. L'intento modifica solo
 `activeCycleId`. Il percorso Kinde usa questa operazione anche per la
 disattivazione confermata, senza modificare le schede o i cicli salvati.
 
+`training-cycle.duplicate` verifica la fonte osservata e le schede
+collegate nella transazione. Sceglie un nome libero dall'archivio corrente
+e inserisce un solo ciclo. `training-cycle.remove` verifica il ciclo e la
+selezione osservati. Se rimuove il ciclo attivo, seleziona il primo dei
+rimanenti nello stesso commit o azzera la scelta. Le schede e le sedute
+registrate restano inalterate.
+
 Identità correnti:
 
 - routine/supplement/workout/meal/intake/exercise: `id`;

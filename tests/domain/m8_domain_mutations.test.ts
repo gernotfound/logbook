@@ -146,6 +146,40 @@ describe('M8 Domain Operations V4 — mutations, reordering and patch semantics'
         expect(replayCycles?.find(item => item.id === cycle.id)?.strategy).toEqual(cycle.strategy);
     });
 
+    it('duplicates the observed cycle and atomically replaces the active pointer on removal', () => {
+        const before = base({
+            trainingCycles: [
+                { id: 'source', name: 'Forza', durationWeeks: 4, routines: [{ routineId: 'r1', frequencyPerWeek: 1 }] },
+                { id: 'existing-copy', name: 'Forza - 1', durationWeeks: 5, routines: [] },
+            ],
+            activeCycleId: 'source',
+            routines: [{ id: 'r1', name: 'Seduta', exercises: [] }],
+            history: [{ id: 'session', date: '2026-10-01', cycleId: 'source', exercises: [] }],
+        });
+        const source = before.trainingCycles![0];
+        const duplicate = { type: 'training-cycle.duplicate', source, id: 'copy', createdAt: 100 } as const;
+        const { after: duplicated, operations: duplicateOps } = compile(before, duplicate);
+        expect(duplicated.trainingCycles?.at(-1)).toMatchObject({
+            id: 'copy', name: 'Forza - 2', durationWeeks: 4, isActive: false, createdAt: 100, routines: source.routines,
+        });
+        expect(duplicateOps.every(item => item.path[0] === 'trainingCycles')).toBe(true);
+        expect(duplicated.activeCycleId).toBe('source');
+        expect(() => applyDomainOperations(before, { ...duplicate, source: { ...source, name: 'Obsoleto' } }))
+            .toThrow('ciclo è cambiato');
+        expect(() => applyDomainOperations({ ...before, routines: [] }, duplicate)).toThrow('Routine non trovata');
+        expect(() => applyDomainOperations(duplicated, duplicate)).toThrow('Ciclo già esistente');
+
+        const remove = { type: 'training-cycle.remove', expected: source, expectedActiveId: 'source' } as const;
+        expect(() => applyDomainOperations({ ...duplicated, activeCycleId: 'copy' }, remove))
+            .toThrow('ciclo attivo è cambiato');
+        const { after, operations, replay } = compile(duplicated, remove);
+        expect(operations.map(item => item.path[0])).toEqual(expect.arrayContaining(['trainingCycles', 'activeCycleId']));
+        expect(replay.get('')?.activeCycleId).toBe('existing-copy');
+        expect(after.trainingCycles?.map(item => item.id)).toEqual(['existing-copy', 'copy']);
+        expect(after.routines).toEqual(before.routines);
+        expect(after.history).toEqual(before.history);
+    });
+
     it('persists muscle priorities when the cycle objective is unspecified', () => {
         const before = base({ trainingCycles: [] });
         const cycle = {
