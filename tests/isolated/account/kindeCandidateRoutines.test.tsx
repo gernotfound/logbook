@@ -39,7 +39,7 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); });
 
-describe('Kinde routine library: read-only owner boundary', () => {
+describe('Kinde routine library: verified owner boundary', () => {
     it('uses only the ready account snapshot and never invokes the guest writer', () => {
         const initial = useAppStore.getState();
         const oldWriter = vi.fn();
@@ -56,9 +56,9 @@ describe('Kinde routine library: read-only owner boundary', () => {
             const library = screen.getByRole('region', { name: 'Schede allenamento account' });
             expect(screen.getByText('Scheda account')).toBeDefined();
             expect(screen.queryByText('Scheda guest estranea')).toBeNull();
-            expect(screen.queryByRole('button', { name: 'Crea scheda' })).toBeNull();
+            expect(screen.getByRole('button', { name: 'Crea o riprendi scheda' })).toBeDefined();
             fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
-            expect(screen.queryByRole('menuitem', { name: 'Modifica' })).toBeNull();
+            expect(screen.getByRole('menuitem', { name: 'Modifica' })).toBeDefined();
             expect(screen.getByRole('menuitem', { name: 'Duplica' })).toBeDefined();
             expect(screen.getByRole('menuitem', { name: 'Elimina' })).toBeDefined();
             fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));

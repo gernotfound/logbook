@@ -7,6 +7,8 @@ import {
     type KindeCandidateFitnessSnapshot,
 } from '../../lib/auth/kindeCandidateFitnessRealm';
 import type { DomainOperationBatch } from '../../lib/sync/domainOperations';
+import type { KindeRoutineDraft } from '../../lib/auth/kindeCandidateRoutineDraft';
+import type { KindeExerciseDraft } from '../../lib/auth/kindeCandidateExerciseDraft';
 import type { useKindeAccountSession } from './useKindeAccountSession';
 
 type Session = ReturnType<typeof useKindeAccountSession>;
@@ -174,7 +176,9 @@ export function useKindeCandidateFitnessLifecycle({
         }
     };
 
-    const submit = async (operation: DomainOperationBatch) => {
+    const runMutation = async <T extends { outcome: Awaited<ReturnType<KindeCandidateFitnessRealm['submit']>> }>(
+        run: (active: KindeCandidateFitnessRealm) => Promise<T>,
+    ): Promise<T> => {
         const active = realm.current;
         if (!enabled || busy.current || !active?.isCurrent()
             || state.phase !== 'ready' || state.view !== session.view) {
@@ -184,13 +188,13 @@ export function useKindeCandidateFitnessLifecycle({
         busy.current = true;
         setState({ phase: 'opening', view });
         try {
-            const outcome = await active.submit(operation);
+            const result = await run(active);
             if (realm.current !== active || !active.isCurrent()) throw new KindeCandidateBoundaryError();
             const snapshot = active.snapshot();
             setState(snapshot
-                ? { phase: 'ready', view, snapshot, hasPendingJournal: outcome.kind === 'local-pending' }
+                ? { phase: 'ready', view, snapshot, hasPendingJournal: result.outcome.kind === 'local-pending' }
                 : { phase: 'recheck-required', view });
-            return outcome;
+            return result;
         } catch (error) {
             if (realm.current === active) {
                 // Terminal failures must release this scope so a fresh
@@ -205,6 +209,13 @@ export function useKindeCandidateFitnessLifecycle({
         }
     };
 
+    const submit = async (operation: DomainOperationBatch) => (
+        await runMutation(async active => ({ outcome: await active.submit(operation) }))
+    ).outcome;
+
+    const saveRoutineDraft = (draft: KindeRoutineDraft) => runMutation(active => active.saveRoutineDraft(draft));
+    const saveExerciseDraft = (draft: KindeExerciseDraft) => runMutation(active => active.saveExerciseDraft(draft));
+
     const captureEditWitness = () => {
         const active = realm.current;
         if (!enabled || state.phase !== 'ready' || state.view !== session.view
@@ -217,11 +228,29 @@ export function useKindeCandidateFitnessLifecycle({
         };
     };
 
+    const openDraft = async <T extends { close: () => void }>(open: (active: KindeCandidateFitnessRealm) => Promise<T>) => {
+        const active = realm.current;
+        const witness = captureEditWitness();
+        if (!active || !witness || busy.current) throw new KindeCandidateBoundaryError();
+        busy.current = true;
+        try {
+            const opened = await open(active);
+            if (!witness.isCurrent()) {
+                opened.close();
+                throw new KindeCandidateBoundaryError();
+            }
+            return opened;
+        } finally { busy.current = false; }
+    };
+
     return {
         // The immutable view identity suppresses stale plaintext on the very
         // render that changes identity, before passive effects can dispose.
         state: state.phase !== 'closed' && (!enabled || state.view !== session.view)
             ? CLOSED : state,
         open, submit, recheck, suspend, captureEditWitness,
+        openRoutineDraft: (id?: string) => openDraft(active => active.openRoutineDraft(id)),
+        openExerciseDraft: (id?: string) => openDraft(active => active.openExerciseDraft(id)),
+        saveRoutineDraft, saveExerciseDraft,
     };
 }

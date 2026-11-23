@@ -1,40 +1,44 @@
 import { RotateCcw } from 'lucide-react';
-import type { useTrainingExercises } from '../../../hooks/useTrainingExercises';
+import type { MuscleSelectionMode } from '../../../hooks/trainingExercises/exerciseMuscleEditor';
+import type { MuscleDef } from '../../../lib/constants/muscles';
+import type { ExerciseTrackingType } from '../../../lib/exerciseEditorDraft';
+import type { Exercise } from '../../../types';
 import { ExerciseMuscleSelector } from './ExerciseMuscleSelector';
 
-type TrainingExercisesHook = ReturnType<typeof useTrainingExercises>;
-type ExerciseEditorHook = Pick<TrainingExercisesHook,
-    | 'editingExId'
-    | 'exName'
-    | 'setExName'
-    | 'exNotes'
-    | 'setExNotes'
-    | 'muscleSearch'
-    | 'setMuscleSearch'
-    | 'selectedMuscles'
-    | 'secondaryMuscles'
-    | 'selectionMode'
-    | 'setSelectionMode'
-    | 'isDuplicateName'
-    | 'filteredMuscles'
-    | 'trackingType'
-    | 'setTrackingType'
-    | 'isBodyweight'
-    | 'setIsBodyweight'
-    | 'equipmentWeight'
-    | 'setEquipmentWeight'
-    | 'toggleMuscle'
-    | 'handleToggleMuscleById'
-    | 'removeMuscleById'
->;
+interface ExerciseEditorView {
+    editingExId: string | null;
+    exName: string;
+    setExName: (name: string) => void;
+    exNotes: string;
+    setExNotes: (notes: string) => void;
+    muscleSearch: string;
+    setMuscleSearch: (query: string) => void;
+    selectedMuscles: MuscleDef[];
+    secondaryMuscles: MuscleDef[];
+    selectionMode: MuscleSelectionMode;
+    setSelectionMode: (mode: MuscleSelectionMode) => void;
+    isDuplicateName: boolean;
+    filteredMuscles: MuscleDef[];
+    trackingType: ExerciseTrackingType;
+    setTrackingType: (type: ExerciseTrackingType) => void;
+    isBodyweight: boolean;
+    setIsBodyweight: (value: boolean) => void;
+    equipmentWeight: string;
+    setEquipmentWeight: (weight: string) => void;
+    toggleMuscle: (muscle: MuscleDef) => void;
+    handleToggleMuscleById: (id: string) => void;
+    removeMuscleById: (id: string) => void;
+}
 
 interface ExerciseEditorFormProps {
-    hook: ExerciseEditorHook;
+    hook: ExerciseEditorView;
     isSaving: boolean;
-    editingExercise: TrainingExercisesHook['library'][number] | undefined;
+    editingExercise?: Exercise;
     onCancel: () => void;
+    onClose?: () => void;
     onSave: () => void | Promise<void>;
-    onRestore: () => void | Promise<void>;
+    onRestore?: () => void | Promise<void>;
+    preview?: boolean;
 }
 
 export function ExerciseEditorForm({
@@ -42,8 +46,10 @@ export function ExerciseEditorForm({
     isSaving,
     editingExercise,
     onCancel,
+    onClose,
     onSave,
     onRestore,
+    preview = false,
 }: ExerciseEditorFormProps) {
     const {
         editingExId,
@@ -74,18 +80,18 @@ export function ExerciseEditorForm({
         <section
             id="exercise-creation-form"
             className="exercise-editor"
-            aria-label={editingExId ? 'Modifica esercizio' : 'Crea esercizio'}
+            aria-label={preview ? 'Valori della bozza esercizio' : editingExId ? 'Modifica esercizio' : 'Crea esercizio'}
         >
             <div className="exercise-editor-head">
-                <h2>{editingExId ? 'Modifica esercizio' : 'Nuovo esercizio'}</h2>
-                <button
+                <h2>{preview ? 'Anteprima bozza' : editingExId ? 'Modifica esercizio' : 'Nuovo esercizio'}</h2>
+                {!preview && <button
                     type="button"
                     className="btn exercise-editor-close"
-                    onClick={onCancel}
+                    onClick={onClose ?? onCancel}
                     disabled={isSaving}
                 >
                     Chiudi
-                </button>
+                </button>}
             </div>
 
             <div className="exercise-field">
@@ -208,7 +214,7 @@ export function ExerciseEditorForm({
                 removeMuscleById={removeMuscleById}
             />
 
-            <div className="exercise-editor-actions">
+            {!preview && <div className="exercise-editor-actions">
                 <button
                     type="button"
                     className="btn"
@@ -225,9 +231,9 @@ export function ExerciseEditorForm({
                 >
                     {isSaving ? 'Salvataggio…' : 'Salva'}
                 </button>
-            </div>
+            </div>}
 
-            {editingExId && editingExercise?.isDefault && (
+            {editingExId && editingExercise?.isDefault && onRestore && (
                 <button
                     type="button"
                     className="btn exercise-restore-button"

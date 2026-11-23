@@ -1,32 +1,11 @@
-import type { MuscleDef } from '../../lib/constants/muscles';
 import { readWorkoutRecoveryDraftImage, writeWorkoutRecoveryDraft } from '../../lib/sync/workoutRecoveryDraft';
-import { z } from '../../lib/zod';
+import { exerciseDraftSchema, type ExerciseDraft } from '../../lib/exerciseEditorDraft';
 import { storageOwner } from '../../lib/sync/session';
+export type { ExerciseDraft, ExerciseTrackingType } from '../../lib/exerciseEditorDraft';
 
 const EXERCISE_DRAFT_KEY = 'draft_exercise';
 
-export type ExerciseTrackingType = 'weight_reps' | 'time' | 'cardio';
-
-export interface ExerciseDraft {
-    name: string;
-    notes: string;
-    trackingType: ExerciseTrackingType;
-    selectedMuscles: MuscleDef[];
-    secondaryMuscles: MuscleDef[];
-    isBodyweight: boolean;
-    equipmentWeight: string;
-}
-
-const muscleDraftSchema = z.object({ id: z.string().min(1), name: z.string() }).passthrough();
-const recoveredExerciseDraftSchema = z.object({
-    name: z.string().optional(),
-    notes: z.string().optional(),
-    trackingType: z.enum(['weight_reps', 'time', 'cardio']).optional(),
-    selectedMuscles: z.array(muscleDraftSchema).optional(),
-    secondaryMuscles: z.array(muscleDraftSchema).optional(),
-    isBodyweight: z.boolean().optional(),
-    equipmentWeight: z.string().optional(),
-}).passthrough();
+const recoveredExerciseDraftSchema = exerciseDraftSchema.partial().passthrough();
 
 function parseRecoveredExerciseDraft(value: unknown | null): Partial<ExerciseDraft> | null {
     if (value === null) return null;

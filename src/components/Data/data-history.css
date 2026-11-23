@@ -1,20 +1,20 @@
 /* Storico Dati — composizione allineata allo Storico Allenamento. */
-#view-data .data-history {
+:is(#view-data, .kinde-measurement-history) .data-history {
     padding-bottom: 5.625rem;
 }
 
-#view-data .history-header {
+:is(#view-data, .kinde-measurement-history) .history-header {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: .75rem;
 }
 
-#view-data .history-heading {
+:is(#view-data, .kinde-measurement-history) .history-heading {
     min-width: 0;
 }
 
-#view-data .history-heading h2 {
+:is(#view-data, .kinde-measurement-history) .history-heading h2 {
     margin: 0;
     color: var(--text-main);
     font-size: var(--font-size-page);
@@ -23,33 +23,33 @@
     letter-spacing: -.02em;
 }
 
-#view-data .history-heading p {
+:is(#view-data, .kinde-measurement-history) .history-heading p {
     margin: .3125rem 0 0;
     color: var(--text-muted);
     font-size: var(--font-size-meta);
 }
 
-#view-data .history-period-button,
-#view-data .history-icon-button,
-#view-data .history-today-button,
-#view-data .history-month-button,
-#view-data .history-day,
-#view-data .history-record-open {
+:is(#view-data, .kinde-measurement-history) .history-period-button,
+:is(#view-data, .kinde-measurement-history) .history-icon-button,
+:is(#view-data, .kinde-measurement-history) .history-today-button,
+:is(#view-data, .kinde-measurement-history) .history-month-button,
+:is(#view-data, .kinde-measurement-history) .history-day,
+:is(#view-data, .kinde-measurement-history) .history-record-open {
     font: inherit;
 }
 
-#view-data .history-period-button,
-#view-data .history-icon-button,
-#view-data .history-today-button,
-#view-data .history-month-button,
-#view-data .history-day {
+:is(#view-data, .kinde-measurement-history) .history-period-button,
+:is(#view-data, .kinde-measurement-history) .history-icon-button,
+:is(#view-data, .kinde-measurement-history) .history-today-button,
+:is(#view-data, .kinde-measurement-history) .history-month-button,
+:is(#view-data, .kinde-measurement-history) .history-day {
     min-height: 2.75rem;
     border: 0;
     color: var(--text-main);
     cursor: pointer;
 }
 
-#view-data .history-period-button {
+:is(#view-data, .kinde-measurement-history) .history-period-button {
     display: inline-flex;
     min-width: 2.75rem;
     align-items: center;
@@ -64,8 +64,8 @@
     white-space: nowrap;
 }
 
-#view-data .history-year-picker,
-#view-data .history-calendar-panel {
+:is(#view-data, .kinde-measurement-history) .history-year-picker,
+:is(#view-data, .kinde-measurement-history) .history-calendar-panel {
     min-width: 0;
     padding: .875rem;
     border: 1px solid var(--glass-border);
@@ -73,30 +73,30 @@
     background: var(--surface-color);
 }
 
-#view-data .history-year-picker {
+:is(#view-data, .kinde-measurement-history) .history-year-picker {
     display: grid;
     gap: .625rem;
 }
 
-#view-data .history-year-picker-head {
+:is(#view-data, .kinde-measurement-history) .history-year-picker-head {
     display: grid;
     grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem;
     align-items: center;
     gap: .5rem;
 }
 
-#view-data .history-year-picker-head strong {
+:is(#view-data, .kinde-measurement-history) .history-year-picker-head strong {
     text-align: center;
     font-size: var(--font-size-section);
 }
 
-#view-data .history-year-picker-grid {
+:is(#view-data, .kinde-measurement-history) .history-year-picker-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: .375rem;
 }
 
-#view-data .history-month-button {
+:is(#view-data, .kinde-measurement-history) .history-month-button {
     position: relative;
     min-width: 0;
     padding: .5rem;
@@ -106,7 +106,7 @@
     font-size: var(--font-size-meta);
 }
 
-#view-data .history-month-button.has-data::after {
+:is(#view-data, .kinde-measurement-history) .history-month-button.has-data::after {
     position: absolute;
     bottom: .3125rem;
     left: 50%;
@@ -118,18 +118,18 @@
     transform: translateX(-50%);
 }
 
-#view-data .history-month-button.selected {
+:is(#view-data, .kinde-measurement-history) .history-month-button.selected {
     border-color: var(--primary-color);
     background: var(--primary-color);
     color: var(--on-primary);
     font-weight: 600;
 }
 
-#view-data .history-month-button.selected::after {
+:is(#view-data, .kinde-measurement-history) .history-month-button.selected::after {
     background: currentColor;
 }
 
-#view-data .history-month-nav {
+:is(#view-data, .kinde-measurement-history) .history-month-nav {
     display: grid;
     grid-template-columns: 2.75rem minmax(0, 1fr) auto 2.75rem;
     align-items: center;
@@ -137,7 +137,7 @@
     margin-bottom: .625rem;
 }
 
-#view-data .history-icon-button {
+:is(#view-data, .kinde-measurement-history) .history-icon-button {
     display: inline-grid;
     width: 2.75rem;
     min-width: 2.75rem;
@@ -148,7 +148,7 @@
     background: var(--surface-light);
 }
 
-#view-data .history-month-name {
+:is(#view-data, .kinde-measurement-history) .history-month-name {
     min-width: 0;
     overflow: hidden;
     color: var(--text-main);
@@ -159,7 +159,7 @@
     white-space: nowrap;
 }
 
-#view-data .history-today-button {
+:is(#view-data, .kinde-measurement-history) .history-today-button {
     min-width: 2.75rem;
     padding: 0 .5625rem;
     border-radius: .75rem;
@@ -169,14 +169,14 @@
     font-weight: 600;
 }
 
-#view-data .history-weekdays,
-#view-data .history-calendar-grid {
+:is(#view-data, .kinde-measurement-history) .history-weekdays,
+:is(#view-data, .kinde-measurement-history) .history-calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: .125rem;
 }
 
-#view-data .history-weekdays span {
+:is(#view-data, .kinde-measurement-history) .history-weekdays span {
     padding: .25rem 0 .375rem;
     color: var(--text-muted);
     font-size: var(--font-size-micro);
@@ -185,7 +185,7 @@
     text-transform: uppercase;
 }
 
-#view-data .history-day {
+:is(#view-data, .kinde-measurement-history) .history-day {
     position: relative;
     display: grid;
     width: 100%;
@@ -199,11 +199,11 @@
     font-variant-numeric: tabular-nums;
 }
 
-#view-data .history-day.outside {
+:is(#view-data, .kinde-measurement-history) .history-day.outside {
     color: var(--text-muted);
 }
 
-#view-data .history-day.has-data:not(.has-multiple)::after {
+:is(#view-data, .kinde-measurement-history) .history-day.has-data:not(.has-multiple)::after {
     position: absolute;
     bottom: .3125rem;
     left: 50%;
@@ -215,23 +215,23 @@
     transform: translateX(-50%);
 }
 
-#view-data .history-day.today:not(.selected) {
+:is(#view-data, .kinde-measurement-history) .history-day.today:not(.selected) {
     background: var(--primary-soft);
     color: var(--primary-color);
     font-weight: 600;
 }
 
-#view-data .history-day.selected {
+:is(#view-data, .kinde-measurement-history) .history-day.selected {
     background: var(--primary-color);
     color: var(--on-primary);
     font-weight: 700;
 }
 
-#view-data .history-day.selected::after {
+:is(#view-data, .kinde-measurement-history) .history-day.selected::after {
     background: currentColor !important;
 }
 
-#view-data .history-day-count {
+:is(#view-data, .kinde-measurement-history) .history-day-count {
     position: absolute;
     right: .25rem;
     bottom: .1875rem;
@@ -248,18 +248,18 @@
     line-height: 1;
 }
 
-#view-data .history-day.selected .history-day-count {
+:is(#view-data, .kinde-measurement-history) .history-day.selected .history-day-count {
     background: var(--on-primary);
     color: var(--primary-color);
 }
 
-#view-data .history-month-summary {
+:is(#view-data, .kinde-measurement-history) .history-month-summary {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: .375rem;
 }
 
-#view-data .history-month-summary > div {
+:is(#view-data, .kinde-measurement-history) .history-month-summary > div {
     min-width: 0;
     padding: .625rem .35rem;
     border-radius: .875rem;
@@ -267,12 +267,12 @@
     text-align: center;
 }
 
-#view-data .history-month-summary strong,
-#view-data .history-month-summary span {
+:is(#view-data, .kinde-measurement-history) .history-month-summary strong,
+:is(#view-data, .kinde-measurement-history) .history-month-summary span {
     display: block;
 }
 
-#view-data .history-month-summary strong {
+:is(#view-data, .kinde-measurement-history) .history-month-summary strong {
     overflow: hidden;
     color: var(--text-main);
     font-size: var(--font-size-control);
@@ -281,20 +281,20 @@
     white-space: nowrap;
 }
 
-#view-data .history-month-summary span {
+:is(#view-data, .kinde-measurement-history) .history-month-summary span {
     margin-top: .125rem;
     color: var(--text-muted);
     font-size: var(--font-size-micro);
     line-height: 1.2;
 }
 
-#view-data .history-selected-day {
+:is(#view-data, .kinde-measurement-history) .history-selected-day {
     display: grid;
     min-width: 0;
     gap: .625rem;
 }
 
-#view-data .history-selected-day-heading {
+:is(#view-data, .kinde-measurement-history) .history-selected-day-heading {
     display: flex;
     min-width: 0;
     align-items: end;
@@ -303,11 +303,11 @@
     padding: .25rem .125rem 0;
 }
 
-#view-data .history-selected-day-heading > div {
+:is(#view-data, .kinde-measurement-history) .history-selected-day-heading > div {
     min-width: 0;
 }
 
-#view-data .history-selected-day-heading p {
+:is(#view-data, .kinde-measurement-history) .history-selected-day-heading p {
     margin: 0 0 .25rem;
     color: var(--text-muted);
     font-size: var(--font-size-micro);
@@ -316,7 +316,7 @@
     text-transform: uppercase;
 }
 
-#view-data .history-selected-day-heading h3 {
+:is(#view-data, .kinde-measurement-history) .history-selected-day-heading h3 {
     margin: 0;
     overflow: hidden;
     color: var(--text-main);
@@ -326,13 +326,13 @@
     white-space: nowrap;
 }
 
-#view-data .history-selected-day-heading > span {
+:is(#view-data, .kinde-measurement-history) .history-selected-day-heading > span {
     flex: none;
     color: var(--text-muted);
     font-size: var(--font-size-micro);
 }
 
-#view-data .history-empty-day {
+:is(#view-data, .kinde-measurement-history) .history-empty-day {
     padding: 1.125rem;
     border-radius: 1rem;
     background: var(--surface-color);
@@ -341,12 +341,12 @@
     text-align: center;
 }
 
-#view-data .history-record-list {
+:is(#view-data, .kinde-measurement-history) .history-record-list {
     display: grid;
     gap: .625rem;
 }
 
-#view-data .history-record-card {
+:is(#view-data, .kinde-measurement-history) .history-record-card {
     position: relative;
     width: 100%;
     min-height: 4.5rem;
@@ -354,11 +354,11 @@
     background: var(--surface-light);
 }
 
-#view-data .history-record-card.editing {
+:is(#view-data, .kinde-measurement-history) .history-record-card.editing {
     box-shadow: inset .1875rem 0 var(--primary-color);
 }
 
-#view-data .history-record-open {
+:is(#view-data, .kinde-measurement-history) .history-record-open {
     display: flex;
     width: 100%;
     min-width: 0;
@@ -374,7 +374,7 @@
     text-align: left;
 }
 
-#view-data .history-record-icon {
+:is(#view-data, .kinde-measurement-history) .history-record-icon {
     display: grid;
     width: 2.5rem;
     height: 2.5rem;
@@ -385,15 +385,15 @@
     color: var(--primary-color);
 }
 
-#view-data .history-record-copy {
+:is(#view-data, .kinde-measurement-history) .history-record-copy {
     display: grid;
     min-width: 0;
     flex: 1;
     gap: .25rem;
 }
 
-#view-data .history-record-name,
-#view-data .history-record-info {
+:is(#view-data, .kinde-measurement-history) .history-record-name,
+:is(#view-data, .kinde-measurement-history) .history-record-info {
     display: block;
     min-width: 0;
     overflow: hidden;
@@ -401,18 +401,18 @@
     white-space: nowrap;
 }
 
-#view-data .history-record-name {
+:is(#view-data, .kinde-measurement-history) .history-record-name {
     color: var(--text-main);
     font-size: var(--font-size-control);
     font-weight: 500;
 }
 
-#view-data .history-record-info {
+:is(#view-data, .kinde-measurement-history) .history-record-info {
     color: var(--text-muted);
     font-size: var(--font-size-micro);
 }
 
-#view-data .history-record-menu {
+:is(#view-data, .kinde-measurement-history) .history-record-menu {
     position: absolute;
     top: 50%;
     right: .375rem;
@@ -420,7 +420,7 @@
     transform: translateY(-50%);
 }
 
-#view-data .data-detail-layer {
+:is(#view-data, .kinde-measurement-history) .data-detail-layer {
     position: fixed;
     z-index: 10001;
     inset: 0;
@@ -428,7 +428,7 @@
     align-items: flex-end;
 }
 
-#view-data .data-detail-backdrop {
+:is(#view-data, .kinde-measurement-history) .data-detail-backdrop {
     position: absolute;
     inset: 0;
     width: 100%;
@@ -437,7 +437,7 @@
     cursor: pointer;
 }
 
-#view-data .data-detail-sheet {
+:is(#view-data, .kinde-measurement-history) .data-detail-sheet {
     position: relative;
     z-index: 1;
     display: flex;
@@ -456,7 +456,7 @@
     box-shadow: 0 -1rem 3rem color-mix(in srgb, var(--bg-color) 45%, transparent);
 }
 
-#view-data .data-detail-head {
+:is(#view-data, .kinde-measurement-history) .data-detail-head {
     display: flex;
     min-width: 0;
     align-items: flex-start;
@@ -464,28 +464,28 @@
     gap: .75rem;
 }
 
-#view-data .data-detail-head > div {
+:is(#view-data, .kinde-measurement-history) .data-detail-head > div {
     min-width: 0;
 }
 
-#view-data .data-detail-head h2 {
+:is(#view-data, .kinde-measurement-history) .data-detail-head h2 {
     margin: 0;
     color: var(--text-main);
     font-size: var(--font-size-section);
 }
 
-#view-data .data-detail-head p {
+:is(#view-data, .kinde-measurement-history) .data-detail-head p {
     margin: .25rem 0 0;
     color: var(--text-muted);
     font-size: var(--font-size-meta);
 }
 
-#view-data .data-detail-head,
-#view-data .data-detail-sheet > .data-action-row {
+:is(#view-data, .kinde-measurement-history) .data-detail-head,
+:is(#view-data, .kinde-measurement-history) .data-detail-sheet > .data-action-row {
     flex: 0 0 auto;
 }
 
-#view-data .data-detail-scroll {
+:is(#view-data, .kinde-measurement-history) .data-detail-scroll {
     min-height: 0;
     flex: 1 1 auto;
     overflow-y: auto;
@@ -494,26 +494,26 @@
     touch-action: pan-y;
 }
 
-#view-data .data-detail-grid {
+:is(#view-data, .kinde-measurement-history) .data-detail-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: .5rem;
     margin-top: 1rem;
 }
 
-#view-data .data-detail-grid > div {
+:is(#view-data, .kinde-measurement-history) .data-detail-grid > div {
     min-width: 0;
     padding: .65rem;
     border-radius: var(--radius-control);
     background: var(--surface-light);
 }
 
-#view-data .data-detail-grid strong,
-#view-data .data-detail-grid span {
+:is(#view-data, .kinde-measurement-history) .data-detail-grid strong,
+:is(#view-data, .kinde-measurement-history) .data-detail-grid span {
     display: block;
 }
 
-#view-data .data-detail-grid strong {
+:is(#view-data, .kinde-measurement-history) .data-detail-grid strong {
     overflow: hidden;
     color: var(--text-main);
     font-size: var(--font-size-control);
@@ -521,22 +521,22 @@
     white-space: nowrap;
 }
 
-#view-data .data-detail-grid span {
+:is(#view-data, .kinde-measurement-history) .data-detail-grid span {
     margin-top: .15rem;
     color: var(--text-muted);
     font-size: var(--font-size-micro);
 }
 
-#view-data .data-date-arrow:focus-visible,
-#view-data .data-date-current:focus-visible,
-#view-data .data-clearable-input button:focus-visible,
-#view-data .history-period-button:focus-visible,
-#view-data .history-icon-button:focus-visible,
-#view-data .history-today-button:focus-visible,
-#view-data .history-month-button:focus-visible,
-#view-data .history-day:focus-visible,
-#view-data .history-record-open:focus-visible,
-#view-data .data-icon-button:focus-visible {
+:is(#view-data, .kinde-measurement-history) .data-date-arrow:focus-visible,
+:is(#view-data, .kinde-measurement-history) .data-date-current:focus-visible,
+:is(#view-data, .kinde-measurement-history) .data-clearable-input button:focus-visible,
+:is(#view-data, .kinde-measurement-history) .history-period-button:focus-visible,
+:is(#view-data, .kinde-measurement-history) .history-icon-button:focus-visible,
+:is(#view-data, .kinde-measurement-history) .history-today-button:focus-visible,
+:is(#view-data, .kinde-measurement-history) .history-month-button:focus-visible,
+:is(#view-data, .kinde-measurement-history) .history-day:focus-visible,
+:is(#view-data, .kinde-measurement-history) .history-record-open:focus-visible,
+:is(#view-data, .kinde-measurement-history) .data-icon-button:focus-visible {
     outline: 2px solid var(--primary-color);
     outline-offset: 2px;
 }

@@ -1,5 +1,6 @@
-import { z } from '../../lib/zod';
-import type { RoutineExercise } from '../../types';
+import { z } from './zod';
+import { normalizeBusinessId } from './businessIdentity';
+import type { RoutineExercise } from '../types';
 
 // Owner, consent revision and ciphertext are verified by the device recovery reader
 // before this schema is used to hydrate an editor.
@@ -29,6 +30,16 @@ const recoveredRoutineDraftSchema = z.object({
     name: z.string().optional(),
     exercises: z.array(recoveredRoutineExerciseSchema).optional(),
 }).passthrough();
+
+const routineValuesSchema = z.object({ name: z.string(), exercises: z.array(recoveredRoutineExerciseSchema) });
+const routineId = z.string().refine(id => normalizeBusinessId(id) === id);
+
+export const accountRoutineDraftSchema = routineValuesSchema.extend({
+    version: z.literal(1),
+    routineId,
+    basis: routineValuesSchema.nullable(),
+    submitted: z.boolean(),
+}).strict();
 
 export function parseRoutineRecovery(value: unknown | null): { name?: string; exercises?: RoutineExercise[] } | null {
     if (value === null) return null;

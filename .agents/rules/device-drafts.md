@@ -103,6 +103,25 @@ Un backup device-only non costituisce prova di una revisione diversa, né implic
 
 **MUST (CRITICAL, bozze catalogo allenamento):** le bozze `draft_exercise` e `draft_routine` sono recupero device-local di dati destinati a Domain Operations e non possono essere considerate correnti sulla sola base dell'owner o della cifratura. Per owner autenticati ogni copia nuova deve conservare la revisione di consenso di origine nel medesimo record cifrato (con nome della chiave e owner); prima di hydration UI, edit/cleanup e commit business verificare il legame con il consenso e la sessione originali. Un form rimasto montato non può rietichettare i propri valori con un'epoch più recente. Le copie account prive di prova di owner/nome/revisione sono incompatibili anche nell'epoch iniziale: non adottarle, cancellarle né sovrascriverle automaticamente; il formato guest attuale resta supportato. Errori di persistenza dei draft devono essere visibili e bloccare i percorsi di salvataggio dipendenti, non trasformati in avvisi silenziosi. Guest invariato. Restore device-draft da backup esplicito non prova una nuova epoca né autorizza reimport automatico.
 
+L'editor schede Kinde candidato apre `draft_routine` con un Web Lock
+esclusivo per owner e record. Il vault attivo, la sessione Kinde e il
+consenso verificati autorizzano una copia della DEK limitata alla vita di
+quell'editor e alla sola chiave device. La prova del ciphertext osservato
+si controlla a ogni edit, rimozione e dentro la transazione del journal.
+L'editor mostra soltanto modifiche già scritte in forma cifrata. Dopo un
+reload serve riaprire il realm verificato prima di recuperare la bozza.
+La transazione ricontrolla anche i valori di partenza della scheda e gli
+esercizi nuovi. Prima del commit marca la copia esatta come tentata. Se
+il browser si interrompe o la rimozione non è confermabile, la copia
+rimane ispezionabile senza ripetere l'intento. Dopo prova di durabilità
+locale, anche con journal ancora in attesa, si rimuove soltanto la copia
+di quel tentativo. Il Web Lock serializza gli editor che lo rispettano.
+
+L'editor Kinde degli esercizi personali applica lo stesso contratto a
+`draft_exercise`, con un lock e una copia cifrata distinti. Il commit
+confronta i campi modificabili di partenza e ricontrolla l'unicità del
+nome. Una bozza di scheda e una bozza di esercizio possono coesistere.
+
 **MUST (CRITICAL, recupero check-in/fine allenamento):** le copie sincrone `draft:pre-session:<workoutId>` e `draft:post-session:<workoutId>` devono registrare owner, nome della chiave e revisione del consenso all'interno dello stesso record cifrato dei valori (senza modifiche a IndexedDB o al journal). Il bootstrap dei componenti, ogni edit, il flush di update/reload, l'avvio della sessione, la finalizzazione e il cleanup verificano provenienza e sessione prima di usare o sostituire la copia. Le copie account senza revisione e identificazione owner/chiave non vengono rilette automaticamente, nemmeno nella prima generazione; non sovrascriverle né cancellarle e preservare i byte originali per il backup esplicito. Il guest mantiene il proprio formato corrente. Una mutazione di business già durabile e la successiva pulizia device sono risultati distinti.
 
 **MUST (CRITICAL, bozze datate):** le bozze sincrone di misurazioni, sonno e attività (`draft:<kind>:<date>`) sono dati sanitari locali modificabili, non semplici preferenze. Una bozza autenticata nuova conserva owner e revisione consenso nello stesso record device cifrato dei valori. Una bozza account V2 senza `consentRevision`, anche nella prima generazione e anche se è un tombstone, non prova l'origine e viene rifiutata senza riscrivere o eliminare i byte; la mancanza del marker impedisce inoltre di creare nuove copie o tombstone account. Disaccordi di owner/epoch bloccano rendering, overwrite, pulizia e salvataggi attraverso la barriera `localPersistenceBlocked`, conservando la copia per l'export esplicito. Una nuova bozza valida con revisione corrente continua a funzionare. Le scritture guest e account usano il wrapper device datato V2 con identificatore casuale per ogni revisione; il guest non richiede il marker di consenso account. V1 e copie non avvolte non sono importate nel formato corrente. Nessun reimport automatico di bozze da vecchie generazioni.
