@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { WorkoutSession } from '../../src/types';
 import { applyDomainOperations } from '../../src/lib/sync/domainOperations';
+import { captureMeasurement } from '../../src/lib/nutrition/measurementHistory';
 import { base, compile } from './m8DomainFixture';
 
 describe('M8 Domain Operations V4 — mutations, reordering and patch semantics', () => {
@@ -223,5 +224,30 @@ describe('M8 Domain Operations V4 — mutations, reordering and patch semantics'
         expect(Object.hasOwn(after.profile ?? {}, 'waist')).toBe(false);
         expect(operations).toContainEqual(expect.objectContaining({ path: ['profile', 'waist'], isDelete: true }));
         expect(Object.hasOwn((replay.get('')?.profile as Record<string, unknown>) ?? {}, 'waist')).toBe(false);
+    });
+
+    it('compares the exact measurement before clearing and preserves unrelated same-day data', () => {
+        const date = '2026-10-17';
+        const before = base({ nutrition: { [date]: {
+            date, kcal: 120, carbs: 20, pro: 6, fat: 2,
+            weight: 77.5, waist: 86, bf: 19.5,
+            bfProvenance: { method: 'us_navy', inputs: { waistCm: 86 } },
+            measurementTime: '07:50',
+            meals: [{ id: 'meal-preserved', meal: 'breakfast', name: 'Avena', quantity: 50, kcal: 240, carbs: 40, pro: 12, fat: 4 }],
+            sleepHours: '07:20', steps: 4200, stepsSource: 'manual',
+        } } });
+        const observedDay = before.nutrition![date];
+        const operation = { type: 'measurement.delete', date, expected: captureMeasurement(observedDay) } as const;
+        const { after, operations } = compile(before, operation);
+        const remaining = after.nutrition?.[date];
+        expect(remaining).toMatchObject({ meals: observedDay.meals, sleepHours: '07:20', steps: 4200, stepsSource: 'manual' });
+        expect(captureMeasurement(remaining!)).toEqual({});
+        expect(operations).toHaveLength(5);
+        expect(operations.map(item => item.path[1]).sort()).toEqual(['bf', 'bfProvenance', 'measurementTime', 'waist', 'weight']);
+        expect(operations.every(item => item.docPath === 'nutrition_months/2026-10' && item.path[0] === date && item.isDelete)).toBe(true);
+
+        const changed = applyDomainOperations(before, { type: 'nutrition-day.patch', date, patch: { measurementTime: '08:10' } });
+        expect(() => applyDomainOperations(changed, operation)).toThrow('Misurazione cambiata');
+        expect(() => applyDomainOperations(after, operation)).toThrow('Misurazione cambiata');
     });
 });

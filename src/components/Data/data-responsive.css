@@ -49,7 +49,7 @@
     }
 
     #view-data .data-method-switch,
-    #view-data .data-action-row,
+    :is(#view-data, .kinde-measurement-history) .data-action-row,
     #view-data .activity-editor-actions {
         grid-template-columns: minmax(0, 1fr);
     }
@@ -63,33 +63,33 @@
         width: 100%;
     }
 
-    #view-data .history-header {
+    :is(#view-data, .kinde-measurement-history) .history-header {
         grid-template-columns: minmax(0, 1fr);
     }
 
-    #view-data .history-period-button {
+    :is(#view-data, .kinde-measurement-history) .history-period-button {
         width: 100%;
     }
 
-    #view-data .history-year-picker,
-    #view-data .history-calendar-panel {
+    :is(#view-data, .kinde-measurement-history) .history-year-picker,
+    :is(#view-data, .kinde-measurement-history) .history-calendar-panel {
         padding: .75rem;
     }
 
-    #view-data .history-month-nav {
+    :is(#view-data, .kinde-measurement-history) .history-month-nav {
         gap: .25rem;
     }
 
-    #view-data .history-month-name,
-    #view-data .history-month-summary strong {
+    :is(#view-data, .kinde-measurement-history) .history-month-name,
+    :is(#view-data, .kinde-measurement-history) .history-month-summary strong {
         font-size: var(--font-size-secondary);
     }
 
-    #view-data .history-selected-day-heading {
+    :is(#view-data, .kinde-measurement-history) .history-selected-day-heading {
         align-items: flex-start;
     }
 
-    #view-data .history-record-open {
+    :is(#view-data, .kinde-measurement-history) .history-record-open {
         gap: .5rem;
         padding-left: .625rem;
     }
@@ -97,7 +97,7 @@
 
 @media (max-width: 20rem) {
     #view-data .data-form-grid,
-    #view-data .data-detail-grid {
+    :is(#view-data, .kinde-measurement-history) .data-detail-grid {
         grid-template-columns: minmax(0, 1fr);
     }
 

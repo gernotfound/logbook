@@ -2,6 +2,62 @@ import { expect, test } from '../fixtures';
 import { loadKindeReplica, mountKindePlanning, withKindeReplicaDevices } from './kindeReplicaFixture';
 import type { DomainOperation } from '../../src/lib/sync/domainOperations';
 
+test('reads and deletes only the confirmed Kinde measurement, keeping meals and sleep on the other device', async ({ browser }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
+        const date = '2026-10-17';
+        expect(await second.evaluate(date => window.kindeReplicaFixture!.submit([
+            { type: 'nutrition-day.patch', date, patch: { weight: 77.5, waist: 86, measurementTime: '07:50', sleepHours: '07:20' } },
+            { type: 'activity-steps.set', date, steps: 4200 },
+            { type: 'nutrition-meal.upsert', date, meal: {
+                id: 'measurement-test-breakfast', name: 'Avena', meal: 'breakfast', quantity: 50,
+                kcal: 240, carbs: 40, pro: 12, fat: 4,
+            } },
+        ]), date)).toMatchObject({ kind: 'cloud-acknowledged' });
+        const before = receipts();
+
+        await first.bringToFront();
+        await mountKindePlanning(first);
+        const history = first.getByRole('region', { name: 'Storico rilevazioni account' });
+        await expect(history).toHaveCount(0);
+        await first.getByRole('button', { name: 'Apri archivio account' }).click();
+        await expect(history.getByRole('heading', { name: 'Storico Dati' })).toBeVisible();
+        await expect(history.locator('.history-calendar-grid')).toHaveCSS('display', 'grid');
+        await history.getByRole('button', { name: 'Apri dettaglio del 17/10/2026' }).click();
+        const detail = history.getByRole('dialog', { name: 'Dettaglio dati' });
+        await expect(history.locator('.data-detail-layer')).toHaveCSS('position', 'fixed');
+        await expect(detail.getByText('77,5 kg', { exact: true })).toBeVisible();
+        await expect(detail.getByText('07:20', { exact: true })).toBeVisible();
+        await expect(detail.getByRole('button', { name: 'Modifica' })).toHaveCount(0);
+        await detail.getByRole('button', { name: 'Chiudi dettaglio' }).click();
+
+        const requestDelete = async () => {
+            await history.getByRole('button', { name: 'Opzioni' }).click();
+            await history.getByRole('menuitem', { name: 'Elimina misurazione' }).click();
+            return first.getByRole('alertdialog', { name: 'Conferma' });
+        };
+        await (await requestDelete()).getByRole('button', { name: 'Annulla' }).click();
+        await expect(history.getByText('Misurazione · 07:50')).toBeVisible();
+        expect(receipts()).toBe(before);
+        await (await requestDelete()).getByRole('button', { name: 'Conferma' }).click();
+        await expect.poll(() => firstCommitStatuses).toEqual([429]);
+        await expect(history).toHaveCount(0);
+        expect(receipts()).toBe(before);
+
+        allowFirstCommit();
+        await first.getByRole('button', { name: 'Verifica salvataggio' }).click();
+        await expect(history.getByText('Dati giornalieri', { exact: true })).toBeVisible();
+        await expect(history.getByText('Sonno 07:20', { exact: true })).toBeVisible();
+        expect(firstCommitStatuses).toEqual([429, 200]);
+        expect(receipts()).toBe(before + 1);
+
+        const day = await second.evaluate(async date => (await window.kindeReplicaFixture!.refresh()).data.nutrition?.[date], date);
+        expect(day).toMatchObject({ sleepHours: '07:20', steps: 4200, meals: [{ id: 'measurement-test-breakfast' }] });
+        expect(day?.weight).toBeUndefined();
+        expect(day?.waist).toBeUndefined();
+        expect(day?.measurementTime).toBeUndefined();
+    }, { planningUi: true });
+});
+
 test('recovers an encrypted Kinde routine draft after reload, then creates and edits it once', async ({ browser }) => {
     await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
         const exerciseId = 'editor-e2e-exercise';

@@ -17,6 +17,7 @@ import type {
     WorkoutRoutine,
     WorkoutSession,
 } from '../../../types';
+import type { MeasurementSnapshot } from '../../nutrition/measurementHistory';
 
 type NutritionDayPatch = Partial<Omit<
     NutritionDay,
@@ -32,6 +33,7 @@ export type DomainOperation =
     | { type: 'nutrition-planning.replace'; value: NutritionPlanning; origin?: 'generated-default' | 'user-edited' }
     | { type: 'nutrition-day.patch'; date: string; patch: NutritionDayPatch }
     | { type: 'nutrition-day.delete'; date: string }
+    | { type: 'measurement.delete'; date: string; expected: MeasurementSnapshot }
     | { type: 'activity-steps.set'; date: string; steps: number; source?: 'manual' | 'imported'; capturedAt?: number }
     | { type: 'activity-steps.clear'; date: string }
     | { type: 'cardio-session.upsert'; date: string; session: CardioSession }

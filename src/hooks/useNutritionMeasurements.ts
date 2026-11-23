@@ -7,6 +7,7 @@ import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 import { hasMeasurementData } from '../lib/nutrition/measurementPresence';
+import { MEASUREMENT_CLEAR_PATCH, selectMeasurementHistory } from '../lib/nutrition/measurementHistory';
 import { parseMeasurementNumber, prepareBodyMeasurements } from '../lib/nutrition/measurementInput';
 import type { BodyFatProvenance, NutritionDay, UserProfile } from '../types';
 
@@ -36,14 +37,7 @@ export function useNutritionMeasurements(selectedDate?: string, includeHistory =
     const hasExistingData = hasMeasurementData(targetDayData);
 
     const measurementsHistory = useMemo(() => {
-        if (!includeHistory) return EMPTY_MEASUREMENTS_HISTORY;
-        const historyFields = [
-            'weight', 'bf', 'waist', 'neck', 'hip', 'chest', 'shoulders', 'biceps', 'thighs', 'calves',
-            'sleepHours', 'sleepDeep', 'sleepLight', 'sleepRem', 'sleepAwake',
-        ] as const satisfies readonly (keyof NutritionDay)[];
-        return Object.values(nutrition)
-            .filter(day => day && historyFields.some(key => day[key] !== undefined && day[key] !== null && day[key] !== ''))
-            .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        return includeHistory ? selectMeasurementHistory(nutrition) : EMPTY_MEASUREMENTS_HISTORY;
     }, [nutrition, includeHistory]);
 
     const handleEditClick = (day: Pick<NutritionDay, 'date'>) => {
@@ -70,20 +64,7 @@ export function useNutritionMeasurements(selectedDate?: string, includeHistory =
             await dispatchDurableOperation(dispatchDomainOperation, {
                 type: 'nutrition-day.patch',
                 date: dateStr,
-                patch: {
-                    weight: undefined,
-                    bf: undefined,
-                    bfProvenance: undefined,
-                    waist: undefined,
-                    neck: undefined,
-                    hip: undefined,
-                    chest: undefined,
-                    shoulders: undefined,
-                    biceps: undefined,
-                    thighs: undefined,
-                    calves: undefined,
-                    measurementTime: undefined,
-                },
+                patch: MEASUREMENT_CLEAR_PATCH,
             });
         } catch {
             if (isCurrentSession(session)) await showAlert("Errore durante l'eliminazione.");

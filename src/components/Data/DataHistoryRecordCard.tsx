@@ -10,7 +10,7 @@ interface DataHistoryRecordCardProps {
     day: MeasurementHistoryDay;
     editingDate: string | null;
     canOpenDetail: boolean;
-    onSelectEdit: (day: MeasurementHistoryDay) => void;
+    onSelectEdit?: (day: MeasurementHistoryDay) => void;
     onDeleteMeasurement?: (date: string) => void;
 }
 
@@ -53,8 +53,8 @@ export default function DataHistoryRecordCard({
                             {
                                 label: 'Modifica misurazione',
                                 icon: <Pencil size={16} />,
-                                hidden: !measurement,
-                                onClick: () => onSelectEdit(day),
+                                hidden: !measurement || !onSelectEdit,
+                                onClick: () => onSelectEdit?.(day),
                             },
                             {
                                 label: 'Elimina misurazione',
