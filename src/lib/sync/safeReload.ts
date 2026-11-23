@@ -1,5 +1,4 @@
 import { isReloadSessionCurrent, prepareForReload, prepareForRequiredUpdateReload } from './reloadBarrier';
-import { isCurrentSession } from './session';
 import { checkForWaitingServiceWorker } from '../pwaUpdate';
 
 const REQUIRED_UPDATE_SW_TIMEOUT_MS = 3000;
@@ -65,7 +64,7 @@ export async function requiredUpdateHardReload(reload: () => void = () => window
     // activate a waiting service worker before reloading into the newer application.
     const session = prepareForRequiredUpdateReload();
     await refreshServiceWorkerForRequiredUpdate();
-    if (!isCurrentSession(session)) {
+    if (!isReloadSessionCurrent(session)) {
         throw new Error('Sessione cambiata. Ripeti l’aggiornamento.');
     }
     reload();

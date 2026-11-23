@@ -36,6 +36,9 @@ export function isReloadSessionCurrent(session: ReturnType<typeof captureSession
 
 export function prepareForRequiredUpdateReload() {
     const session = captureSession();
+    // The signed-out entry screen has no attributed fitness data or active
+    // guest session. Do not require a guest vault to refresh its app shell.
+    if (isUnauthenticatedReloadSession(session)) return session;
     const state = useAppStore.getState();
     persistOwnerBoundWorkoutSnapshot(session, state.dataOwner, state.localWorkout);
     if (!isCurrentSession(session)) throw new Error('Sessione cambiata. Ripeti l’aggiornamento.');

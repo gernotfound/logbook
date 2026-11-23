@@ -59,6 +59,39 @@ export function registerReloadUpdateCases(ctx: ReloadSuiteContext): void {
         expect(isReloadSessionCurrent(prepared)).toBe(false);
     });
     
+
+    it('allows required-update recovery on the signed-out screen without touching an existing account vault', async () => {
+        const existing = await get('logbook:v2:user:a');
+        app.auth.currentUser = null as any;
+        app.state = { userData: null, localWorkout: null, dataOwner: null };
+        const reload = vi.fn();
+
+        await requiredUpdateHardReload(reload);
+
+        expect(reload).toHaveBeenCalledOnce();
+        expect(await get('logbook:v2:user:a')).toEqual(existing);
+        expect(app.flush).not.toHaveBeenCalled();
+        expect(ctx.disk.has('logbook_is_guest')).toBe(false);
+    });
+
+    it('still blocks signed-out required-update recovery after a session epoch change during service worker inspection', async () => {
+        const existing = await get('logbook:v2:user:a');
+        app.auth.currentUser = null as any;
+        app.state = { userData: null, localWorkout: null, dataOwner: null };
+        vi.stubGlobal('navigator', { serviceWorker: {
+            getRegistration: vi.fn(async () => {
+                invalidateSession();
+                return undefined;
+            }),
+            controller: null,
+        } });
+        const reload = vi.fn();
+
+        await expect(requiredUpdateHardReload(reload)).rejects.toThrow('Sessione cambiata');
+        expect(reload).not.toHaveBeenCalled();
+        expect(await get('logbook:v2:user:a')).toEqual(existing);
+    });
+
     it('hard reloads only after the durable reload barrier succeeds', async () => {
         app.flush.mockRejectedValue(new Error('offline'));
         const reload = vi.fn(() => {
