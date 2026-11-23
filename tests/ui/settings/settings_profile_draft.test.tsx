@@ -153,6 +153,33 @@ describe('biometric profile draft persistence', () => {
         expect(state.showAlert).toHaveBeenCalledWith('Errore durante il salvataggio del profilo.');
     });
 
+    it('retains an unsaved biometric edit after a rejected durable result and allows retry', async () => {
+        state.dispatch.mockResolvedValueOnce({
+            ok: false,
+            status: 'rejected',
+            error: new Error('Local journal unavailable'),
+        });
+        const { result } = renderHook(() => useSettingsProfile());
+        act(() => result.current.setHeight('185'));
+
+        await act(async () => { await result.current.handleSaveProfile(); });
+
+        expect(state.dispatch).toHaveBeenCalledExactlyOnceWith({
+            type: 'profile.patch',
+            patch: { height: '185' },
+        });
+        expect(result.current.height).toBe('185');
+        expect(state.showAlert).toHaveBeenCalledExactlyOnceWith('Errore durante il salvataggio del profilo.');
+
+        await act(async () => { await result.current.handleSaveProfile(); });
+        expect(state.dispatch).toHaveBeenCalledTimes(2);
+        expect(state.dispatch).toHaveBeenNthCalledWith(2, {
+            type: 'profile.patch',
+            patch: { height: '185' },
+        });
+        expect(result.current.height).toBe('170');
+    });
+
     it('does not clear the draft or show an old-session error after the session changes', async () => {
         let reject!: (error: Error) => void;
         state.dispatch.mockImplementationOnce(() => new Promise((_resolve, rejectPromise) => { reject = rejectPromise; }));
