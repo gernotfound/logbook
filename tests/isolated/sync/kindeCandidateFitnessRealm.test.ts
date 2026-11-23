@@ -22,11 +22,18 @@ import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
 import { beginLocalPurge } from '../../../src/lib/sync/localPurgeFence';
 import { createDefaultNutritionPlanning } from '../../../src/lib/nutritionDefaults';
 import { protectedDeviceKey } from '../../../src/lib/sync/deviceStorageKeys';
+import { readDeviceValueStrict } from '../../../src/lib/sync/deviceStorageRead';
+import { captureActivitySteps } from '../../../src/lib/activity';
+import { requiredUpdateRecoveryRegistry } from '../../../src/lib/sync/requiredUpdateRecovery';
 
 const uid = 'k_' + 'P'.repeat(43);
 const otherUid = 'k_' + 'Q'.repeat(43);
 const owner = 'user:' + uid;
 const expected = { uid, fenceEpoch: 1, healthConsentRevision: 1 };
+const witnessNamePrefix = 'draft:dated-intent:';
+const witnessKeyPrefix = protectedDeviceKey(witnessNamePrefix, owner);
+const stepWitnessKeys = () => Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index))
+    .filter((key): key is string => key?.startsWith(witnessKeyPrefix) === true);
 let online: boolean;
 const catalog = {
     manifest: { version: 'cf03-realm', updatedAt: '2026-11-21T00:00:00.000Z',
@@ -90,6 +97,105 @@ afterEach(() => {
 });
 
 describe('isolated Kinde fitness realm with trusted owner, no Firebase/global grant', () => {
+    it('recovers the separately witnessed steps draft and acknowledges only the selected day', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        const date = '2026-10-12';
+        const slot = protectedDeviceKey('draft:activity-steps:' + date, owner);
+        try {
+            await fixture.consent(uid);
+            const client = browser(fixture);
+            const first = await openKindeCandidateFitnessRealm({ ...client, expected });
+            try {
+                await first.submit({ type: 'nutrition-day.patch', date, patch: { sleepHours: '07:00' } });
+                const draft = await first.openStepsDraft(date);
+                draft.write('8124');
+                const [key] = stepWitnessKeys();
+                const initialDraft = localStorage.getItem(slot);
+                const witness = localStorage.getItem(key);
+                expect(initialDraft).toMatch(/^tlb-sealed:v1:/);
+                expect(witness).toMatch(/^tlb-sealed:v1:/);
+                expect(witness).not.toBe(initialDraft);
+                requiredUpdateRecoveryRegistry.captureAll();
+                expect(localStorage.getItem(slot)).toBe(initialDraft);
+                expect(localStorage.getItem(key)).toBe(witness);
+            } finally { first.close(); }
+            const reopened = await openKindeCandidateFitnessRealm({ ...browser(fixture), expected });
+            try {
+                const draft = await reopened.openStepsDraft(date);
+                expect(draft.initial).toMatchObject({ date, steps: '8124', submitted: false });
+                await expect(reopened.saveStepsDraft(draft)).resolves.toMatchObject({
+                    outcome: { kind: 'cloud-acknowledged' }, draftCleared: true,
+                });
+                expect(reopened.snapshot()?.data.nutrition?.[date]).toMatchObject({ steps: 8124, sleepHours: '07:00' });
+                expect(fixture.count('sync_receipts', uid)).toBe(2);
+                expect(stepWitnessKeys()).toEqual([]);
+                expect(localStorage.getItem(slot)).toMatch(/^tlb-sealed:v1:/);
+                expect(isVaultUnlocked(owner)).toBe(false);
+            } finally { reopened.close(); }
+        } finally { fixture.close(); }
+    });
+
+    it('fences stale steps edits and removal while keeping the other writer’s value', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        const date = '2026-10-12';
+        const slot = protectedDeviceKey('draft:activity-steps:' + date, owner);
+        try {
+            await fixture.consent(uid);
+            const first = await openKindeCandidateFitnessRealm({ ...browser(fixture), expected });
+            const second = await openKindeCandidateFitnessRealm({ ...browser(fixture), expected });
+            try {
+                const draft = await first.openStepsDraft(date);
+                draft.write('8124');
+                const original = localStorage.getItem(slot);
+                await expect(second.openStepsDraft(date)).rejects.toThrow('un’altra scheda');
+                const oldSteps = captureActivitySteps(first.snapshot()?.data.nutrition?.[date]);
+                await second.submit({ type: 'activity-steps.set', date, steps: 5600, capturedAt: 2367 });
+                await expect(first.saveStepsDraft(draft)).rejects.toThrow('I passi sono cambiati');
+                expect(localStorage.getItem(slot)).toBe(original);
+                await expect(first.submit({ type: 'activity-steps.clear', date, expected: oldSteps }))
+                    .rejects.toThrow('I passi sono cambiati');
+                expect(fixture.count('sync_receipts', uid)).toBe(1);
+                expect((await second.refresh()).data.nutrition?.[date]?.steps).toBe(5600);
+            } finally { first.close(); second.close(); }
+        } finally { fixture.close(); }
+    });
+
+    it('keeps the independent copy after a failed canonical write and blocks save and reload', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        const date = '2026-10-12';
+        const slot = protectedDeviceKey('draft:activity-steps:' + date, owner);
+        try {
+            await fixture.consent(uid);
+            const realm = await openKindeCandidateFitnessRealm({ ...browser(fixture), expected });
+            try {
+                const draft = await realm.openStepsDraft(date);
+                const store = localStorage.setItem.bind(localStorage);
+                const write = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+                    if (key === slot) throw new DOMException('Quota exceeded', 'QuotaExceededError');
+                    store(key, value);
+                });
+                try { expect(() => draft.write('8124')).toThrow(); }
+                finally { write.mockRestore(); }
+                const [key] = stepWitnessKeys();
+                const witness = localStorage.getItem(key);
+                expect(witness).toMatch(/^tlb-sealed:v1:/);
+                expect(localStorage.getItem(slot)).toBeNull();
+                const grant = await unlockVaultForOwner(owner);
+                try {
+                    const name = witnessNamePrefix + key.slice(witnessKeyPrefix.length);
+                    const raw = readDeviceValueStrict(name, owner);
+                    expect(JSON.parse(raw!)).toMatchObject({
+                        owner, consentRevision: 1, draftName: 'draft:activity-steps:' + date, values: { steps: '8124' },
+                    });
+                } finally { grant.release(); }
+                expect(() => requiredUpdateRecoveryRegistry.captureAll()).toThrow();
+                await expect(realm.saveStepsDraft(draft)).rejects.toThrow();
+                expect(fixture.count('sync_receipts', uid)).toBe(0);
+                expect(localStorage.getItem(key)).toBe(witness);
+            } finally { realm.close(); }
+        } finally { fixture.close(); }
+    });
+
     it('saves an exercise without consuming the routine draft and opens both with separate device locks', async () => {
         const fixture = await createCloudKeyHttpFixture([uid]);
         try {

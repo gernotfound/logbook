@@ -150,6 +150,14 @@ Esame su azione esplicita e export Backup JSON sono letture di recupero, senza r
 
 La persistenza indipendente protegge contro la perdita di una copia nella race condivisa, ma non determina quale delle due versioni sia corretta e non rende atomiche le write `localStorage`. **MUST:** la sola lettura di una bozza già durevole non la rende dirty; una chiamata di flush senza input umano non deve creare una seconda testimonianza o riscrivere la copia canonica.
 
+L'editor candidato dei passi Kinde usa lo stesso formato datato V2 e la
+stessa catena di testimonianze. La sessione e il consenso verificati nel
+realm autorizzano una chiave limitata al lock della bozza e ai record
+delle testimonianze datate dell'owner. Il controllo di update e il commit
+IndexedDB ricontrollano sia la bozza sia la catena osservata. Un tentativo
+di commit marcato nel record cifrato richiede verifica prima di poter
+agire di nuovo. Un salvataggio confermato lascia il tombstone datato.
+
 **MUST (annullamento in UI):** la vista Misurazioni può uscire dalla modifica e navigare allo Storico solo quando `draft.clear()` conferma la pulizia della copia device; un errore o un esito `false` conservano il form e la bozza persistente, senza segnalare falsamente l'annullamento.
 
 ## Editor storico e chiusura del workout
