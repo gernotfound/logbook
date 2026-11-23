@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import RecoveryBentoCard from '../../../src/components/Home/widgets/RecoveryBentoCard';
 import TrainingPlanning from '../../../src/components/Training/planning/TrainingPlanning';
 import { UserDataSchema } from '../../../src/lib/schema';
-import type { UserData } from '../../../src/types';
+import { Logic } from '../../../src/lib/logic';
 import { storageOwner } from '../../../src/lib/sync/session';
 import { useAppStore } from '../../../src/store/useAppStore';
 
@@ -27,8 +27,27 @@ describe('React effect replacement with derived state', () => {
         expect(screen.getByRole('button', { name: '1 dolori attivi' }).getAttribute('aria-expanded')).toBe('false');
     });
 
+    it('gives the muscle pain search an accessible name and exposes toggle state', () => {
+        const muscle = Logic.searchMuscles('pettorali', 8)[0];
+        expect(muscle).toBeDefined();
+        const onTogglePain = vi.fn();
+        render(<RecoveryBentoCard
+            activePains={[muscle.id]}
+            painColors={{}}
+            muscleColors={{}}
+            onTogglePain={onTogglePain}
+        />);
+
+        const search = screen.getByRole('textbox', { name: 'Cerca muscolo dolorante' });
+        fireEvent.change(search, { target: { value: 'pettorali' } });
+        const selected = screen.getAllByRole('button', { pressed: true });
+        expect(selected.length).toBeGreaterThan(0);
+        fireEvent.click(selected[0]);
+        expect(onTogglePain).toHaveBeenCalledWith(muscle.id);
+    });
+
     it('never carries the expanded details of an active cycle to a different cycle or back', () => {
-        const data = {
+        const data = UserDataSchema.parse({
             profile: {},
             routines: [{ id: 'routine-a', name: 'Scheda A', exercises: [] }],
             trainingCycles: [
@@ -36,9 +55,8 @@ describe('React effect replacement with derived state', () => {
                 { id: 'cycle-b', name: 'Ciclo B', durationWeeks: 4, routines: [{ routineId: 'routine-a', frequencyPerWeek: 1 }] },
             ],
             activeCycleId: 'cycle-a',
-        } satisfies UserData;
-        expect(UserDataSchema.safeParse(data).success).toBe(true);
-        useAppStore.setState({ userData: data, dataOwner: storageOwner() });
+        });
+        useAppStore.setState({ userData: data as any, dataOwner: storageOwner() });
         const view = render(<TrainingPlanning />);
 
         const details = screen.getByRole('button', { name: 'Dettagli ciclo' });
@@ -48,14 +66,14 @@ describe('React effect replacement with derived state', () => {
         const renamedCycles = data.trainingCycles.map(cycle => cycle.id === 'cycle-a'
             ? { ...cycle, name: 'Ciclo A aggiornato' } : cycle);
         act(() => useAppStore.setState({
-            userData: { ...data, trainingCycles: renamedCycles },
+            userData: { ...data, trainingCycles: renamedCycles } as any,
         }));
         expect(screen.getByRole('heading', { name: 'Ciclo A aggiornato' })).toBeDefined();
         expect(screen.getByRole('button', { name: 'Dettagli ciclo' }).getAttribute('aria-expanded')).toBe('true');
 
-        act(() => useAppStore.setState({ userData: { ...data, activeCycleId: 'cycle-b' } }));
+        act(() => useAppStore.setState({ userData: { ...data, activeCycleId: 'cycle-b' } as any }));
         expect(screen.getByRole('button', { name: 'Dettagli ciclo' }).getAttribute('aria-expanded')).toBe('false');
-        act(() => useAppStore.setState({ userData: { ...data, activeCycleId: 'cycle-a' } }));
+        act(() => useAppStore.setState({ userData: { ...data, activeCycleId: 'cycle-a' } as any }));
         expect(screen.getByRole('button', { name: 'Dettagli ciclo' }).getAttribute('aria-expanded')).toBe('false');
         view.unmount();
     });

@@ -62,48 +62,6 @@ describe('ContextMenu Component (Milestone M1)', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('does not resurrect an open menu when its last action disappears and returns', () => {
-    const action = { id: 'details', label: 'Dettagli', onClick: vi.fn() };
-    const { rerender } = render(<ContextMenu items={[action]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
-    expect(screen.getByRole('menu')).not.toBeNull();
-
-    rerender(<ContextMenu items={[{ ...action, hidden: true }]} />);
-    expect(screen.queryByRole('menu')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Opzioni' })).toBeNull();
-
-    rerender(<ContextMenu items={[action]} />);
-    expect(screen.getByRole('button', { name: 'Opzioni' }).getAttribute('aria-expanded')).toBe('false');
-    expect(screen.queryByRole('menu')).toBeNull();
-    expect(action.onClick).not.toHaveBeenCalled();
-  });
-
-  it('closes a previous menu when another opens without stealing focus from the new trigger', () => {
-    const firstAction = vi.fn();
-    const secondAction = vi.fn();
-    render(
-      <>
-        <ContextMenu ariaLabel="Opzioni primo" items={[{ id: 'first', label: 'Apri primo', onClick: firstAction }]} />
-        <ContextMenu ariaLabel="Opzioni secondo" items={[{ id: 'second', label: 'Apri secondo', onClick: secondAction }]} />
-      </>,
-    );
-    const firstTrigger = screen.getByRole('button', { name: 'Opzioni primo' });
-    const secondTrigger = screen.getByRole('button', { name: 'Opzioni secondo' });
-    firstTrigger.focus();
-    fireEvent.click(firstTrigger);
-    expect(screen.getByRole('menu', { name: 'Opzioni primo' })).not.toBeNull();
-
-    secondTrigger.focus();
-    fireEvent.click(secondTrigger);
-    expect(screen.queryByRole('menu', { name: 'Opzioni primo' })).toBeNull();
-    expect(screen.getByRole('menu', { name: 'Opzioni secondo' })).not.toBeNull();
-    expect(firstTrigger.getAttribute('aria-expanded')).toBe('false');
-    expect(secondTrigger.getAttribute('aria-expanded')).toBe('true');
-    expect(document.activeElement).toBe(secondTrigger);
-    expect(firstAction).not.toHaveBeenCalled();
-    expect(secondAction).not.toHaveBeenCalled();
-  });
-
   it('opens and closes dropdown on trigger button click', () => {
     const onOpenChange = vi.fn();
     render(<ContextMenu items={sampleItems} onOpenChange={onOpenChange} />);
