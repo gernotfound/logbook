@@ -13,6 +13,7 @@ describe('Empirical Challenger: Cycle editor calendar interactions', () => {
         it('CycleEditor clamps durationWeeks to 1 when user sets an end date before start date', () => {
             const onSave = vi.fn();
             const onCancel = vi.fn();
+            const alert = vi.spyOn(useDialogStore.getState(), 'showAlert').mockResolvedValue(undefined);
 
             const { container } = render(
                 <CycleEditor
@@ -42,7 +43,6 @@ describe('Empirical Challenger: Cycle editor calendar interactions', () => {
             expect((screen.getByLabelText('Data di inizio') as HTMLInputElement).value).toBe('15/09/2026');
             expect(endDateInput.value).toBe('10/09/2026');
 
-            const alert = vi.spyOn(useDialogStore.getState(), 'showAlert').mockResolvedValue(undefined);
             fireEvent.submit(container.querySelector('form')!);
             expect(onSave).not.toHaveBeenCalled();
             expect(alert).toHaveBeenCalledWith(expect.stringContaining('fine non precedente'));
