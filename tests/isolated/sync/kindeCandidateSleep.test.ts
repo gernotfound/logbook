@@ -95,8 +95,9 @@ describe('Kinde sleep: encrypted local draft, owner guards, authenticated domain
             const client = browser(fixture);
             const first = await openKindeCandidateFitnessRealm({ ...client, expected });
             await first.submit({ type: 'nutrition-day.patch', date, patch: {
-                weight: 81, steps: 3000, sleepHours: '07:00', sleepDeep: '02:00',
+                weight: 81, sleepHours: '07:00', sleepDeep: '02:00',
             } });
+            await first.submit({ type: 'activity-steps.set', date, steps: 3000 });
             const draft = await first.openSleepDraft(date);
             expect(draft.initial).toMatchObject({ date, hasExisting: true,
                 values: { sleepHours: '07:00', sleepDeep: '02:00' } });
@@ -120,7 +121,7 @@ describe('Kinde sleep: encrypted local draft, owner guards, authenticated domain
             });
             expect(second.snapshot()?.data.nutrition?.[date]?.sleepDeep).toBeUndefined();
             expect(localStorage.getItem(slot)).toBeNull();
-            expect(fixture.count('sync_receipts', uid)).toBe(2);
+            expect(fixture.count('sync_receipts', uid)).toBe(3);
             expect(isVaultUnlocked(owner)).toBe(false);
             second.close();
         } finally { fixture.close(); }
