@@ -24,6 +24,16 @@ export function calculateRawLoggedMealTotals(meals: readonly LoggedMealItem[]) {
 
 /** Reject arithmetic loss before permissive schema fallbacks can replace it with zero. */
 export function calculateLoggedMealTotals(meals: readonly LoggedMealItem[]) {
+    for (const item of meals ?? []) {
+        // The display preview may tolerate incomplete values; durable domain
+        // projections must not silently coerce invalid nutrients to zero.
+        if (!item || ![item.kcal, item.carbs, item.pro, item.fat].every(
+            value => typeof value === 'number' && Number.isFinite(value) && value >= 0,
+        ) || (item.quantity != null && (!Number.isFinite(item.quantity) || item.quantity < 0))
+            || (item.baseQty != null && !Number.isFinite(item.baseQty))) {
+            throw new Error('Totali nutrizionali non rappresentabili.');
+        }
+    }
     const { kcal, carbs, pro, fat } = calculateRawLoggedMealTotals(meals);
     if (![kcal, carbs, pro, fat].every(Number.isFinite)) {
         throw new Error('Totali nutrizionali non rappresentabili.');
