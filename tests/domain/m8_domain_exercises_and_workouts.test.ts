@@ -54,8 +54,9 @@ describe('M8 Domain Operations V4 — exercise archive and active workout invari
 
         expect(after.library?.map(item => item.id)).toEqual(['e-keep']);
         expect(after.routines?.map(routine => routine.exercises.map(exercise => exercise.exId))).toEqual([['e-keep'], []]);
-        expect(after.history?.[0]?.id).toBe(historical.id);
-        expect(after.history?.[0]?.exercises[0]?.exId).toBe('e-delete');
+        // Removing an exercise from the catalog must not edit historical
+        // workouts, including fields beyond the exercise reference itself.
+        expect(after.history).toEqual(before.history);
         expect(operations.some(operation => operation.docPath === '' && operation.path[0] === 'library')).toBe(true);
         expect(operations.some(operation => operation.docPath === '' && operation.path[0] === 'routines')).toBe(true);
         expect(operations.every(operation => operation.docPath === '')).toBe(true);
@@ -66,7 +67,8 @@ describe('M8 Domain Operations V4 — exercise archive and active workout invari
             (replayRoot?.routines as Array<{ exercises: Array<{ exId: string }> }> | undefined)
                 ?.map(routine => routine.exercises.map(exercise => exercise.exId)),
         ).toEqual([['e-keep'], []]);
-        expect(projectDocuments(after, catalog).get('history_months/2026-09')).toBeDefined();
+        expect(projectDocuments(after, catalog).get('history_months/2026-09'))
+            .toEqual(projectDocuments(before, catalog).get('history_months/2026-09'));
         expect((projectDocuments(after, catalog).get('history_months/2026-09')!['w-delete-regression'] as WorkoutSession).exercises[0].exId)
             .toBe('e-delete');
     });
@@ -83,7 +85,7 @@ describe('M8 Domain Operations V4 — exercise archive and active workout invari
         const { after, operations, replay } = compile(before, { type: 'exercise.delete', id: 'e-delete' });
 
         expect(after.library?.map(item => item.id)).toEqual(['e-keep']);
-        expect(after.routines?.[0]?.exercises.map(exercise => exercise.exId)).toEqual(['e-keep']);
+        expect(after.routines).toEqual(before.routines);
         expect(operations.some(operation => operation.docPath === '' && operation.path[0] === 'library')).toBe(true);
         expect(operations.some(operation => operation.path[0] === 'routines')).toBe(false);
         expect((replay.get('')?.library as Array<{ id: string }> | undefined)?.map(item => item.id))
