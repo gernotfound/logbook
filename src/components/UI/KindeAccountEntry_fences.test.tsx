@@ -56,7 +56,8 @@ describe('Kinde candidate entry: owner, cookie and consent fences', () => {
         vi.mocked(readKindeCandidateAccess).mockResolvedValue(confirmed);
         let finish!: (value: {
             kind: 'candidate-observed'; checkpointRevision: number;
-            replicaOutcome: 'already-active';
+            replicaOutcome: 'already-active'; journalOutcome: 'idle';
+            journalDrained: true;
         }) => void;
         vi.mocked(prepareKindeCandidateOwner).mockImplementationOnce(() =>
             new Promise(resolve => { finish = resolve; }));
@@ -68,8 +69,10 @@ describe('Kinde candidate entry: owner, cookie and consent fences', () => {
         // The in-flight action suppresses a foreground refresh, but its own
         // pinned cookie check must reject the late result before any success.
         await act(async () => {
+            // This is otherwise ready: only the replaced session may reject it.
             finish({ kind: 'candidate-observed', checkpointRevision: 1,
-                replicaOutcome: 'already-active' });
+                replicaOutcome: 'already-active', journalOutcome: 'idle',
+                journalDrained: true });
         });
         await screen.findByRole('alert');
         expect(screen.queryByText(/Archivio cifrato verificato nel percorso candidato/)).toBeNull();

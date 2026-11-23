@@ -68,6 +68,18 @@ for (const theme of ['light', 'dark'] as const) {
 
     await expect(page.getByRole('button', { name: 'Continua senza account' })).toBeVisible();
     await expect(secondTab.getByRole('button', { name: 'Continua senza account' })).toBeVisible();
+    // Revoke and purge must remove every guest-owned localStorage value,
+    // while retaining the independent revocation fence for suspended tabs.
+    await expect.poll(() => page.evaluate(() => ({
+      guestFlag: localStorage.getItem('logbook_is_guest'),
+      guestGeneration: localStorage.getItem('logbook_guest_session_id_v1'),
+      ownerKeys: Object.keys(localStorage).filter(key => key.startsWith('logbook:v2:guest:')),
+      revoked: /^[a-f0-9]{32}$/.test(localStorage.getItem('logbook_guest_revoked_v1') ?? ''),
+    }))).toEqual({ guestFlag: null, guestGeneration: null, ownerKeys: [], revoked: true });
+    // A storage event may hide an old realm without fencing a fresh bootstrap.
+    await secondTab.reload();
+    await expect(secondTab.getByRole('button', { name: 'Continua senza account' })).toBeVisible();
+    await expect(secondTab.locator('.guest-banner')).toHaveCount(0);
     // A fresh guest could hide the old values even if their encrypted bytes survived.
     // Check the underlying archive, wrapped control and device key before provisioning it.
     await expect.poll(() => guestArchiveEntries(page)).toBe(0);

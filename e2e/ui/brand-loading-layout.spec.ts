@@ -30,7 +30,7 @@ async function sample(page: Page, selector: string) {
     const spinnerCss = getComputedStyle(spinner);
     const headingCss = getComputedStyle(wordmark.querySelector('h1')!);
     return {
-      screen: rect(screen), image: rect(image), wordmark: rect(wordmark),
+      screen: rect(screen), group: rect(brand), image: rect(image), wordmark: rect(wordmark),
       mascotSrc: image.currentSrc,
       background: screenCss.backgroundColor, color: screenCss.color,
       filter: getComputedStyle(image).filter,
@@ -56,6 +56,12 @@ function expectFits(snapshot: Awaited<ReturnType<typeof sample>>, viewport: { wi
     expect(box.bottom, name).toBeLessThanOrEqual(Math.min(viewport.height, snapshot.screen.bottom) + 1);
     expect((box.x + box.right) / 2, name).toBeCloseTo(viewport.width / 2, 0);
   }
+  // Both variants must center the complete group, allowing the bootstrap's
+  // small optical shift (-2vh). Fitting within the viewport is not enough.
+  const groupCenterY = (snapshot.group.y + snapshot.group.bottom) / 2;
+  const availableCenterY = (snapshot.screen.y + snapshot.screen.bottom) / 2;
+  expect(Math.abs(groupCenterY - availableCenterY), 'loader vertical centering')
+    .toBeLessThanOrEqual(viewport.height * 0.03 + 2);
   expect(snapshot.scrollLocked).toBe(true);
 }
 

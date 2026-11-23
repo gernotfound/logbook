@@ -52,6 +52,12 @@ test('offline browser restart after abrupt crash preserves an uncommitted dated 
     await page.getByRole('button', { name: 'Accetta e Continua' }).click();
     await expect(page.getByRole('button', { name: 'Dati e statistiche', exact: true })).toBeVisible();
     await openGuestMeasurements(page);
+    // Use an explicit date so a new local day during browser restart cannot
+    // change which dated draft the test is recovering.
+    const originalNavigator = page.getByRole('navigation', { name: 'Giorno selezionato' });
+    await originalNavigator.getByRole('button', { name: 'Giorno precedente' }).click();
+    const originalDay = (await originalNavigator.locator('.data-date-current strong').innerText()).trim();
+    expect(originalDay).toMatch(/^\d{2}\/\d{2}\/\d{4}$/);
 
     // Don't blur or submit: only the synchronous device archive may contain
     // this uncommitted health-form edit when Chromium is terminated.
@@ -83,6 +89,14 @@ test('offline browser restart after abrupt crash preserves an uncommitted dated 
     await resumed.goto('/');
     await expect(resumed.getByRole('button', { name: 'Dati e statistiche', exact: true })).toBeVisible();
     await openGuestMeasurements(resumed);
+    const recoveredNavigator = resumed.getByRole('navigation', { name: 'Giorno selezionato' });
+    const recoveredDay = recoveredNavigator.locator('.data-date-current strong');
+    // After a crash the UI defaults to the new local 'today'. Read the exact
+    // original day through the real date picker instead of trusting that clock.
+    for (let offset = 0; offset < 3 && (await recoveredDay.innerText()).trim() !== originalDay; offset++) {
+      await recoveredNavigator.getByRole('button', { name: 'Giorno precedente' }).click();
+    }
+    await expect(recoveredDay).toHaveText(originalDay);
     await expect(resumed.locator('#measure-weight')).toHaveValue(value);
     expect(await deviceEvidence(resumed)).toEqual(before);
   } finally {

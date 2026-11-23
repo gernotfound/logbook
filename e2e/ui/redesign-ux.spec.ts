@@ -105,7 +105,7 @@ test('hosted Kinde password handling never appears inside the PWA', async ({ pag
     const card = page.locator('#auth-kinde-entry');
     await expect(card.getByRole('button', { name: 'Accedi o registrati' })).toBeVisible();
     await expect(card.getByRole('button', { name: /Continua senza account/ })).toBeVisible();
-    await expect(card.locator('input[type="password"]')).toHaveCount(0);
+    await expect(page.locator('input[type="email"], input[type="password"]')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Mostra password' })).toHaveCount(0);
     await expect(page.getByRole('group', { name: 'Modalità di accesso' })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);

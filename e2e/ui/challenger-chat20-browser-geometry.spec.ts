@@ -28,16 +28,21 @@ test('workout muscle SVG remains inside its real container from narrow mobile to
       const documentWidth = document.documentElement.scrollWidth;
       const viewportWidth = document.documentElement.clientWidth;
       return {
-        svgWidth: svgRect.width, parentWidth: parentRect.width,
+        svgWidth: svgRect.width, svgHeight: svgRect.height, parentWidth: parentRect.width,
         svgLeft: svgRect.left, svgRight: svgRect.right,
+        svgTop: svgRect.top, svgBottom: svgRect.bottom,
         parentLeft: parentRect.left, parentRight: parentRect.right,
+        parentTop: parentRect.top, parentBottom: parentRect.bottom,
         documentWidth, viewportWidth
       };
     });
     expect(geometry.svgWidth, `SVG absent at ${width}px`).toBeGreaterThan(0);
+    expect(geometry.svgHeight, `SVG has no height at ${width}px`).toBeGreaterThan(0);
     expect(geometry.svgWidth, `SVG detached from container at ${width}px`).toBeLessThanOrEqual(geometry.parentWidth + 1);
     expect(geometry.svgLeft).toBeGreaterThanOrEqual(geometry.parentLeft - 1);
     expect(geometry.svgRight).toBeLessThanOrEqual(geometry.parentRight + 1);
+    expect(geometry.svgTop).toBeGreaterThanOrEqual(geometry.parentTop - 1);
+    expect(geometry.svgBottom).toBeLessThanOrEqual(geometry.parentBottom + 1);
     expect(geometry.documentWidth, `Horizontal document overflow at ${width}px`).toBeLessThanOrEqual(geometry.viewportWidth);
   }
 });
@@ -55,9 +60,13 @@ test('measurements focus remains observable within a short real Chromium viewpor
     const rect = input.getBoundingClientRect();
     return {
       top: rect.top, bottom: rect.bottom,
-      visibleHeight: window.visualViewport?.height ?? document.documentElement.clientHeight
+      visibleHeight: window.visualViewport?.height ?? document.documentElement.clientHeight,
+      navTop: document.querySelector('.bottom-nav')!.getBoundingClientRect().top
     };
   });
   expect(bounds.top).toBeGreaterThanOrEqual(0);
   expect(bounds.bottom).toBeLessThanOrEqual(bounds.visibleHeight + 1);
+  // A field can fit the visual viewport and still be hidden by the fixed nav.
+  expect(bounds.bottom, 'focused measurement must remain above bottom navigation')
+    .toBeLessThanOrEqual(bounds.navTop + 1);
 });

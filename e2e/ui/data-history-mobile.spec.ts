@@ -31,7 +31,8 @@ test('history detail exposes scrollable geometry and a reachable close action on
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
   await page.getByRole('tab', { name: 'Storico', exact: true }).click();
-  await page.getByRole('button', { name: /Apri dettaglio/i }).click();
+  const detailTrigger = page.getByRole('button', { name: /Apri dettaglio/i });
+  await detailTrigger.click();
 
   const dialog = page.getByRole('dialog');
   const scrollArea = dialog.locator('.data-detail-scroll');
@@ -75,4 +76,5 @@ test('history detail exposes scrollable geometry and a reachable close action on
   if (testInfo.project.name === 'mobile-safari') await closeButton.tap();
   else await closeButton.click();
   await expect(dialog).toHaveCount(0);
+  await expect(detailTrigger).toBeFocused();
 });

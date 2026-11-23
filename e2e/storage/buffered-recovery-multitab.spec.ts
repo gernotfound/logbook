@@ -16,6 +16,9 @@ async function openRecoveryInspector(page: Page) {
   await page.goto('/?tab=settings');
   await expect(page.getByRole('heading', { name: 'Impostazioni', exact: true })).toBeVisible();
   await page.locator('.settings-menu').getByRole('button', { name: /Dati e backup/ }).click();
+  // The inspector must stay unmounted even when encrypted witnesses already exist.
+  // Its contents become visible only after an explicit user request.
+  await expect(page.getByRole('region', { name: 'Copie di recupero' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Esamina copie sul dispositivo' }).click();
 }
 

@@ -1,6 +1,15 @@
-import { expect, test } from '../fixtures';
+import { expect, test, type Page } from '../fixtures';
 import { loadKindeReplica, mountKindePlanning, withKindeReplicaDevices } from './kindeReplicaFixture';
 import type { DomainOperation } from '../../src/lib/sync/domainOperations';
+
+// Observe the selected day after navigation; a separate wall-clock read can
+// disagree with the UI if local midnight occurs between navigation and save.
+async function selectedDiaryDate(page: Page): Promise<string> {
+    const label = (await page.getByRole('button', { name: /Torna a oggi/ }).locator('strong').innerText()).trim();
+    const parsed = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(label);
+    if (!parsed) throw new Error('Data selezionata del diario non valida: ' + label);
+    return `${parsed[3]}-${parsed[2]}-${parsed[1]}`;
+}
 
 test('reads and deletes only the confirmed Kinde measurement, keeping meals and sleep on the other device', async ({ browser }) => {
     await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
@@ -244,7 +253,7 @@ test('duplicates a Kinde routine from the verified archive and replicates it onc
     }, { planningUi: true });
 });
 
-test('keeps a duplicated Kinde routine in the original encrypted journal after a lost receipt', async ({ browser }) => {
+test('keeps a Kinde routine duplication pending after HTTP 429 until a verified retry', async ({ browser }) => {
     await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
         expect(await second.evaluate(() => window.kindeReplicaFixture!.submit({
             type: 'routine.upsert', routine: {
@@ -281,7 +290,7 @@ test('keeps a duplicated Kinde routine in the original encrypted journal after a
     }, { planningUi: true });
 });
 
-test('reads Kinde training history and report without writing another owner\'s data', async ({ browser }) => {
+test('reads Kinde training history and report without issuing a D1 commit', async ({ browser }) => {
     await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses }) => {
         const saved = await second.evaluate(() => window.kindeReplicaFixture!.submit([
             { type: 'exercise.upsert', exercise: {
@@ -415,18 +424,15 @@ test('adds, edits and removes a meal through the Kinde diary on the selected day
             type: 'food.upsert',
             food: { id: 'rice-fixture', name, baseQty: 100, unit: 'g', kcal: 350, carbs: 75, pro: 7, fat: 1 },
         }), foodName)).toMatchObject({ kind: 'cloud-acknowledged' });
-        const yesterday = await first.evaluate(() => {
-            const date = new Date();
-            date.setDate(date.getDate() - 1);
-            const twoDigits = (value: number) => String(value).padStart(2, '0');
-            return [date.getFullYear(), twoDigits(date.getMonth() + 1), twoDigits(date.getDate())].join('-');
-        });
         await first.bringToFront();
         await mountKindePlanning(first);
         const diary = first.getByRole('region', { name: 'Diario pasti' });
         await expect(diary).toHaveCount(0);
         await first.getByRole('button', { name: 'Apri archivio account' }).click();
+        const originalDay = await selectedDiaryDate(first);
         await diary.getByRole('button', { name: /Giorno precedente/ }).click();
+        const yesterday = await selectedDiaryDate(first);
+        expect(yesterday).not.toBe(originalDay);
         await diary.getByRole('searchbox', { name: 'Cerca alimento' }).fill(foodName);
         await diary.getByRole('button', { name: `Aggiungi ${foodName} a Pranzo` }).click();
 
@@ -502,12 +508,6 @@ test('manages supplements and dated intakes through the Kinde archive', async ({
         expect(await second.evaluate(() => window.kindeReplicaFixture!.submit({
             type: 'supplement.upsert', supplement: { id: 'magnesium', name: 'Magnesio fixture', unit: 'mg' },
         }))).toMatchObject({ kind: 'cloud-acknowledged' });
-        const yesterday = await first.evaluate(() => {
-            const date = new Date();
-            date.setDate(date.getDate() - 1);
-            const pad = (value: number) => String(value).padStart(2, '0');
-            return [date.getFullYear(), pad(date.getMonth() + 1), pad(date.getDate())].join('-');
-        });
         await first.bringToFront();
         await mountKindePlanning(first);
         const diary = first.getByRole('region', { name: 'Diario pasti' });
@@ -515,7 +515,10 @@ test('manages supplements and dated intakes through the Kinde archive', async ({
         await first.getByRole('button', { name: 'Apri archivio account' }).click();
         await diary.getByRole('tab', { name: 'Integratori' }).click();
         const panel = diary.getByRole('tabpanel', { name: 'Integratori' });
+        const originalDay = await selectedDiaryDate(first);
         await panel.getByRole('button', { name: /Giorno precedente/ }).click();
+        const yesterday = await selectedDiaryDate(first);
+        expect(yesterday).not.toBe(originalDay);
         const magnesiumInput = panel.getByRole('spinbutton', { name: 'Quantità assunzione Magnesio fixture' });
         await magnesiumInput.fill('200');
         await panel.getByRole('button', { name: /Nuovo integratore/ }).click();

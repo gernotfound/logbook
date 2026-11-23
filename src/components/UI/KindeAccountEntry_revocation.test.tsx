@@ -75,6 +75,29 @@ describe('Kinde candidate entry: backup, revocation and rights', () => {
         expect(prepareKindeCandidatePortableBackupJson).not.toHaveBeenCalled();
     });
 
+    it('allows explicit withdrawal without requiring a backup or download', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValue({
+            kind: 'email-verified', principal: { ...principal, healthConsentRevision: 1 },
+        });
+        vi.mocked(readKindeCandidateAccess).mockResolvedValue(confirmed);
+        render(<KindeAccountEntry candidateMode="preparation" candidateLifecycleEnabled />);
+
+        await screen.findByRole('button', { name: 'Prepara backup JSON' });
+        const revoke = screen.getByRole('button', { name: 'Revoca consenso e avvia cancellazione' });
+        expect(revoke).toHaveProperty('disabled', true);
+        expect(prepareKindeCandidatePortableBackupJson).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole('checkbox', {
+            name: /Confermo di voler revocare il consenso/,
+        }));
+        expect(revoke).toHaveProperty('disabled', false);
+        fireEvent.click(revoke);
+        await waitFor(() => expect(withdrawKindeCandidateHealthConsent).toHaveBeenCalledOnce());
+        expect(prepareKindeCandidatePortableBackupJson).not.toHaveBeenCalled();
+        expect(unlockVaultForOwner).not.toHaveBeenCalled();
+        expect(screen.queryByRole('link', { name: 'Scarica backup JSON' })).toBeNull();
+    });
+
     it('offers optional backup before destructive confirmation, never silently withdrawing', async () => {
         vi.mocked(readKindeCandidateIdentity).mockResolvedValue({
             kind: 'email-verified', principal: { ...principal, healthConsentRevision: 1 },

@@ -108,4 +108,40 @@ describe('cycle macro volume - canonical muscle IDs', () => {
         ]);
         expect({ cycle, routines, library }).toEqual(original);
     });
+
+    it('keeps representative canonical muscle groups semantically distinct', () => {
+        // Explicit expected groups are independent of the classifier's substring rules.
+        const cases = [
+            ['chest_upper', 'chest', 'Petto'],
+            ['lower_back', 'core', 'Core'],
+            ['lats_lower_left', 'back', 'Dorso'],
+            ['delts_rear', 'shoulders', 'Spalle'],
+            ['brachialis', 'arms', 'Braccia'],
+            ['quads_right', 'quads', 'Quadricipiti'],
+            ['hamstrings_left', 'hamstrings', 'Femorali'],
+            ['abductors_right', 'glutes', 'Glutei'],
+            ['adductors_left', 'adductors', 'Adduttori'],
+            ['calves_left', 'calves', 'Polpacci'],
+            ['legs_general', 'legs', 'Gambe (generale)'],
+        ] as const;
+        const cycle: TrainingCycle = {
+            id: 'mapping-cycle', name: 'Classificazione',
+            durationWeeks: 4, sessionsPerWeek: 1,
+            routines: [{ routineId: 'mapping-routine', frequencyPerWeek: 1 }],
+        };
+
+        for (const [muscleId, key, label] of cases) {
+            expect(MUSCLES.some(muscle => muscle.id === muscleId)).toBe(true);
+            const routines: WorkoutRoutine[] = [{
+                id: 'mapping-routine', name: 'Classificazione',
+                exercises: [{ exId: muscleId, setsCount: 1 }],
+            }];
+            const library: Exercise[] = [{
+                id: muscleId, name: muscleId, muscles: [muscleId], setsCount: 1, sets: [],
+            }];
+            expect(calculateCycleMacroVolume(cycle, routines, library)).toEqual([
+                { key, label, sets: 1 },
+            ]);
+        }
+    });
 });

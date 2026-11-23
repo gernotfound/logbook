@@ -1,4 +1,15 @@
-import { expect, test } from '../fixtures';
+import { expect, test, type Page } from '../fixtures';
+
+async function expectLegalPalette(page: Page, scheme: 'light' | 'dark') {
+  const observed = await page.locator('html').evaluate(element => {
+    const style = getComputedStyle(element);
+    return { background: style.backgroundColor, color: style.color };
+  });
+  const expected = scheme === 'light'
+    ? { background: 'rgb(255, 255, 255)', color: 'rgb(22, 22, 22)' }
+    : { background: 'rgb(9, 9, 9)', color: 'rgb(241, 241, 241)' };
+  expect(observed).toEqual(expected);
+}
 
 // Legal pages are static: they do not require an account or a PWA runtime.
 test.use({ serviceWorkers: 'block' });
@@ -7,6 +18,7 @@ test('about and privacy are readable anonymously in light and dark mode', async 
   for (const scheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: scheme });
     await page.goto('/about.html');
+    await expectLegalPalette(page, scheme);
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Allenamenti, alimentazione e progressi');
     await expect(page.getByRole('link', { name: 'Informativa sulla privacy' }).first()).toBeVisible();
     await expect(page.locator('#auth-login-box')).toHaveCount(0);
@@ -14,10 +26,12 @@ test('about and privacy are readable anonymously in light and dark mode', async 
     expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 
     await page.goto('/privacy.html');
+    await expectLegalPalette(page, scheme);
     await expect(page.getByRole('heading', { level: 1, name: 'Informativa sulla privacy' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Accesso con Google: dati, uso e condivisione' })).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'Navigazione principale' }).getByRole('link', { name: 'Informazioni', exact: true })).toBeVisible();
     await expect(page.locator('#auth-login-box')).toHaveCount(0);
+    await expect(page.locator('script')).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
   }
 });

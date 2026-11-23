@@ -22,6 +22,8 @@ async function inspect(page: Page) {
   await page.goto('/?tab=settings');
   await expect(page.getByRole('heading', { name: 'Impostazioni', exact: true })).toBeVisible();
   await page.locator('.settings-menu').getByRole('button', { name: /Dati e backup/ }).click();
+  // A stored AEAD witness must never be published before the owner explicitly asks to inspect it.
+  await expect(page.getByRole('region', { name: 'Copie di recupero' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Esamina copie sul dispositivo' }).click();
 }
 
@@ -59,10 +61,22 @@ for (const interleaving of ['stale', 'collision'] as const) {
   test(`real browser tabs retain sealed dated-form values after a ${interleaving} write and block ambiguous saves`, async ({ page, context }) => {
     await enterGuest(page);
     await openMeasurements(page);
+    // Pin both independent editors to the same explicit day. 'Today' may
+    // advance between tab mounts, turning a valid race test into a false failure.
+    const firstCalendar = page.getByRole('navigation', { name: 'Giorno selezionato' });
+    await firstCalendar.getByRole('button', { name: 'Giorno precedente' }).click();
+    const sharedDay = (await firstCalendar.locator('.data-date-current strong').innerText()).trim();
+    expect(sharedDay).toMatch(/^\d{2}\/\d{2}\/\d{4}$/);
 
     const other = await context.newPage();
     await other.goto('/');
     await openMeasurements(other);
+    const otherCalendar = other.getByRole('navigation', { name: 'Giorno selezionato' });
+    const otherDay = otherCalendar.locator('.data-date-current strong');
+    for (let step = 0; step < 3 && (await otherDay.innerText()).trim() !== sharedDay; step++) {
+      await otherCalendar.getByRole('button', { name: 'Giorno precedente' }).click();
+    }
+    await expect(otherDay).toHaveText(sharedDay);
 
     const archiveBefore = await readGuestArchive(page);
     if (interleaving === 'collision') {

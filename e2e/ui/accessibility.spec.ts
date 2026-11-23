@@ -109,6 +109,15 @@ test('keyboard-opened routine menu retains focus and fits a narrow real viewport
   await expect(secondMenu).toBeVisible();
   await expect(secondMenu.getByRole('menuitem').last()).toBeFocused();
   await expect(page.getByRole('menu')).toHaveCount(1);
+  await expect(secondTrigger).toHaveAttribute('aria-expanded', 'true');
   expect(await collectBlockingAccessibilityViolations(page, 'keyboard-routine-menu'),
     'axe found critical/serious WCAG violations in the open routine menu').toEqual([]);
+
+  // After switching menus, Escape must restore focus to the active trigger,
+  // not to the trigger of the previously closed menu.
+  await page.keyboard.press('Escape');
+  await expect(secondMenu).toHaveCount(0);
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(secondTrigger).toHaveAttribute('aria-expanded', 'false');
+  await expect(secondTrigger).toBeFocused();
 });
