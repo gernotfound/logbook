@@ -111,10 +111,9 @@ describe('UI Alignments - R3 & R4', () => {
             // Click previous button
             const prevBtn = screen.getByRole('button', { name: 'Giorno precedente' });
             fireEvent.click(prevBtn);
-            expect(mockSetSelectedDate).toHaveBeenCalledWith(
-                new Date(new Date(`${todayStr}T12:00:00`).getTime() - 24 * 60 * 60 * 1000)
-                    .toLocaleDateString('sv-SE'),
-            );
+            const previousDay = new Date(`${todayStr}T12:00:00`);
+            previousDay.setDate(previousDay.getDate() - 1);
+            expect(mockSetSelectedDate).toHaveBeenCalledWith(Logic.getLocalDateString(previousDay));
         });
 
         it('allows navigating forward on a past date and offers deletion instead of a meaningless cancel action', () => {
@@ -207,9 +206,11 @@ describe('UI Alignments - R3 & R4', () => {
             });
 
             const day = useAppStore.getState().userData?.nutrition?.['2026-08-06'];
-            expect(day?.bf).toBeTypeOf('number');
-            expect(Number.isFinite(day?.bf)).toBe(true);
-            expect(day?.bfProvenance?.method).toBe('us_navy');
+            expect(day?.bf).toBe(13.7);
+            expect(day?.bfProvenance).toEqual({
+                method: 'us_navy',
+                inputs: { heightCm: 180, waistCm: 82, neckCm: 38, gender: 'M' },
+            });
         });
 
         it('does not promote BF without provenance during ordinary save', async () => {
