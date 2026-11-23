@@ -113,6 +113,9 @@ describe('isolated Kinde fitness realm with trusted owner, no Firebase/global gr
                 });
                 expect(localStorage.getItem(slot)).toMatch(/^tlb-sealed:v1:/);
                 expect(localStorage.getItem(slot)).not.toContain('Primo ciclo');
+                const sealed = localStorage.getItem(slot);
+                requiredUpdateRecoveryRegistry.captureAll();
+                expect(localStorage.getItem(slot)).toBe(sealed);
             } finally { first.close(); }
             const reopened = await openKindeCandidateFitnessRealm({ ...browser(fixture), expected });
             try {

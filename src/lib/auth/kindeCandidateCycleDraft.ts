@@ -1,8 +1,10 @@
 import equal from 'fast-deep-equal';
 import type { TrainingCycle } from '../../types';
 import { TrainingCycleRoutineItemSchema, TrainingCycleSchema } from '../schemas/schema_training';
+import { requiredUpdateRecoveryRegistry } from '../sync/requiredUpdateRecovery';
 import { initialCycleForm, prepareCycleSubmission, type CycleEditorDraft } from '../trainingCycleForm';
 import { generateId } from '../utils/date';
+import { draftRegistry } from '../utils/draftRegistry';
 import { z } from '../zod';
 import { openKindeCatalogDraft, type KindeCatalogDraftController } from './kindeCandidateCatalogDraft';
 
@@ -74,6 +76,15 @@ export async function openKindeCandidateCycleDraft({
             if (stale) throw new Error('Il ciclo originale è cambiato. La bozza cifrata è conservata.');
             return device.editable();
         };
+        const verify = () => { device.current(); };
+        draftRegistry.register(verify);
+        const unregisterRecovery = requiredUpdateRecoveryRegistry.register(verify);
+        const close = () => {
+            draftRegistry.unregister(verify);
+            unregisterRecovery();
+            device.close();
+        };
+        const discard = () => { device.discard(); close(); };
         return {
             handle: {
                 initial: {
@@ -81,15 +92,15 @@ export async function openKindeCandidateCycleDraft({
                     submitted: initial.submitted, stale,
                 },
                 write: values => device.persist({ ...editable(), values }),
-                discard: device.discard,
-                close: device.close,
+                discard,
+                close,
             },
             prepare: () => {
                 const submitted = editable();
                 const prepared = prepareCycleSubmission(submitted.values);
                 if (!prepared.ok) throw new Error(prepared.message);
                 const expected = submitted.expected;
-                return device.prepareCommit(submitted, {
+                const preparedCommit = device.prepareCommit(submitted, {
                     type: 'training-cycle.upsert', expected,
                     cycle: {
                         ...prepared.fields,
@@ -99,6 +110,7 @@ export async function openKindeCandidateCycleDraft({
                         isActive: expected?.isActive ?? false,
                     },
                 });
+                return { ...preparedCommit, clearAfterCommit: discard };
             },
         };
     } catch (error) {

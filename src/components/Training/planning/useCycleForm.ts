@@ -1,336 +1,225 @@
-// Responsabilità: gestire lo stato del form per la creazione e modifica di un ciclo di allenamento.
-// Props: initialCycle (TrainingCycle), routines (WorkoutRoutine[]), onSave (callback), showAlert (callback).
-// Effetti: non salva sul DB, chiama onSave passando l'oggetto ciclo completato.
-
-import { useState, useRef, useMemo } from 'react';
+import { useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Logic } from '../../../lib/logic';
 import { MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK, previewCycleCount } from '../../../lib/calc/cycleLimits';
-import { computeEndDate, computeWeeksFromDates, initialCycleForm, prepareCycleSubmission } from '../../../lib/trainingCycleForm';
-import type {
-    TrainingCycle,
-    TrainingCycleIntent,
-    WorkoutRoutine,
-} from '../../../types';
+import {
+    computeEndDate, computeWeeksFromDates, initialCycleForm, prepareCycleSubmission, type CycleEditorDraft,
+} from '../../../lib/trainingCycleForm';
+import type { TrainingCycle, TrainingCycleIntent, WorkoutRoutine } from '../../../types';
 
 export { computeEndDate, computeWeeksFromDates } from '../../../lib/trainingCycleForm';
 
-export interface UseCycleFormProps {
+export type CycleFormPersistence =
+    | { onSave: (cycleData: TrainingCycle) => void | Promise<void>; draft?: undefined }
+    | {
+        onSave?: undefined;
+        draft: {
+            values: CycleEditorDraft;
+            canEdit: boolean;
+            write: (values: CycleEditorDraft) => void;
+            save: () => Promise<void>;
+        };
+    };
+
+type UseCycleFormProps = CycleFormPersistence & {
     initialCycle?: TrainingCycle | null;
     routines: WorkoutRoutine[];
-    onSave: (cycleData: TrainingCycle) => void | Promise<void>;
     showAlert: (msg: string) => Promise<void>;
-}
+};
 
-export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseCycleFormProps) {
+export function useCycleForm({ initialCycle, routines, onSave, showAlert, draft }: UseCycleFormProps) {
     const startDatePickerRef = useRef<HTMLInputElement>(null);
-    const saveInFlightRef = useRef(false);
-    const [isSaving, setIsSaving] = useState(false);
     const endDatePickerRef = useRef<HTMLInputElement>(null);
-
-    const [initial] = useState(() => initialCycleForm(initialCycle));
-    const [name, setName] = useState(initial.name);
-    const [startDate, setStartDate] = useState(initial.startDate);
-    const [dateTextInput, setDateTextInput] = useState(initial.dateTextInput);
-    const [endDate, setEndDate] = useState(initial.endDate);
-    const [endDateTextInput, setEndDateTextInput] = useState(initial.endDateTextInput);
-    const [durationWeeks, setDurationWeeks] = useState(initial.durationWeeks);
-    const [sessionsPerWeek, setSessionsPerWeek] = useState(initial.sessionsPerWeek);
-    const [notes, setNotes] = useState(initial.notes);
-    const [strategyIntent, setStrategyIntent] = useState(initial.strategyIntent);
-    const [progressionFocus, setProgressionFocus] = useState(initial.progressionFocus);
-    const [primaryMuscles, setPrimaryMuscles] = useState(initial.primaryMuscles);
-    const [secondaryMuscles, setSecondaryMuscles] = useState(initial.secondaryMuscles);
-    const [cycleRoutines, setCycleRoutines] = useState(initial.cycleRoutines);
+    const saving = useRef(false);
+    const failedWrite = useRef(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [writeBlocked, setWriteBlocked] = useState(false);
+    const [value, setValue] = useState(() => draft?.values ?? initialCycleForm(initialCycle));
+    const observed = useRef(value);
     const [showSchedulePreview, setShowSchedulePreview] = useState(false);
+    const { name, startDate, endDate, durationWeeks, sessionsPerWeek, cycleRoutines } = value;
+    const canEdit = () => !saving.current && !failedWrite.current && draft?.canEdit !== false;
 
-    const handleDurationWeeksChange = (val: string) => {
-        setDurationWeeks(val);
-        const w = Number(val);
-        if (Number.isSafeInteger(w) && w >= 1 && startDate) {
-            const newEnd = computeEndDate(startDate, w);
-            setEndDate(newEnd);
-            setEndDateTextInput(Logic.formatItalianDate(newEnd));
+    const update = (change: (previous: CycleEditorDraft) => Partial<CycleEditorDraft> | null) => {
+        if (!canEdit()) return;
+        const previous = observed.current;
+        const patch = change(previous);
+        if (!patch || Object.entries(patch).every(([key, next]) => Object.is(previous[key as keyof CycleEditorDraft], next))) return;
+        const next = { ...previous, ...patch };
+        try {
+            // A date edit and its derived fields are one durable draft image.
+            draft?.write(next);
+            observed.current = next;
+            setValue(next);
+        } catch {
+            failedWrite.current = true;
+            setWriteBlocked(true);
         }
     };
+    const field = <K extends keyof CycleEditorDraft>(key: K, next: CycleEditorDraft[K]) =>
+        update(() => ({ [key]: next }));
 
-    const handleStartDateTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = e.target.value;
-        setDateTextInput(val);
-        const parsedIso = Logic.parseDateInput(val);
-        if (parsedIso) {
-            setStartDate(parsedIso);
-            const w = previewCycleCount(durationWeeks, 4, MAX_EDITABLE_CYCLE_WEEKS);
-            const newEnd = computeEndDate(parsedIso, w);
-            setEndDate(newEnd);
-            setEndDateTextInput(Logic.formatItalianDate(newEnd));
+    const formatEnd = (date: string) => ({ endDate: date, endDateTextInput: Logic.formatItalianDate(date) });
+    const fromStart = (previous: CycleEditorDraft, date: string, text: string) => ({
+        startDate: date,
+        dateTextInput: text,
+        ...formatEnd(computeEndDate(date, previewCycleCount(previous.durationWeeks, 4, MAX_EDITABLE_CYCLE_WEEKS))),
+    });
+    const fromEnd = (previous: CycleEditorDraft, date: string, text: string) => ({
+        endDate: date,
+        endDateTextInput: text,
+        ...(previous.startDate ? { durationWeeks: String(computeWeeksFromDates(previous.startDate, date)) } : {}),
+    });
+
+    const handleDurationWeeksChange = (text: string) => update(previous => {
+        const weeks = Number(text);
+        return {
+            durationWeeks: text,
+            ...(Number.isSafeInteger(weeks) && weeks >= 1 && previous.startDate
+                ? formatEnd(computeEndDate(previous.startDate, weeks)) : {}),
+        };
+    });
+    const handleStartDateTextChange = (event: ChangeEvent<HTMLInputElement>) => {
+        const text = event.target.value;
+        const date = Logic.parseDateInput(text);
+        update(previous => date ? fromStart(previous, date, text) : { dateTextInput: text });
+    };
+    const handleStartDateTextBlur = () => update(previous => {
+        const date = Logic.parseDateInput(previous.dateTextInput);
+        if (date) return fromStart(previous, date, Logic.formatItalianDate(date));
+        return previous.startDate ? { dateTextInput: Logic.formatItalianDate(previous.startDate) } : null;
+    });
+    const handleStartCalendarDateChange = (event: ChangeEvent<HTMLInputElement>) => {
+        const date = event.target.value;
+        if (date) update(previous => fromStart(previous, date, Logic.formatItalianDate(date)));
+    };
+    const handleEndDateTextChange = (event: ChangeEvent<HTMLInputElement>) => {
+        const text = event.target.value;
+        const date = Logic.parseDateInput(text);
+        update(previous => date ? fromEnd(previous, date, text) : { endDateTextInput: text });
+    };
+    const handleEndDateTextBlur = () => update(previous => {
+        const date = Logic.parseDateInput(previous.endDateTextInput);
+        if (date) return fromEnd(previous, date, Logic.formatItalianDate(date));
+        return previous.endDate ? { endDateTextInput: Logic.formatItalianDate(previous.endDate) } : null;
+    });
+    const handleEndCalendarDateChange = (event: ChangeEvent<HTMLInputElement>) => {
+        const date = event.target.value;
+        if (date) update(previous => fromEnd(previous, date, Logic.formatItalianDate(date)));
+    };
+    const openCalendar = (input: HTMLInputElement | null) => {
+        if (!input || !canEdit()) return;
+        if (typeof input.showPicker === 'function') {
+            try { input.showPicker(); return; }
+            catch { /* Fall back to the native control focus. */ }
         }
+        input.focus();
     };
 
-    const handleStartDateTextBlur = () => {
-        const parsedIso = Logic.parseDateInput(dateTextInput);
-        if (parsedIso) {
-            setStartDate(parsedIso);
-            setDateTextInput(Logic.formatItalianDate(parsedIso));
-            const w = previewCycleCount(durationWeeks, 4, MAX_EDITABLE_CYCLE_WEEKS);
-            const newEnd = computeEndDate(parsedIso, w);
-            setEndDate(newEnd);
-            setEndDateTextInput(Logic.formatItalianDate(newEnd));
-        } else if (startDate) {
-            // Preserve the existing blur recovery contract for incomplete text input.
-            setDateTextInput(Logic.formatItalianDate(startDate));
-        }
-    };
-
-    const handleStartCalendarDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = e.target.value;
-        if (val) {
-            setStartDate(val);
-            setDateTextInput(Logic.formatItalianDate(val));
-            const w = previewCycleCount(durationWeeks, 4, MAX_EDITABLE_CYCLE_WEEKS);
-            const newEnd = computeEndDate(val, w);
-            setEndDate(newEnd);
-            setEndDateTextInput(Logic.formatItalianDate(newEnd));
-        }
-    };
-
-    const handleEndDateTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = e.target.value;
-        setEndDateTextInput(val);
-        const parsedIso = Logic.parseDateInput(val);
-        if (parsedIso) {
-            setEndDate(parsedIso);
-            if (startDate) {
-                const w = computeWeeksFromDates(startDate, parsedIso);
-                setDurationWeeks(String(w));
-            }
-        }
-    };
-
-    const handleEndDateTextBlur = () => {
-        const parsedIso = Logic.parseDateInput(endDateTextInput);
-        if (parsedIso) {
-            setEndDate(parsedIso);
-            setEndDateTextInput(Logic.formatItalianDate(parsedIso));
-            if (startDate) {
-                const w = computeWeeksFromDates(startDate, parsedIso);
-                setDurationWeeks(String(w));
-            }
-        } else if (endDate) {
-            setEndDateTextInput(Logic.formatItalianDate(endDate));
-        }
-    };
-
-    const handleEndCalendarDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = e.target.value;
-        if (val) {
-            setEndDate(val);
-            setEndDateTextInput(Logic.formatItalianDate(val));
-            if (startDate) {
-                const w = computeWeeksFromDates(startDate, val);
-                setDurationWeeks(String(w));
-            }
-        }
-    };
-
-    const handleOpenStartCalendar = () => {
-        if (startDatePickerRef.current) {
-            if (typeof startDatePickerRef.current.showPicker === 'function') {
-                try {
-                    startDatePickerRef.current.showPicker();
-                } catch {
-                    startDatePickerRef.current.focus();
-                }
-            } else {
-                startDatePickerRef.current.focus();
-            }
-        }
-    };
-
-    const handleOpenEndCalendar = () => {
-        if (endDatePickerRef.current) {
-            if (typeof endDatePickerRef.current.showPicker === 'function') {
-                try {
-                    endDatePickerRef.current.showPicker();
-                } catch {
-                    endDatePickerRef.current.focus();
-                }
-            } else {
-                endDatePickerRef.current.focus();
-            }
-        }
-    };
-
-    const handleAddRoutineById = (routineId: string) => {
-        if (!routineId || cycleRoutines.some(item => item.routineId === routineId)) return;
-        setCycleRoutines(prev => prev.some(item => item.routineId === routineId)
-            ? prev : [...prev, { routineId, frequencyPerWeek: 1 }]);
-        const newCount = cycleRoutines.length + 1;
-        if (!initialCycle?.sessionsPerWeek && parseInt(sessionsPerWeek, 10) === cycleRoutines.length) {
-            setSessionsPerWeek(String(newCount));
-        }
-    };
-
-    const handleMoveRoutine = (routineId: string, direction: -1 | 1) => {
-        setCycleRoutines(prev => {
-            // A queued remove/reorder can change positions before this updater
-            // runs; resolve the stable business identity against current state.
-            const index = prev.findIndex(item => item.routineId === routineId);
-            const targetIndex = index + direction;
-            if (index < 0 || targetIndex < 0 || targetIndex >= prev.length) return prev;
-            const next = [...prev];
-            const [moved] = next.splice(index, 1);
-            next.splice(targetIndex, 0, moved);
-            return next;
-        });
-    };
-
-    const handleRemoveRoutine = (routineId: string) => {
-        setCycleRoutines(prev => prev.filter(item => item.routineId !== routineId));
-    };
-
-    const handleStrategyIntentChange = (intent: TrainingCycleIntent | '') => {
-        setStrategyIntent(intent);
-        if (intent !== 'development') setProgressionFocus('');
-    };
-
+    const handleAddRoutineById = (routineId: string) => update(previous => {
+        const list = previous.cycleRoutines;
+        if (!routineId || list.some(item => item.routineId === routineId)) return null;
+        return {
+            cycleRoutines: [...list, { routineId, frequencyPerWeek: 1 }],
+            ...(!initialCycle?.sessionsPerWeek && parseInt(previous.sessionsPerWeek, 10) === list.length
+                ? { sessionsPerWeek: String(list.length + 1) } : {}),
+        };
+    });
+    const handleMoveRoutine = (routineId: string, direction: -1 | 1) => update(previous => {
+        const list = previous.cycleRoutines;
+        const index = list.findIndex(item => item.routineId === routineId);
+        const target = index + direction;
+        if (index < 0 || target < 0 || target >= list.length) return null;
+        const next = [...list];
+        const [moved] = next.splice(index, 1);
+        next.splice(target, 0, moved);
+        return { cycleRoutines: next };
+    });
+    const handleRemoveRoutine = (routineId: string) => update(previous => ({
+        cycleRoutines: previous.cycleRoutines.filter(item => item.routineId !== routineId),
+    }));
+    const handleStrategyIntentChange = (intent: TrainingCycleIntent | '') => update(previous => ({
+        strategyIntent: intent, progressionFocus: intent === 'development' ? previous.progressionFocus : '',
+    }));
     const handleAddPriorityMuscle = (priority: 'primary' | 'secondary', muscleId: string) => {
         if (!muscleId) return;
-        if (priority === 'primary') {
-            setPrimaryMuscles(prev => prev.includes(muscleId) ? prev : [...prev, muscleId]);
-            setSecondaryMuscles(prev => prev.filter(id => id !== muscleId));
-            return;
-        }
-        setSecondaryMuscles(prev => prev.includes(muscleId) ? prev : [...prev, muscleId]);
-        setPrimaryMuscles(prev => prev.filter(id => id !== muscleId));
-    };
-
-    const handleRemovePriorityMuscle = (priority: 'primary' | 'secondary', muscleId: string) => {
-        if (priority === 'primary') {
-            setPrimaryMuscles(prev => prev.filter(id => id !== muscleId));
-            return;
-        }
-        setSecondaryMuscles(prev => prev.filter(id => id !== muscleId));
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (saveInFlightRef.current) return;
-        const prepared = prepareCycleSubmission({
-            name,
-            cycleRoutines,
-            strategyIntent,
-            progressionFocus,
-            durationWeeks,
-            sessionsPerWeek,
-            dateTextInput,
-            endDateTextInput,
-            notes,
-            primaryMuscles,
-            secondaryMuscles,
+        const target = priority === 'primary' ? 'primaryMuscles' : 'secondaryMuscles';
+        const other = priority === 'primary' ? 'secondaryMuscles' : 'primaryMuscles';
+        update(previous => {
+            const alreadySelected = previous[target].includes(muscleId);
+            if (alreadySelected && !previous[other].includes(muscleId)) return null;
+            return {
+                [target]: alreadySelected ? previous[target] : [...previous[target], muscleId],
+                [other]: previous[other].filter(id => id !== muscleId),
+            };
         });
+    };
+    const handleRemovePriorityMuscle = (priority: 'primary' | 'secondary', muscleId: string) => {
+        const target = priority === 'primary' ? 'primaryMuscles' : 'secondaryMuscles';
+        update(previous => ({ [target]: previous[target].filter(id => id !== muscleId) }));
+    };
+
+    const handleSubmit = async (event: FormEvent) => {
+        event.preventDefault();
+        if (!canEdit()) return;
+        const prepared = prepareCycleSubmission(observed.current);
         if (!prepared.ok) {
             await showAlert(prepared.message);
             return;
         }
-        const fields = prepared.fields;
-        const cycle: TrainingCycle = {
-            id: initialCycle?.id || Logic.generateId('cycle'),
-            name: fields.name,
-            durationWeeks: fields.durationWeeks,
-            sessionsPerWeek: fields.sessionsPerWeek,
-            progressionMode: initialCycle?.progressionMode ?? 'sequential',
-            startDate: fields.startDate,
-            endDate: fields.endDate,
-            notes: fields.notes,
-            ...(fields.strategy ? { strategy: fields.strategy } : {}),
-            routines: fields.routines,
-            createdAt: initialCycle?.createdAt || Date.now(),
-            isActive: initialCycle?.isActive ?? false,
-        };
-
-        // A rapid second submit must not enqueue another upsert (or generate
-        // a different ID for a new cycle) before the first durable save settles.
-        if (saveInFlightRef.current) return;
-        saveInFlightRef.current = true;
+        saving.current = true;
         setIsSaving(true);
         try {
-            await onSave(cycle);
-        } catch (error) {
-            console.error('Errore salvataggio ciclo:', error);
-            await showAlert('Salvataggio del ciclo non riuscito. Le modifiche sono ancora nel form: riprova.');
+            if (draft) await draft.save();
+            else await onSave({
+                ...prepared.fields,
+                id: initialCycle?.id || Logic.generateId('cycle'),
+                progressionMode: initialCycle?.progressionMode ?? 'sequential',
+                createdAt: initialCycle?.createdAt || Date.now(),
+                isActive: initialCycle?.isActive ?? false,
+            });
+        } catch {
+            await showAlert(draft
+                ? 'Impossibile salvare il ciclo. La bozza cifrata resta sul dispositivo.'
+                : 'Salvataggio del ciclo non riuscito. Le modifiche sono ancora nel form: riprova.');
         } finally {
-            saveInFlightRef.current = false;
+            saving.current = false;
             setIsSaving(false);
         }
     };
 
-    // Preview may be bounded while the form keeps the original invalid input
-    // visible so it can be corrected rather than silently saved or truncated.
     const tempWeeks = previewCycleCount(durationWeeks, 4, MAX_EDITABLE_CYCLE_WEEKS);
     const tempFreq = previewCycleCount(sessionsPerWeek, cycleRoutines.length || 1, MAX_CYCLE_SESSIONS_PER_WEEK);
-
-    const timeline = useMemo(() => {
-        return Logic.calculateCycleTimeline({
-            id: 'preview',
-            name: name || 'Ciclo',
-            durationWeeks: tempWeeks,
-            sessionsPerWeek: tempFreq,
-            startDate: startDate || undefined,
-            endDate: endDate || undefined,
-            routines: cycleRoutines
-        });
-    }, [name, tempWeeks, tempFreq, startDate, endDate, cycleRoutines]);
-
-    const schedule = useMemo(() => {
-        return Logic.calculateCycleSchedule({
-            id: 'preview',
-            name: name || 'Ciclo',
-            durationWeeks: tempWeeks,
-            sessionsPerWeek: tempFreq,
-            startDate: startDate || undefined,
-            endDate: endDate || undefined,
-            routines: cycleRoutines
-        }, routines, showSchedulePreview);
-    }, [name, tempWeeks, tempFreq, startDate, endDate, cycleRoutines, routines, showSchedulePreview]);
+    const preview = useMemo<TrainingCycle>(() => ({
+        id: 'preview', name: name || 'Ciclo', durationWeeks: tempWeeks, sessionsPerWeek: tempFreq,
+        startDate: startDate || undefined, endDate: endDate || undefined, routines: cycleRoutines,
+    }), [name, tempWeeks, tempFreq, startDate, endDate, cycleRoutines]);
+    const timeline = useMemo(() => Logic.calculateCycleTimeline(preview), [preview]);
+    const schedule = useMemo(() => Logic.calculateCycleSchedule(preview, routines, showSchedulePreview),
+        [preview, routines, showSchedulePreview]);
 
     return {
         refs: { startDatePickerRef, endDatePickerRef },
         state: {
-            name, setName,
-            startDate, setStartDate,
-            dateTextInput,
-            endDate, setEndDate,
-            endDateTextInput,
-            durationWeeks, setDurationWeeks,
-            sessionsPerWeek, setSessionsPerWeek,
-            notes, setNotes,
-            strategyIntent,
-            progressionFocus, setProgressionFocus,
-            primaryMuscles,
-            secondaryMuscles,
-            cycleRoutines, setCycleRoutines,
-            showSchedulePreview, setShowSchedulePreview,
-            isSaving,
-            tempWeeks, tempFreq
+            ...value,
+            setName: (next: string) => field('name', next),
+            setStartDate: (next: string) => field('startDate', next),
+            setEndDate: (next: string) => field('endDate', next),
+            setDurationWeeks: (next: string) => field('durationWeeks', next),
+            setSessionsPerWeek: (next: string) => field('sessionsPerWeek', next),
+            setNotes: (next: string) => field('notes', next),
+            setProgressionFocus: (next: CycleEditorDraft['progressionFocus']) => field('progressionFocus', next),
+            setCycleRoutines: (next: CycleEditorDraft['cycleRoutines']) => field('cycleRoutines', next),
+            showSchedulePreview, setShowSchedulePreview, isSaving, writeBlocked, tempWeeks, tempFreq,
         },
         computed: { timeline, schedule },
         handlers: {
             handleDurationWeeksChange,
-            handleStartDateTextChange,
-            handleStartDateTextBlur,
-            handleStartCalendarDateChange,
-            handleEndDateTextChange,
-            handleEndDateTextBlur,
-            handleEndCalendarDateChange,
-            handleOpenStartCalendar,
-            handleOpenEndCalendar,
-            handleAddRoutineById,
-            handleMoveRoutine,
-            handleRemoveRoutine,
-            handleStrategyIntentChange,
-            handleAddPriorityMuscle,
-            handleRemovePriorityMuscle,
-            handleSubmit
-        }
+            handleStartDateTextChange, handleStartDateTextBlur, handleStartCalendarDateChange,
+            handleEndDateTextChange, handleEndDateTextBlur, handleEndCalendarDateChange,
+            handleOpenStartCalendar: () => openCalendar(startDatePickerRef.current),
+            handleOpenEndCalendar: () => openCalendar(endDatePickerRef.current),
+            handleAddRoutineById, handleMoveRoutine, handleRemoveRoutine, handleStrategyIntentChange,
+            handleAddPriorityMuscle, handleRemovePriorityMuscle, handleSubmit,
+        },
     };
 }

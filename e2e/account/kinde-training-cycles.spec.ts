@@ -1,6 +1,60 @@
 import { expect, test } from '../fixtures';
 import { mountKindePlanning, withKindeReplicaDevices } from './kindeReplicaFixture';
 
+test('recovers a Kinde cycle draft after reload and edits the same active cycle on a later commit', async ({ browser }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, allowFirstCommit }) => {
+        const seed = await second.evaluate(() => window.kindeReplicaFixture!.submit({
+            type: 'routine.create', routine: { id: 'cycle-editor-routine', name: 'Scheda Forza', exercises: [] },
+        }));
+        expect(seed.kind).toBe('cloud-acknowledged');
+        const before = receipts();
+        allowFirstCommit();
+        await first.bringToFront();
+        const cycles = first.getByRole('region', { name: 'Cicli di allenamento account' });
+        const open = async () => {
+            await mountKindePlanning(first);
+            await first.getByRole('button', { name: 'Apri archivio account' }).click();
+            await expect(cycles).toBeVisible();
+        };
+        const resume = cycles.getByRole('button', { name: 'Nuovo o riprendi ciclo' });
+        const name = cycles.getByLabel('Nome ciclo', { exact: true });
+        await open();
+        await resume.click();
+        await name.fill('Ciclo in bozza');
+        await cycles.getByRole('combobox', { name: 'Aggiungi scheda alla sequenza' }).fill('cycle-editor-routine');
+        expect(receipts()).toBe(before);
+        await first.reload();
+        await open();
+        await resume.click();
+        await expect(name).toHaveValue('Ciclo in bozza');
+        await expect(cycles.getByRole('heading', { name: 'Sequenza rotazione schede (1)' })).toBeVisible();
+        await cycles.getByRole('button', { name: 'Salva ciclo', exact: true }).click();
+        const original = cycles.getByRole('article').filter({ hasText: 'Ciclo in bozza' });
+        await expect(original.getByText('Ciclo attivo', { exact: true })).toBeVisible();
+        await expect.poll(receipts).toBe(before + 1);
+        const current = () => second.evaluate(async () => {
+            const data = (await window.kindeReplicaFixture!.refresh()).data;
+            return { active: data.activeCycleId, cycles: data.trainingCycles };
+        });
+        const saved = await current();
+        expect(saved.cycles).toMatchObject([{ name: 'Ciclo in bozza', routines: [{ routineId: 'cycle-editor-routine' }] }]);
+        expect(saved.active).toBe(saved.cycles?.[0]?.id);
+
+        await original.getByRole('button', { name: 'Opzioni' }).click();
+        await original.getByRole('menuitem', { name: 'Modifica' }).click();
+        await name.fill('Ciclo riveduto');
+        await cycles.getByRole('button', { name: 'Chiudi e conserva bozza' }).click();
+        await resume.click();
+        await expect(name).toHaveValue('Ciclo riveduto');
+        await cycles.getByRole('button', { name: 'Salva modifiche' }).click();
+        await expect(cycles.getByRole('article').filter({ hasText: 'Ciclo riveduto' })).toBeVisible();
+        await expect.poll(receipts).toBe(before + 2);
+        const edited = await current();
+        expect(edited.active).toBe(saved.active);
+        expect(edited.cycles).toMatchObject([{ id: saved.active, name: 'Ciclo riveduto' }]);
+    }, { planningUi: true });
+});
+
 test('reads and switches the active Kinde cycle with a verified second-device receipt', async ({ browser }) => {
     await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
         const seed = await second.evaluate(() => window.kindeReplicaFixture!.submit([
