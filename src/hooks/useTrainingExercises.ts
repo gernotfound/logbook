@@ -9,7 +9,7 @@ import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { getCachedCatalog } from '../lib/catalog/catalogService';
 import { filterMuscles } from './trainingExercises/muscleSelection';
 import { toggleExerciseMuscle, removeExerciseMuscle, resolveExerciseMuscles } from './trainingExercises/exerciseMuscleEditor';
-import { hasDuplicateExerciseName, buildExerciseSavePayload } from './trainingExercises/exerciseEditorModel';
+import { hasDuplicateExerciseName, buildExerciseSavePayload } from '../lib/exerciseEditorModel';
 import {
     clearExerciseDraft,
     persistExerciseDraft,

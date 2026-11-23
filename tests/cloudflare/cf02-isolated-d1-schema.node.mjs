@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { verifyLocalMigrationTarget, verifyMigrationLedger,
   verifyRemoteIsolatedD1, MIGRATIONS } from '../../scripts/verify-cloudflare-isolated-d1-schema.mjs';
+import { D1_NOW_MS } from '../../cloudflare/sql/d1-time.mjs';
 
 const ACCOUNT = '0123456789abcdef0123456789abcdef';
 const ID = '9aa51833-8adc-495f-bdfc-93b5542e8023';
@@ -11,9 +12,10 @@ const names = readdirSync(new URL('../../cloudflare/api/migrations/', import.met
   .filter(n => n.endsWith('.sql')).sort();
 const ledger = (count = 8) => MIGRATIONS.slice(0, count).map((name, i) => ({ id: i + 1, name }));
 const schema = [
+  { name: 'cloud_key_first_issuance', type: 'trigger', sql: `accepted_at_ms <= ${D1_NOW_MS}` },
   { name: 'health_erasure_finalization_fence', type: 'trigger' },
   { name: 'health_erasure_finalizations', type: 'table' },
-  { name: 'sync_writable_cloud_key', type: 'view' },
+  { name: 'sync_writable_cloud_key', type: 'view', sql: `accepted_at_ms <= ${D1_NOW_MS}` },
 ];
 
 function response(result, status = 200) {
@@ -84,47 +86,47 @@ void test('only approved isolated D1 with exactly reviewed SQL files is eligible
   assert.throws(() => verifyLocalMigrationTarget({ ...config, d1_databases: [
     { ...config.d1_databases[0], database_id: 'unexpected' },
   ] }, names));
-  assert.throws(() => verifyLocalMigrationTarget(config, [...names, '0011_unknown.sql']));
+  assert.throws(() => verifyLocalMigrationTarget(config, [...names, '0012_unknown.sql']));
 });
 
-void test('prefix ledger: 0008 initial, 0009 interrupted, 0010 complete, no gaps or drift', () => {
+void test('the known contiguous migration prefixes may resume; completion requires 0011', () => {
   assert.equal(verifyMigrationLedger(ledger(8), 'before'), 8);
   assert.equal(verifyMigrationLedger(ledger(9), 'before'), 9);
   assert.equal(verifyMigrationLedger(ledger(10), 'before'), 10);
-  assert.equal(verifyMigrationLedger(ledger(10), 'after'), 10);
+  assert.equal(verifyMigrationLedger(ledger(11), 'after'), 11);
   for (const entries of [
     ledger(7), [...ledger(8), { id: 10, name: MIGRATIONS[8] }],
     [...ledger(8), { id: 9, name: '0009_other.sql' }],
     [...ledger(10), { id: 11, name: '0011_unknown.sql' }],
     ledger(8).map((row, i) => i === 0 ? { ...row, id: 0 } : row),
   ]) assert.throws(() => verifyMigrationLedger(entries, 'before'));
-  assert.throws(() => verifyMigrationLedger(ledger(9), 'after'));
+  assert.throws(() => verifyMigrationLedger(ledger(10), 'after'));
 });
 
 void test('checks account, EU D1, Time Travel, ledger, empty principals and schema readback', async () => {
   const before = syntheticProvider();
   assert.deepEqual(await verifyRemoteIsolatedD1({
     phase: 'before', account: ACCOUNT, token: 'test', request: before.request,
-  }), { phase: 'before', applied: 8, expected: 10, jurisdiction: 'eu',
+  }), { phase: 'before', applied: 8, expected: 11, jurisdiction: 'eu',
     timeTravelBookmarkVerified: true });
   assertReadOnlyRequests(before.calls);
 
-  const after = syntheticProvider({ migrationCount: 10 });
+  const after = syntheticProvider({ migrationCount: 11 });
   assert.equal((await verifyRemoteIsolatedD1({
     phase: 'after', account: ACCOUNT, token: 'test', request: after.request,
-  })).applied, 10);
+  })).applied, 11);
   assert.ok(after.calls.some(c => c.sql?.includes('sqlite_master')));
   assertReadOnlyRequests(after.calls);
 });
 
 void test('fails closed on provider, migration and isolation drift without writes', async () => {
   for (const options of [
-    { migrationCount: 7 }, { migrationCount: 9 }, { principals: 1 },
-    { sessions: 1 }, { keys: 1 }, { erasureJobs: 1 },
-    { jurisdiction: 'us' }, { replication: 'auto' },
-    { objects: [] }, { failedStatus: 403 },
+    { migrationCount: 7 }, { migrationCount: 10 }, { principals: 1 },
+    { sessions: 1 }, { keys: 1 }, { erasureJobs: 1 }, { jurisdiction: 'us' },
+    { replication: 'auto' }, { objects: [] }, { failedStatus: 403 },
+    { objects: [{ ...schema[0], sql: 'accepted_at_ms <= julianday(\'now\')' }, ...schema.slice(1)] },
   ]) {
-    const provider = syntheticProvider(options);
+    const provider = syntheticProvider({ migrationCount: 11, ...options });
     await assert.rejects(verifyRemoteIsolatedD1({
       phase: 'after', account: ACCOUNT, token: 'test', request: provider.request,
     }));

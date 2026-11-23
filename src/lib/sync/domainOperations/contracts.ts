@@ -17,17 +17,23 @@ import type {
     WorkoutRoutine,
     WorkoutSession,
 } from '../../../types';
+import type { MeasurementSnapshot } from '../../nutrition/measurementHistory';
 
 type NutritionDayPatch = Partial<Omit<
     NutritionDay,
     'date' | 'kcal' | 'carbs' | 'pro' | 'fat' | 'meals' | 'supplementsIntake' | 'steps' | 'stepsSource' | 'stepsCapturedAt' | 'cardioSessions'
 >>;
 
+export type ExerciseEditableFields = Pick<Exercise,
+    'name' | 'notes' | 'muscles' | 'secondaryMuscles' | 'trackingType' | 'isBodyweight' | 'equipmentWeight'
+>;
+
 export type DomainOperation =
     | { type: 'profile.patch'; patch: Partial<UserProfile> }
     | { type: 'nutrition-planning.replace'; value: NutritionPlanning; origin?: 'generated-default' | 'user-edited' }
     | { type: 'nutrition-day.patch'; date: string; patch: NutritionDayPatch }
     | { type: 'nutrition-day.delete'; date: string }
+    | { type: 'measurement.delete'; date: string; expected: MeasurementSnapshot }
     | { type: 'activity-steps.set'; date: string; steps: number; source?: 'manual' | 'imported'; capturedAt?: number }
     | { type: 'activity-steps.clear'; date: string }
     | { type: 'cardio-session.upsert'; date: string; session: CardioSession }
@@ -42,7 +48,7 @@ export type DomainOperation =
     | { type: 'supplement.edit'; supplement: Supplement }
     | { type: 'supplement.delete'; id: string }
     | { type: 'supplement.reorder'; ids: string[] }
-    | { type: 'routine.upsert'; routine: WorkoutRoutine }
+    | { type: 'routine.upsert' | 'routine.create'; routine: WorkoutRoutine }
     | { type: 'routine.edit'; id: string; name: string; exercises: RoutineExercise[] }
     | { type: 'routine.delete'; id: string }
     | { type: 'routine.reorder'; ids: string[] }
@@ -62,7 +68,8 @@ export type DomainOperation =
     | { type: 'workout.complete'; workout: WorkoutSession; expectedActiveWorkoutId: string; activePains: string[] }
     | { type: 'active-pains.set'; pains: string[] }
     | { type: 'exercise.upsert'; exercise: Exercise }
-    | { type: 'exercise.delete'; id: string }
+    | { type: 'exercise.edit'; id: string; fields: ExerciseEditableFields }
+    | { type: 'exercise.delete'; id: string; expectedRoutineIds?: readonly string[] }
     | { type: 'food.upsert'; food: Food & { id: string | number } }
     | { type: 'food.edit'; food: Food & { id: string | number } }
     | { type: 'food.delete'; id: string | number }
