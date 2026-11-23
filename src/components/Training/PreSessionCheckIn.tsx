@@ -52,8 +52,16 @@ function parseReadinessDraft(parsed: unknown | null): ReadinessDraft {
 }
 
 function blockReadinessPersistence(error: unknown, original?: ReturnType<typeof captureSession> | null): void {
-    // An async failure from an old Auth/consent epoch must not fence the next owner.
-    if (original && !isCurrentSession(original)) return;
+    if (original && !isCurrentSession(original)) {
+        let current: ReturnType<typeof captureSession>;
+        try { current = captureSession(); }
+        catch { return; }
+        // A revoked consent in the same owner's mounted editor must still
+        // block edits; a previous Auth epoch must not fence an unrelated session.
+        if (current.owner !== original.owner
+            || (current.consentMarker === original.consentMarker
+                && current.consentGeneration === original.consentGeneration)) return;
+    }
     console.error('Persistenza check-in pre-sessione non disponibile:', error);
     useAppStore.setState({
         localPersistenceBlocked: true,
