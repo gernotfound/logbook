@@ -132,10 +132,29 @@ it('requires a fresh in-transaction control advance on every business write, inc
     const controlRef = doc(db, 'users/a/sync_control/state');
     const replica = await fencedWrite(db, 'users/a', { profile: { height: '175' } });
     const rootData = (await getDoc(root)).data()!;
+    const unauthorizedEnvelope = (seq: number) => sealCloudDocument(
+        new Uint8Array(32).fill(5), 'a', '', { profile: { height: '999' } },
+        {
+            protocolVersion: CURRENT_SYNC_PROTOCOL,
+            clock: { [replica.slot]: seq },
+            fields: {},
+            writer: {
+                slot: replica.slot,
+                replicaId: replica.replicaId,
+                generation: replica.generation,
+                seq,
+                consentRevision: 1,
+            },
+        },
+    );
 
-    // The old "advance" action and lastSeq remain stored after commit. That
-    // state must not authorize a later standalone business write.
-    await assertFails(setDoc(root, { ...rootData, profile: { height: '999' } }));
+    // The attacker uses a valid AEAD envelope and a plausible next writer
+    // sequence. A plaintext extra property would fail shape validation even
+    // if the mandatory transaction/replica fence were accidentally removed.
+    const standalonePayload = unauthorizedEnvelope(2);
+    expect((openCloudDocument(new Uint8Array(32).fill(5), 'a', '', standalonePayload)
+        .business.profile as Record<string, string>).height).toBe('999');
+    await assertFails(setDoc(root, standalonePayload));
     for (const collection of ['history_months', 'nutrition_months']) {
         const ref = doc(db, `users/a/${collection}/2026-09`);
         await fencedWrite(db, ref.path, {}, replica);
@@ -146,7 +165,8 @@ it('requires a fresh in-transaction control advance on every business write, inc
     const latestControl = (await getDoc(controlRef)).data()!;
     const unchangedControlBatch = writeBatch(db);
     unchangedControlBatch.set(controlRef, latestControl);
-    unchangedControlBatch.set(root, { ...rootData, profile: { height: '999' } });
+    const nextSeq = latestControl.replicas[replica.slot].lastSeq + 1;
+    unchangedControlBatch.set(root, unauthorizedEnvelope(nextSeq));
     await assertFails(unchangedControlBatch.commit());
 
     // After a lost ack, lastSeq may legitimately stay unchanged, but the
@@ -156,7 +176,7 @@ it('requires a fresh in-transaction control advance on every business write, inc
         mutation: { slot: replica.slot, action: 'advance', batchId: `replay-${crypto.randomUUID()}` } });
     replay.set(root, rootData);
     await assertSucceeds(replay.commit());
-    await assertFails(setDoc(root, { ...rootData, profile: { height: '999' } }));
+    await assertFails(setDoc(root, unauthorizedEnvelope(nextSeq)));
     expect((openCloudDocument(new Uint8Array(32).fill(5), 'a', '', (await getDoc(root)).data()).business.profile as Record<string, string>).height).toBe('175');
 });
 
