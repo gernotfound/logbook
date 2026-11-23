@@ -5,10 +5,12 @@ import type { Exercise, WorkoutSession } from '../../types';
 
 function getHomeWorkoutTimestamp(workout: WorkoutSession | null | undefined): number | null {
     if (!workout) return null;
-    if (typeof workout.globalStartTime === 'number' && !isNaN(workout.globalStartTime)) {
+    const validTimestamp = (value: unknown): value is number =>
+        typeof value === 'number' && Number.isFinite(value) && !Number.isNaN(new Date(value).getTime());
+    if (validTimestamp(workout.globalStartTime)) {
         return workout.globalStartTime;
     }
-    if (typeof workout.globalEndTime === 'number' && !isNaN(workout.globalEndTime)) {
+    if (validTimestamp(workout.globalEndTime)) {
         return workout.globalEndTime;
     }
     if (workout.date) {
@@ -24,7 +26,7 @@ export function getHomeWorkoutDate(workout: WorkoutSession | null | undefined): 
     if (!workout) return null;
     if (workout.date) return workout.date;
     const timestamp = getHomeWorkoutTimestamp(workout);
-    return timestamp ? getLocalDateString(timestamp) : null;
+    return timestamp !== null ? getLocalDateString(timestamp) : null;
 }
 
 export function calculateHomeWorkoutStreak(history: WorkoutSession[], nowMs: number): number {
