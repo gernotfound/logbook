@@ -63,6 +63,34 @@ describe('nutrition food archive owner isolation', () => {
         }
     });
 
+    it('dispatches deletion of numeric food ID zero unchanged after confirmation', async () => {
+        await prepareUnlockedTestArchive();
+        const food = {
+            id: 0, name: 'Riso', unit: 'g',
+            baseQty: 100, kcal: 365, carbs: 80, pro: 7, fat: 1,
+        };
+        const previousDispatch = useAppStore.getState().dispatchDomainOperation;
+        const dispatch = vi.fn().mockResolvedValue({ ok: true, status: 'synced' } as SyncResult);
+        const showConfirm = vi.mocked(useDialogStore.getState().showConfirm);
+        showConfirm.mockClear().mockResolvedValueOnce(true);
+        useAppStore.setState({ dispatchDomainOperation: dispatch });
+
+        try {
+            renderWithAuthenticatedTestOwner(<NutritionFoodArchive />, {
+                userData: createMockUserData({ customFoods: [food] }),
+            });
+            fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
+            await act(async () => {
+                fireEvent.click(screen.getByRole('menuitem', { name: 'Elimina' }));
+            });
+
+            expect(showConfirm).toHaveBeenCalledOnce();
+            expect(dispatch).toHaveBeenCalledExactlyOnceWith({ type: 'food.delete', id: 0 });
+        } finally {
+            useAppStore.setState({ dispatchDomainOperation: previousDispatch });
+        }
+    });
+
     it('keeps the edit draft open when a successful durable commit finishes in a replaced auth epoch', async () => {
         await prepareUnlockedTestArchive();
         const food = {

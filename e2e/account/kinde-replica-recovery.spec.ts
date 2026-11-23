@@ -244,7 +244,7 @@ test('duplicates a Kinde routine from the verified archive and replicates it onc
     }, { planningUi: true });
 });
 
-test('keeps a duplicated Kinde routine in the original encrypted journal after a lost receipt', async ({ browser }) => {
+test('recovers a duplicated Kinde routine from the pending journal after reload without a second intent', async ({ browser }) => {
     await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
         expect(await second.evaluate(() => window.kindeReplicaFixture!.submit({
             type: 'routine.upsert', routine: {
@@ -269,8 +269,13 @@ test('keeps a duplicated Kinde routine in the original encrypted journal after a
             (await window.kindeReplicaFixture!.refresh()).data.routines?.map(item => item.name));
         expect(prior).toEqual(['Scheda da recuperare']);
 
+        // The pending operation must survive a fresh document; recovery may
+        // drain the original journal but must not repeat the duplicate action.
+        await first.reload();
+        expect(receipts()).toBe(before);
         allowFirstCommit();
-        await first.getByRole('button', { name: 'Verifica salvataggio' }).click();
+        await mountKindePlanning(first);
+        await first.getByRole('button', { name: 'Apri archivio account' }).click();
         await expect(library.getByText('Scheda da recuperare - 1')).toBeVisible();
         expect(firstCommitStatuses).toEqual([429, 200]);
         expect(receipts()).toBe(before + 1);

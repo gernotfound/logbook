@@ -63,6 +63,13 @@ describe('identità e focus degli alimenti nelle liste', () => {
         const moved = screen.getAllByRole('button', { name: 'Opzioni' })[0];
         expect(moved).toBe(target);
         expect(document.activeElement).toBe(target);
+
+        // Keeping the DOM node is not enough: its action must still target
+        // the reordered food rather than the former item at this position.
+        fireEvent.click(moved);
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Modifica' }));
+        expect(screen.getByRole('heading', { name: 'Modifica alimento' })).toBeDefined();
+        expect((screen.getByLabelText('Nome alimento *') as HTMLInputElement).value).toBe(zeroFood.name);
     });
 
     it('restituisce il focus al campo dopo Cancella ricerca nei pasti', () => {

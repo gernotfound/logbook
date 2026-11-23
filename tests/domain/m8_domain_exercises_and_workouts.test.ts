@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { WorkoutSession } from '../../src/types';
 import { applyDomainOperations } from '../../src/lib/sync/domainOperations';
 import { projectDocuments } from '../../src/lib/sync/documentProjection';
+import { applySemanticOperations } from '../../src/lib/sync/semanticProjection';
 import { base, catalog, compile } from './m8DomainFixture';
 
 describe('M8 Domain Operations V4 — exercise archive and active workout invariants', () => {
@@ -54,8 +55,9 @@ describe('M8 Domain Operations V4 — exercise archive and active workout invari
 
         expect(after.library?.map(item => item.id)).toEqual(['e-keep']);
         expect(after.routines?.map(routine => routine.exercises.map(exercise => exercise.exId))).toEqual([['e-keep'], []]);
-        expect(after.history?.[0]?.id).toBe(historical.id);
-        expect(after.history?.[0]?.exercises[0]?.exId).toBe('e-delete');
+        // Removing an exercise from the catalog must not edit historical
+        // workouts, including fields beyond the exercise reference itself.
+        expect(after.history).toEqual(before.history);
         expect(operations.some(operation => operation.docPath === '' && operation.path[0] === 'library')).toBe(true);
         expect(operations.some(operation => operation.docPath === '' && operation.path[0] === 'routines')).toBe(true);
         expect(operations.every(operation => operation.docPath === '')).toBe(true);
@@ -66,7 +68,8 @@ describe('M8 Domain Operations V4 — exercise archive and active workout invari
             (replayRoot?.routines as Array<{ exercises: Array<{ exId: string }> }> | undefined)
                 ?.map(routine => routine.exercises.map(exercise => exercise.exId)),
         ).toEqual([['e-keep'], []]);
-        expect(projectDocuments(after, catalog).get('history_months/2026-09')).toBeDefined();
+        expect(projectDocuments(after, catalog).get('history_months/2026-09'))
+            .toEqual(projectDocuments(before, catalog).get('history_months/2026-09'));
         expect((projectDocuments(after, catalog).get('history_months/2026-09')!['w-delete-regression'] as WorkoutSession).exercises[0].exId)
             .toBe('e-delete');
     });
@@ -83,7 +86,7 @@ describe('M8 Domain Operations V4 — exercise archive and active workout invari
         const { after, operations, replay } = compile(before, { type: 'exercise.delete', id: 'e-delete' });
 
         expect(after.library?.map(item => item.id)).toEqual(['e-keep']);
-        expect(after.routines?.[0]?.exercises.map(exercise => exercise.exId)).toEqual(['e-keep']);
+        expect(after.routines).toEqual(before.routines);
         expect(operations.some(operation => operation.docPath === '' && operation.path[0] === 'library')).toBe(true);
         expect(operations.some(operation => operation.path[0] === 'routines')).toBe(false);
         expect((replay.get('')?.library as Array<{ id: string }> | undefined)?.map(item => item.id))
@@ -92,18 +95,37 @@ describe('M8 Domain Operations V4 — exercise archive and active workout invari
             ?.[0]?.exercises.map(exercise => exercise.exId)).toEqual(['e-keep']);
     });
 
-    it('guards child mutations of the same active workout by session id', () => {
-        const active: WorkoutSession = { id: 'live-1', date: '2026-09-15', moodRating: 1, exercises: [] };
+    it('guards every compiled child edit against replacement by a different active session', () => {
+        const active: WorkoutSession = {
+            id: 'live-1', date: '2026-09-15', moodRating: 1, globalStartTime: 100, exercises: [],
+        };
         const before = base({ activeWorkout: active });
-        const next = { ...active, moodRating: 4 };
-        const { operations } = compile(before, { type: 'active-workout.set', workout: next });
+        const next = { ...active, moodRating: 4, globalStartTime: 200 };
+        const { operations, replay } = compile(before, { type: 'active-workout.set', workout: next });
+        const childOperations = operations.filter(op => op.path[0] === 'activeWorkout' && op.path.length > 1);
 
-        expect(operations).toContainEqual(expect.objectContaining({
-            path: ['activeWorkout', 'moodRating'],
-            guard: { path: ['activeWorkout', 'id'], equals: 'live-1' },
-        }));
-        expect(operations.filter(op => op.path[0] === 'activeWorkout' && op.path.length > 1)
-            .every(op => op.guard?.equals === 'live-1')).toBe(true);
+        // The compiled journal must contain both edits, each fenced by the full
+        // session identity path. A single correctly guarded operation is insufficient.
+        expect(childOperations.map(op => op.path.join('/')).sort()).toEqual([
+            'activeWorkout/globalStartTime', 'activeWorkout/moodRating',
+        ]);
+        expect(operations).toHaveLength(childOperations.length);
+        for (const operation of childOperations) {
+            expect(operation.guard).toEqual({ path: ['activeWorkout', 'id'], equals: 'live-1' });
+        }
+        expect(replay.get('')?.activeWorkout).toMatchObject({
+            id: 'live-1', moodRating: 4, globalStartTime: 200,
+        });
+
+        // Replay the actual compiled journal against a replacement session;
+        // synthetic guards tested elsewhere would not verify this compiler path.
+        const replaced = base({
+            activeWorkout: { ...active, id: 'live-2', moodRating: 2, globalStartTime: 300 },
+        });
+        const remote = projectDocuments(replaced, catalog);
+        const afterStaleReplay = applySemanticOperations(remote, operations);
+        expect(afterStaleReplay.documents.get('')?.activeWorkout).toEqual(remote.get('')?.activeWorkout);
+        expect(afterStaleReplay.syncMetas['']?.fields).toEqual({});
     });
 
     it('projects readiness with the active workout and preserves it on completion/history edits', () => {

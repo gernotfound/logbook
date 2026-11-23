@@ -11,23 +11,27 @@ describe('meal history incremental rendering', () => {
         pro: index,
         carbs: 0,
         fat: 0,
-    }));
+    })).reverse();
 
-    it('renders bounded pages without dropping days and emits selected day callbacks', () => {
+    it('renders bounded pages without dropping or reassigning any selected date', () => {
         const onDayClick = vi.fn();
         const { container } = render(<NutritionHistory nutritionHistory={days} onDayClick={onDayClick} />);
         const cards = () => container.querySelectorAll('.clickable-card');
-        expect(cards()).toHaveLength(30);
-        fireEvent.click(cards()[0]);
-        expect(onDayClick).toHaveBeenCalledWith(days[0].date);
+        const expectPage = (count: number) => {
+            const shown = Array.from(cards());
+            expect(shown).toHaveLength(count);
+            const callsBefore = onDayClick.mock.calls.length;
+            shown.forEach(card => fireEvent.click(card));
+            expect(onDayClick.mock.calls.slice(callsBefore).map(([date]) => date))
+                .toEqual(days.slice(0, count).map(day => day.date));
+        };
 
+        expectPage(30);
         fireEvent.click(screen.getByRole('button', { name: /Mostra altri giorni/i }));
-        expect(cards()).toHaveLength(60);
+        expectPage(60);
         fireEvent.click(screen.getByRole('button', { name: /Mostra altri giorni/i }));
-        expect(cards()).toHaveLength(66);
+        expectPage(66);
         expect(screen.queryByRole('button', { name: /Mostra altri giorni/i })).toBeNull();
-        fireEvent.click(cards()[65]);
-        expect(onDayClick).toHaveBeenCalledWith(days[65].date);
     });
 
     it('keeps the focused date mounted when a newer day is inserted ahead of it', () => {

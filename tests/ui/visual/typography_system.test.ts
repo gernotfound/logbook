@@ -116,18 +116,18 @@ describe('scala tipografica canonica', () => {
 
   it('mantiene a 16px i controlli di input per Safari iOS', () => {
     const base = fs.readFileSync(path.join(ROOT, 'src/styles/base.css'), 'utf8');
-    expect(base).toMatch(/input,\s*select,\s*textarea\s*\{[\s\S]*?font-size:\s*16px\s*!important/);
+    expect(base).toMatch(/input,\s*select,\s*textarea\s*\{[^}]*font-size:\s*16px\s*!important/);
   });
 
   it('allinea le gerarchie tipografiche condivise tra le pagine di allenamento', () => {
     const training = fs.readFileSync(path.join(ROOT, 'src/components/Training/training.css'), 'utf8');
     const routines = fs.readFileSync(path.join(ROOT, 'src/components/Training/routines/routines.css'), 'utf8');
-    expect(training).toMatch(/\.exercise-library-header h2\s*\{[\s\S]*?font-size:\s*var\(--font-size-page\)/);
-    expect(training).toMatch(/\.history-heading h2\s*\{[\s\S]*?font-size:\s*var\(--font-size-page\)/);
-    expect(training).toMatch(/\.exercise-compact-name\s*\{[\s\S]*?font-size:\s*var\(--font-size-control\)/);
-    expect(training).toMatch(/\.exercise-compact-meta\s*\{[\s\S]*?font-size:\s*var\(--font-size-meta\)/);
-    expect(routines).toMatch(/\.routine-library-header h2\s*\{[\s\S]*?font-size:\s*var\(--font-size-page\)/);
-    expect(routines).toMatch(/\.routine-card-name\s*\{[\s\S]*?font-size:\s*var\(--font-size-control\)/);
-    expect(routines).toMatch(/\.routine-card-meta\s*\{[\s\S]*?font-size:\s*var\(--font-size-meta\)/);
+    expect(training).toMatch(/\.exercise-library-header h2\s*\{[^}]*font-size:\s*var\(--font-size-page\)/);
+    expect(training).toMatch(/\.history-heading h2\s*\{[^}]*font-size:\s*var\(--font-size-page\)/);
+    expect(training).toMatch(/\.exercise-compact-name\s*\{[^}]*font-size:\s*var\(--font-size-control\)/);
+    expect(training).toMatch(/\.exercise-compact-meta\s*\{[^}]*font-size:\s*var\(--font-size-meta\)/);
+    expect(routines).toMatch(/\.routine-library-header h2\s*\{[^}]*font-size:\s*var\(--font-size-page\)/);
+    expect(routines).toMatch(/\.routine-card-name\s*\{[^}]*font-size:\s*var\(--font-size-control\)/);
+    expect(routines).toMatch(/\.routine-card-meta\s*\{[^}]*font-size:\s*var\(--font-size-meta\)/);
   });
 });

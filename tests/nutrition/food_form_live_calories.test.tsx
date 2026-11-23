@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import CustomFoodForm from '../../src/components/Nutrition/CustomFoodForm';
 import { emptyCustomFoodDraft, type CustomFoodDraft } from '../../src/lib/nutrition/customFoodDraft';
@@ -89,5 +89,30 @@ describe('CustomFoodForm — calories and edit lifecycle', () => {
         fireEvent.click(submit);
         expect(save).toHaveBeenCalledTimes(2);
         await act(async () => finish(true));
+    });
+
+    it('keeps the form editable and permits retry after the save promise rejects', async () => {
+        const rejection = new Error('storage unavailable');
+        const save = vi.fn()
+            .mockRejectedValueOnce(rejection)
+            .mockResolvedValueOnce(true);
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        try {
+            renderFoodForm({ name: 'Riso', kcal: '100', carbs: '10', pro: '10', fat: '2' }, save);
+            const submit = screen.getByRole('button', { name: 'Salva alimento' }) as HTMLButtonElement;
+
+            fireEvent.click(submit);
+            await waitFor(() => expect(submit.disabled).toBe(false));
+            expect(save).toHaveBeenCalledOnce();
+            expect((screen.getByLabelText('Nome alimento *') as HTMLInputElement).value).toBe('Riso');
+            expect((screen.getByLabelText('Kcal') as HTMLInputElement).value).toBe('100');
+            expect(log).toHaveBeenCalledWith('Salvataggio alimento non completato:', rejection);
+
+            fireEvent.click(submit);
+            await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+        } finally {
+            log.mockRestore();
+        }
     });
 });

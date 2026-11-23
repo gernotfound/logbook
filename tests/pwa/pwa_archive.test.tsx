@@ -33,9 +33,10 @@ describe('PWA encrypted storage', () => {
       await prepareUnlockedTestArchive('user:test-user-id');
       const mockData: UserData = makeUserData('185');
 
-      // Set user data
       useAppStore.getState().setUserData(mockData);
-      await new Promise(r => setTimeout(r, 0));
+      await vi.waitFor(async () => {
+        expect((await readLocal('user:test-user-id'))?.data.profile?.height).toBe('185');
+      });
 
       const raw = idbStore['logbook:v2:user:test-user-id'];
       expect(raw).toMatch(/^tlb-sealed:v1:/);
@@ -49,13 +50,14 @@ describe('PWA encrypted storage', () => {
       const mockData: UserData = makeUserData('170');
 
       useAppStore.getState().setUserData(mockData);
-      await new Promise(r => setTimeout(r, 0));
+      await vi.waitFor(async () => {
+        expect((await readLocal('user:test-user-id'))?.data.profile?.height).toBe('170');
+      });
       const ciphertext = idbStore['logbook:v2:user:test-user-id'];
       expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
       expect((await readLocal('user:test-user-id'))?.data.profile?.height).toBe('170');
 
       useAppStore.getState().setUserData(null);
-      await new Promise(r => setTimeout(r, 0));
       // Clearing the view is never an instruction to delete or reseal its archive.
       expect(idbStore['logbook:v2:user:test-user-id']).toBe(ciphertext);
       expect(useAppStore.getState().userData).toBeNull();

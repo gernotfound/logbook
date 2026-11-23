@@ -99,6 +99,45 @@ describe('nutrition planning edits and session ownership', () => {
         }));
     });
 
+    it('does not clear a newer same-owner draft when an earlier save is acknowledged', async () => {
+        let acknowledge!: (result: { ok: true; status: 'synced' }) => void;
+        const pending = new Promise<{ ok: true; status: 'synced' }>(resolve => { acknowledge = resolve; });
+        const dispatch = vi.fn()
+            .mockImplementationOnce(() => pending)
+            .mockResolvedValue({ ok: true, status: 'synced' });
+        useAppStore.setState({ dispatchDomainOperation: dispatch });
+        const { result } = renderHook(() => useNutritionPlanning());
+
+        act(() => result.current.handleUpdate('weight', '90'));
+        let firstSave!: Promise<void>;
+        act(() => { firstSave = result.current.handleSave(); });
+        expect(dispatch).toHaveBeenCalledOnce();
+        expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+            type: 'nutrition-planning.replace',
+            value: expect.objectContaining({ weight: 90 }),
+        }));
+        expect(result.current.saveStatus).toBe('saving');
+
+        act(() => result.current.handleUpdate('weight', '92'));
+        expect(result.current.planning.weight).toBe('92');
+        expect(result.current.saveStatus).toBe('unsaved');
+
+        await act(async () => {
+            acknowledge({ ok: true, status: 'synced' });
+            await firstSave;
+        });
+        expect(result.current.planning.weight).toBe('92');
+        expect(result.current.saveStatus).toBe('unsaved');
+
+        await act(async () => { await result.current.handleSave(); });
+        expect(dispatch).toHaveBeenCalledTimes(2);
+        expect(dispatch).toHaveBeenLastCalledWith(expect.objectContaining({
+            type: 'nutrition-planning.replace',
+            value: expect.objectContaining({ weight: 92 }),
+        }));
+        expect(result.current.saveStatus).toBe('idle');
+    });
+
     it('ignores an old account epoch during a pending save without clearing newer edits', async () => {
         let resolve!: (result: { ok: true; status: 'synced' }) => void;
         const pendingCommit = new Promise<{ ok: true; status: 'synced' }>(done => { resolve = done; });

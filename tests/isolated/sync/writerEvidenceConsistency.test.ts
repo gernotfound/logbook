@@ -22,8 +22,10 @@ describe('shared independent-writer evidence consistency', () => {
 
     it('accepts stable membership, bytes and consent only after final verification', () => {
         expect(() => check()).not.toThrow();
-        expect(readDeviceValueStrict).toHaveBeenCalledTimes(2);
-        expect(readDeviceConsentRevision).toHaveBeenCalledTimes(2);
+        expect(readDeviceValueStrict).toHaveBeenNthCalledWith(1, 'w1', owner);
+        expect(readDeviceValueStrict).toHaveBeenNthCalledWith(2, 'w2', owner);
+        expect(readDeviceConsentRevision).toHaveBeenNthCalledWith(1, owner);
+        expect(readDeviceConsentRevision).toHaveBeenNthCalledWith(2, owner);
     });
 
     it('rejects a newly added independent witness before selecting any recovery', () => {

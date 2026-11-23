@@ -299,7 +299,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     const continueUnverifiedLocally = useUnverifiedLocalContinuation({
-        isGuestActiveStrict, loginAsGuest,
+        isGuestActiveStrict, loginAsGuest, authRunRef, authUidRef,
     });
 
     const retryGuestMigration = useGuestMigrationRetry({

@@ -4,6 +4,8 @@ import { deviceVaultKeyId } from '../src/lib/sync/secureArchiveKeys';
 import { vaultControlMirrorId } from '../src/lib/sync/secureArchiveControlRecovery';
 import { isVaultUnlocked, lockAllVaults, readVaultControl, vaultControlKey } from '../src/lib/sync/secureArchiveSession';
 import { removeBrowserValue } from '../src/lib/sync/browserStorage';
+import { withGuestLifecycleLock } from '../src/lib/sync/guestLifecycleLock';
+import { normalizeStorageOwner } from '../src/lib/sync/owner';
 
 /**
  * Provision a genuine encrypted owner archive for UI tests.
@@ -17,24 +19,38 @@ import { removeBrowserValue } from '../src/lib/sync/browserStorage';
  * archive or sealed device snapshot exists, retain both and surface the error.
  */
 async function clearEmptyOrphanedTestControl(owner: string): Promise<void> {
-    if (!readVaultControl(owner)) return;
-    if (await get<unknown>(deviceVaultKeyId(owner)) !== undefined) return;
-    if (await get<unknown>('logbook:v2:' + owner) !== undefined) return;
-
-    const prefix = 'logbook:v2:' + owner + ':sealed:';
-    for (let i = 0; i < localStorage.length; i++) {
-        if (localStorage.key(i)?.startsWith(prefix)) return;
+    if (typeof navigator === 'undefined' || !navigator.locks?.request) {
+        throw new Error('Test vault cleanup requires owner-scoped Web Locks');
     }
-    // The shared UI fixture deliberately simulates an IDB reset with no
-    // ciphertext. Its mirrored wrapped control is now an orphan too. This is
-    // test-only cleanup; Production MUST retain both controls on key loss.
-    const mirrorId = vaultControlMirrorId(owner);
-    await del(mirrorId);
-    if (await get<unknown>(mirrorId) !== undefined) throw new Error('Mock vault mirror cleanup failed');
-    removeBrowserValue(vaultControlKey(owner));
+
+    // Serialize the orphan check and deletion with production provisioning.
+    // Without this lock, a late AuthProvider can publish a new control/key
+    // after the empty-store check but before the fixture removes its mirror.
+    const cleanup = () => navigator.locks.request(
+        'thelogbook:secure-archive:' + owner, { mode: 'exclusive' }, async () => {
+            if (!readVaultControl(owner)) return;
+            if (await get<unknown>(deviceVaultKeyId(owner)) !== undefined) return;
+            if (await get<unknown>('logbook:v2:' + owner) !== undefined) return;
+
+            const prefix = 'logbook:v2:' + owner + ':sealed:';
+            for (let i = 0; i < localStorage.length; i++) {
+                if (localStorage.key(i)?.startsWith(prefix)) return;
+            }
+            // Test-only orphan cleanup. Production preserves controls on key loss.
+            const mirrorId = vaultControlMirrorId(owner);
+            await del(mirrorId);
+            if (await get<unknown>(mirrorId) !== undefined) {
+                throw new Error('Mock vault mirror cleanup failed');
+            }
+            removeBrowserValue(vaultControlKey(owner));
+        },
+    );
+    if (owner === 'guest') await withGuestLifecycleLock(cleanup);
+    else await cleanup();
 }
 
 export async function prepareUnlockedTestArchive(owner = 'user:test-user-id'): Promise<void> {
+    owner = normalizeStorageOwner(owner);
     lockAllVaults();
     await clearEmptyOrphanedTestControl(owner);
     // A callback that was already waiting for the Web Lock can race our first

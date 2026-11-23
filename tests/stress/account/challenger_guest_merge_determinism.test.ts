@@ -38,6 +38,27 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
             const merged2 = mergeUserData(merged1, merged1);
             const merged3 = mergeUserData(merged1, guestData);
 
+            // Idempotence alone would also hold for a deterministic merge that
+            // silently discarded every collection. Verify the first merge's
+            // business result independently of its subsequent repetitions.
+            expect(merged1.profile).toMatchObject({
+                height: '180', gender: 'M', waist: '84', neck: '40',
+            });
+            expect(merged1.library?.map(item => item.id)).toEqual(['ex1', 'ex2']);
+            expect(merged1.routines?.map(item => item.id)).toEqual(['r1', 'r2']);
+            expect(merged1.customFoods?.map(item => item.id)).toEqual(['f1', 'f2']);
+            expect(merged1.trainingCycles?.map(item => item.id)).toEqual(['tc1', 'tc2']);
+            expect(merged1.history?.map(item => item.id)).toEqual(['h1', 'h2']);
+            expect(merged1.supplements?.map(item => item.id)).toEqual(['s1', 's2']);
+            expect(merged1.nutrition).toMatchObject({
+                '2026-08-01': { date: '2026-08-01', kcal: 2000 },
+                '2026-08-02': { date: '2026-08-02', kcal: 2200 },
+            });
+            expect(merged1.activeWorkout?.id).toBe('w2');
+            expect(merged1.activeCycleId).toBe('tc2');
+            expect(merged1.nutritionPlanning?.weight).toBe(75);
+            expect(merged1.pendingConflicts?.nutritionPlanning?.weight).toBe(78);
+
             expect(merged2).toEqual(merged1);
             expect(merged3).toEqual(merged1);
         });
