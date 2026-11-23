@@ -359,8 +359,11 @@
     line-height: 1.2;
 }
 
-#view-data .data-method-option small,
-
+#view-data .data-method-option small {
+    color: var(--text-muted);
+    font-size: var(--font-size-micro);
+    line-height: 1.4;
+}
 
 #view-data .data-calculation-flow {
     display: grid;
@@ -474,7 +477,11 @@
     font-size: var(--font-size-control);
 }
 
-#view-data .data-disclosure-copy small,
+#view-data .data-disclosure-copy small {
+    color: var(--text-muted);
+    font-size: var(--font-size-meta);
+    line-height: 1.4;
+}
 
 #view-data .data-disclosure-chevron {
     flex: none;

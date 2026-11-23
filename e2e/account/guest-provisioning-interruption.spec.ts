@@ -173,15 +173,16 @@ test('two guest tabs cannot start Firebase signup or create a migration intent w
 
   const pageErrors: string[] = [];
   let popups = 0;
-  const authRequests: string[] = [];
-  // Entering the settings/account section is part of the guest isolation
-  // contract. Observe before navigation, including service-worker requests.
+  const forbiddenRequests: string[] = [];
+  const appOrigin = new URL(page.url()).origin;
+  // Any unexpected external host or same-origin API is a dependency of the
+  // guest settings journey, not proof of local-only account isolation.
+  // Observe before navigation, including service-worker-owned requests.
   context.on('request', request => {
     const url = new URL(request.url());
-    if (/^\/(?:api\/auth(?:\/|$)|api\/account(?:\/|$)|api\/health-consent(?:\/|$)|v1\/|__\/auth\/)/.test(url.pathname)
-      || /(?:^|\.)(?:kinde\.com|firebaseapp\.com|firebaseio\.com|firebasedatabase\.app)$/.test(url.hostname)
-      || /^(?:identitytoolkit|securetoken|firestore|firebaseinstallations|firebaseappcheck)\.googleapis\.com$/.test(url.hostname)) {
-      authRequests.push(url.pathname);
+    if (url.origin !== appOrigin || /^\/(?:api|v1|__\/auth)(?:\/|$)/.test(url.pathname)) {
+      // Never expose OAuth query parameters in failure diagnostics.
+      forbiddenRequests.push(url.origin + url.pathname);
     }
   });
   for (const tab of [page, next]) {
@@ -217,7 +218,7 @@ test('two guest tabs cannot start Firebase signup or create a migration intent w
 
   expect(popups).toBe(0);
   expect(pageErrors).toEqual([]);
-  expect(authRequests).toEqual([]);
+  expect(forbiddenRequests).toEqual([]);
 
   const fresh = await context.newPage();
   await fresh.goto('/?tab=data');

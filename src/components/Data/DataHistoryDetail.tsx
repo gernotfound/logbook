@@ -5,7 +5,7 @@ import { useScrollLock } from '../../hooks/useScrollLock';
 import { formatSleepTime } from '../../lib/utils/date';
 import type { MeasurementHistoryDay } from '../../types';
 import { dayLabel } from '../../lib/utils/historyCalendar';
-import { formatDecimal, hasFiniteValue, hasMeasurementData } from './dataHistoryFormatting';
+import { formatHistoryDecimal, hasFiniteValue, hasMeasurementData } from './dataHistoryFormatting';
 
 interface DataHistoryDetailProps {
     day: MeasurementHistoryDay;
@@ -46,16 +46,16 @@ export default function DataHistoryDetail({ day, onClose, onSelectEdit }: DataHi
                 </div>
                 <div className="data-detail-scroll">
                     <div className="data-detail-grid">
-                    {hasFiniteValue(day.weight) && <div><strong>{formatDecimal(Number(day.weight))} kg</strong><span>Peso</span></div>}
-                    {hasFiniteValue(day.bf) && <div><strong>{formatDecimal(Number(day.bf))}%</strong><span>BF · {day.bfProvenance?.method === 'us_navy' ? 'US Navy' : 'origine n.d.'}</span></div>}
-                    {hasFiniteValue(day.waist) && <div><strong>{formatDecimal(Number(day.waist))} cm</strong><span>Vita</span></div>}
-                    {hasFiniteValue(day.neck) && <div><strong>{formatDecimal(Number(day.neck))} cm</strong><span>Collo</span></div>}
-                    {hasFiniteValue(day.hip) && <div><strong>{formatDecimal(Number(day.hip))} cm</strong><span>Fianchi</span></div>}
-                    {hasFiniteValue(day.chest) && <div><strong>{formatDecimal(Number(day.chest))} cm</strong><span>Torace</span></div>}
-                    {hasFiniteValue(day.shoulders) && <div><strong>{formatDecimal(Number(day.shoulders))} cm</strong><span>Spalle</span></div>}
-                    {hasFiniteValue(day.biceps) && <div><strong>{formatDecimal(Number(day.biceps))} cm</strong><span>Braccia</span></div>}
-                    {hasFiniteValue(day.thighs) && <div><strong>{formatDecimal(Number(day.thighs))} cm</strong><span>Cosce</span></div>}
-                    {hasFiniteValue(day.calves) && <div><strong>{formatDecimal(Number(day.calves))} cm</strong><span>Polpacci</span></div>}
+                    {hasFiniteValue(day.weight) && <div><strong>{formatHistoryDecimal(day.weight)} kg</strong><span>Peso</span></div>}
+                    {hasFiniteValue(day.bf) && <div><strong>{formatHistoryDecimal(day.bf)}%</strong><span>BF · {day.bfProvenance?.method === 'us_navy' ? 'US Navy' : 'origine n.d.'}</span></div>}
+                    {hasFiniteValue(day.waist) && <div><strong>{formatHistoryDecimal(day.waist)} cm</strong><span>Vita</span></div>}
+                    {hasFiniteValue(day.neck) && <div><strong>{formatHistoryDecimal(day.neck)} cm</strong><span>Collo</span></div>}
+                    {hasFiniteValue(day.hip) && <div><strong>{formatHistoryDecimal(day.hip)} cm</strong><span>Fianchi</span></div>}
+                    {hasFiniteValue(day.chest) && <div><strong>{formatHistoryDecimal(day.chest)} cm</strong><span>Torace</span></div>}
+                    {hasFiniteValue(day.shoulders) && <div><strong>{formatHistoryDecimal(day.shoulders)} cm</strong><span>Spalle</span></div>}
+                    {hasFiniteValue(day.biceps) && <div><strong>{formatHistoryDecimal(day.biceps)} cm</strong><span>Braccia</span></div>}
+                    {hasFiniteValue(day.thighs) && <div><strong>{formatHistoryDecimal(day.thighs)} cm</strong><span>Cosce</span></div>}
+                    {hasFiniteValue(day.calves) && <div><strong>{formatHistoryDecimal(day.calves)} cm</strong><span>Polpacci</span></div>}
                     {formattedSleep && <div><strong>{formattedSleep}</strong><span>Sonno</span></div>}
                     </div>
                 </div>

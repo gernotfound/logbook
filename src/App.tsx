@@ -134,6 +134,8 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
     handleOpenSettings, handleCloseSettings, handleTabChange, handleHomeNavigate,
   } = useAppNavigation(navigationOwner, startupTab);
   const [requiredUpdateReloading, setRequiredUpdateReloading] = useState(false);
+  // React may disable the button after a second update handler has entered.
+  const requiredUpdateReloadInFlight = useRef(false);
   const [requiredUpdateReloadError, setRequiredUpdateReloadError] = useState<string | null>(null);
 
   const [showGuestLogin, setShowGuestLogin] = useState(readGuestLoginOverlayState);
@@ -188,23 +190,12 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
   // Transient errors auto-dismiss. A failed sync must remain visible until
   // a subsequent verified recovery; a toast timeout is not cloud evidence.
   useEffect(() => {
-    if (!saveError || syncHealth === 'failed' || localPersistenceBlocked || cloudIntegrityBlocked) return;
+    if (!saveError || syncHealth === 'failed' || syncHealth === 'rejected' || localPersistenceBlocked || cloudIntegrityBlocked) return;
     const timer = setTimeout(() => {
       setSaveError(null);
     }, 5000);
     return () => clearTimeout(timer);
   }, [saveError, syncHealth, localPersistenceBlocked, cloudIntegrityBlocked, setSaveError]);
-
-  // Clear saveError on online event if it was due to missing connection during save
-  useEffect(() => {
-    const handleOnline = () => {
-      if (useAppStore.getState().saveError === 'Connessione assente durante il salvataggio') {
-        setSaveError(null);
-      }
-    };
-    window.addEventListener('online', handleOnline);
-    return () => window.removeEventListener('online', handleOnline);
-  }, [setSaveError]);
 
   // Warm the remaining primary view modules only after startup/auth/sync settles.
   // Importing code here does not mount hidden views or start their hooks.
@@ -262,7 +253,8 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
   }, []);
 
   const handleRequiredUpdateReload = async () => {
-    if (requiredUpdateReloading) return;
+    if (requiredUpdateReloadInFlight.current) return;
+    requiredUpdateReloadInFlight.current = true;
     setRequiredUpdateReloading(true);
     setRequiredUpdateReloadError(null);
     try {
@@ -273,6 +265,7 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
           ? error.message
           : 'Impossibile preparare il dispositivo al ricaricamento. Riprova.',
       );
+      requiredUpdateReloadInFlight.current = false;
       setRequiredUpdateReloading(false);
     }
   };
@@ -351,7 +344,7 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
         >
           <AlertTriangle className="sync-error-icon" size={20} aria-hidden="true" />
           <span className="sync-error-text">{saveError}</span>
-          {syncHealth !== 'failed' && !localPersistenceBlocked && !cloudIntegrityBlocked && (
+          {syncHealth !== 'failed' && syncHealth !== 'rejected' && !localPersistenceBlocked && !cloudIntegrityBlocked && (
             <button
               type="button"
               className="sync-error-close"

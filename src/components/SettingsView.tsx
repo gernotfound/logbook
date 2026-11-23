@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, CircleUserRound, DatabaseBackup, ShieldCheck, SlidersHorizontal } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { useSettings } from '../hooks/useSettings';
@@ -43,6 +43,8 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     const [showTerms, setShowTerms] = useState(false);
     const [showWithdrawalOptions, setShowWithdrawalOptions] = useState(false);
     const [withdrawing, setWithdrawing] = useState(false);
+    // Revocation writes a durable cross-session fence before the network request.
+    const withdrawingRef = useRef(false);
     const [activeSection, setActiveSection] = useState<SettingsSection | null>(null);
     const appearance = useAppearanceStore(state => state.preference);
     const setAppearance = useAppearanceStore(state => state.setPreference);
@@ -98,9 +100,10 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     }, []);
 
     const handleWithdrawHealthConsent = async () => {
-        if (withdrawing) return;
+        if (withdrawingRef.current) return;
         const user = auth.currentUser;
         if (!isGuest && !user) return;
+        withdrawingRef.current = true;
         setWithdrawing(true);
         try {
             if (isGuest) {
@@ -120,6 +123,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                     : 'Le funzioni fitness sono state bloccate. La revoca o la cancellazione cloud non sono ancora confermate; il server riprenderà l’operazione se già registrata. Verifica lo stato quando torni online.',
             );
         } finally {
+            withdrawingRef.current = false;
             setWithdrawing(false);
         }
     };
@@ -209,13 +213,13 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                             <p>La revoca sospende subito le funzioni fitness e avvia la cancellazione definitiva di allenamenti, nutrizione, misurazioni, profilo e bozze. Il tuo account di accesso rimane esistente. I dati cancellati non potranno essere ripristinati da TheLogBook.</p>
                             <p>Puoi esportare una copia prima di revocare il consenso. L’esportazione è facoltativa, può contenere informazioni sulla salute in chiaro e non impedisce la revoca anche se non riesce.</p>
                             <div className="settings-actions">
-                                <button type="button" className="btn" disabled={withdrawing || exportingData} onClick={() => { void handleExportBackup(); }}>
+                                <button type="button" className="btn" disabled={withdrawing || exportingData} onClick={() => { if (!withdrawingRef.current) void handleExportBackup(); }}>
                                     {exportingData ? 'Preparazione backup…' : 'Esporta prima i miei dati'}
                                 </button>
                                 <button type="button" className="btn btn-danger" disabled={withdrawing || exportingData} onClick={() => { void handleWithdrawHealthConsent(); }}>
                                     {withdrawing ? 'Revoca in corso…' : 'Revoca il consenso e cancella i dati'}
                                 </button>
-                                <button type="button" className="btn" disabled={withdrawing} onClick={() => setShowWithdrawalOptions(false)}>Annulla</button>
+                                <button type="button" className="btn" disabled={withdrawing} onClick={() => { if (!withdrawingRef.current) setShowWithdrawalOptions(false); }}>Annulla</button>
                             </div>
                         </section>
                     )}
@@ -241,6 +245,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                     isIOSInstallable={isIOSInstallable}
                     onInstall={promptInstall}
                     isOffline={isOffline}
+                    isGuest={isGuest}
                     checkingForUpdate={checkingForUpdate}
                     onCheckUpdate={handleCheckUpdate}
                 />

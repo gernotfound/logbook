@@ -1,16 +1,29 @@
 import { expect, test } from '../fixtures';
 
-// A guest archive has no remote identity or health-service dependency. Static
-// same-origin assets remain permitted; the test observes page and SW traffic.
-function forbiddenAccountRequest(rawUrl: string): boolean {
+// The guest archive is strictly local. Static files from this preview origin
+// are allowed; neither same-origin APIs nor external hosts are dependencies.
+function forbiddenGuestRequest(rawUrl: string, appOrigin: string): boolean {
   const url = new URL(rawUrl);
-  if (/^\/(?:api\/auth(?:\/|$)|api\/health-consent(?:\/|$)|api\/account(?:\/|$)|v1\/)/.test(url.pathname)) return true;
-  if (/(?:^|\.)(?:kinde\.com|firebaseapp\.com|firebaseio\.com|firebasedatabase\.app)$/.test(url.hostname)) return true;
-  if (/^(?:identitytoolkit|securetoken|firestore|firebaseinstallations|firebaseappcheck)\.googleapis\.com$/.test(url.hostname)) return true;
-  if (/^www\.google\.com$/.test(url.hostname) && url.pathname.startsWith('/recaptcha/')) return true;
-  if (/^www\.gstatic\.com$/.test(url.hostname) && url.pathname.startsWith('/recaptcha/')) return true;
-  return false;
+  return url.origin !== appOrigin || /^\/(?:api|v1|__\/auth)(?:\/|$)/.test(url.pathname);
 }
+
+// Keep query strings out of CI diagnostics: OAuth parameters may be sensitive.
+function requestDestination(rawUrl: string): string {
+  const url = new URL(rawUrl);
+  return url.origin + url.pathname;
+}
+
+test('guest network observer detects private routes and unlisted external hosts', () => {
+  const origin = 'http://127.0.0.1:4173';
+  for (const path of ['/api/auth/session', '/api/fitness', '/api/health-consent',
+    '/v1/sync/commit', '/__/auth/callback']) {
+    expect(forbiddenGuestRequest(origin + path, origin)).toBe(true);
+  }
+  expect(forbiddenGuestRequest('https://unlisted.example.test/pixel', origin)).toBe(true);
+  expect(forbiddenGuestRequest('https://login.kinde.com/', origin)).toBe(true);
+  expect(forbiddenGuestRequest(origin + '/assets/index.js', origin)).toBe(false);
+  expect(forbiddenGuestRequest(origin + '/', origin)).toBe(false);
+});
 
 test('guest fitness persists across an online reload and an offline restart without Auth or health API traffic', async ({ page, context }) => {
   await page.goto('/');
@@ -18,9 +31,10 @@ test('guest fitness persists across an online reload and an offline restart with
   // Observe from the user's guest choice onward, including consent/provisioning.
   await expect(page.getByRole('button', { name: 'Continua senza account' })).toBeVisible();
 
+  const appOrigin = new URL(page.url()).origin;
   const forbidden: string[] = [];
   const onRequest = (request: { url(): string }) => {
-    if (forbiddenAccountRequest(request.url())) forbidden.push(new URL(request.url()).pathname);
+    if (forbiddenGuestRequest(request.url(), appOrigin)) forbidden.push(requestDestination(request.url()));
   };
   context.on('request', onRequest);
 
@@ -29,9 +43,9 @@ test('guest fitness persists across an online reload and an offline restart with
   // by the shared isolated E2E fixture.
   await context.route('**/*', route => {
     const url = route.request().url();
-    if (forbiddenAccountRequest(url)) {
+    if (forbiddenGuestRequest(url, appOrigin)) {
       // A routed request must fail the test even if no request event is emitted.
-      forbidden.push(new URL(url).pathname);
+      forbidden.push(requestDestination(url));
       return route.abort('blockedbyclient');
     }
     return route.fallback();
@@ -86,10 +100,15 @@ test('guest fitness persists across an online reload and an offline restart with
 
     await second.evaluate(async () => { await navigator.serviceWorker.ready; });
     await second.waitForFunction(() => navigator.serviceWorker.controller !== null);
-    await context.setOffline(true);
+    // Close every live document before offline recovery: a warm first tab
+    // cannot mask a failure to cold-bootstrap the owner-scoped archive.
     await second.close();
+    await page.close();
+    expect(context.pages()).toHaveLength(0);
+    await context.setOffline(true);
     const recovered = await context.newPage();
     await recovered.goto('/?tab=data');
+    expect(await recovered.evaluate(() => navigator.onLine)).toBe(false);
     await expect(recovered.locator('.guest-banner')).toBeVisible();
     await recovered.getByRole('tab', { name: 'Biometria', exact: true }).click();
     await expect(recovered.locator('#biometry-height')).toHaveValue('181');
