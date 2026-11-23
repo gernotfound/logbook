@@ -16,7 +16,7 @@ import { routeCandidateFirstPartyApi } from '../../../cloudflare/first-party-api
 import { createCloudKeyHttpFixture, ORIGIN } from '../../cloudflare/cloud-key-http-fixture.mjs';
 import { openKindeCandidateFitnessRealm } from '../../../src/lib/auth/kindeCandidateFitnessRealm';
 import { protectedDeviceKey } from '../../../src/lib/sync/deviceStorageKeys';
-import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
+import { isVaultUnlocked, lockAllVaults, unlockVaultForOwner } from '../../../src/lib/sync/secureArchiveSession';
 import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
 
 const uid = 'k_' + 'M'.repeat(43);
@@ -27,6 +27,13 @@ const slot = protectedDeviceKey('draft_measurement', owner);
 let online = true;
 
 type Fixture = Awaited<ReturnType<typeof createCloudKeyHttpFixture>>;
+
+async function readVerifiedLocal() {
+    const grant = await unlockVaultForOwner(owner);
+    try { return await readLocal(owner); }
+    finally { grant.release(); }
+}
+
 
 function browser(fixture: Fixture) {
     const session = fixture.sessions.get(uid);
@@ -129,7 +136,7 @@ describe('candidate-only measurement editor, authenticated encrypted device draf
             await expect(first.saveMeasurementDraft(draft)).rejects.toThrow('misurazione è cambiata');
             expect(localStorage.getItem(slot)).toBe(sealed);
             expect(fixture.count('sync_receipts', uid)).toBe(2);
-            expect((await readLocal(owner))?.data.nutrition?.[DATE]).toMatchObject({
+            expect((await readVerifiedLocal())?.data.nutrition?.[DATE]).toMatchObject({
                 weight: 76, sleepHours: '07:30', waist: 88,
             });
             first.close();
@@ -150,10 +157,11 @@ describe('candidate-only measurement editor, authenticated encrypted device draf
                 outcome: { kind: 'local-pending' }, draftCleared: true,
             });
             expect(fixture.count('sync_receipts', uid)).toBe(0);
-            expect((await readLocal(owner))?.data.nutrition?.[DATE]).toMatchObject({
+            expect((await readVerifiedLocal())?.data.nutrition?.[DATE]).toMatchObject({
                 weight: 82, chest: 100,
             });
             expect(localStorage.getItem(slot)).toBeNull();
+            expect(isVaultUnlocked(owner)).toBe(false);
             realm.close();
         } finally { fixture.close(); }
     });
@@ -195,7 +203,7 @@ describe('candidate-only measurement editor, authenticated encrypted device draf
             await expect(first.saveMeasurementDraft(draft)).rejects.toThrow('profilo biometrico è cambiato');
             expect(localStorage.getItem(slot)).toBe(sealed);
             expect(fixture.count('sync_receipts', uid)).toBe(2);
-            expect((await readLocal(owner))?.data.nutrition?.[DATE]).toBeUndefined();
+            expect((await readVerifiedLocal())?.data.nutrition?.[DATE]).toBeUndefined();
             first.close();
             second.close();
         } finally { fixture.close(); }
