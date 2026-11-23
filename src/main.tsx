@@ -178,15 +178,13 @@ export const initApp = async () => {
         renderStorageUnavailable(rootElement);
         return;
       }
-      {
-        if (!useAppStore.getState().userData) {
-          useAppStore.setState({ userData: initialData, dataOwner: bootstrapOwner });
-        }
-        const session = captureSession();
-        if (bootstrapOwner === session.owner) markTabSnapshotClean(session, initialData);
-        // Update marker ONLY after complete successful read and schema validation
-        if (bootstrapOwner) updateStorageMarker(Date.now(), undefined, bootstrapOwner);
+      if (!useAppStore.getState().userData) {
+        useAppStore.setState({ userData: initialData, dataOwner: bootstrapOwner });
       }
+      const session = captureSession();
+      if (bootstrapOwner === session.owner) markTabSnapshotClean(session, initialData);
+      // Update marker ONLY after complete successful read and schema validation
+      if (bootstrapOwner) updateStorageMarker(Date.now(), undefined, bootstrapOwner);
     }
   } catch (e) {
     console.warn("Errore generale durante bootstrap storage:", e);
