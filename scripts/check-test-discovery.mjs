@@ -115,7 +115,8 @@ function commandFiles(script) {
 }
 
 export function normalizePlaywrightLocation(location) {
-  return (location.startsWith('e2e/') ? '' : 'e2e/') + location;
+  const normalized = location.replaceAll('\\', '/');
+  return (normalized.startsWith('e2e/') ? '' : 'e2e/') + normalized;
 }
 
 function playwrightList(project, shard) {

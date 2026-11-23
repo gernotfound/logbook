@@ -90,9 +90,11 @@ await test('rejects Playwright sharding loss and duplicate test identities', () 
   assert.match(compareAssignments(tests, { shard1: [tests[0]], shard2: [tests[0]] }, 'Playwright').join('\n'), /duplicate.*undiscovered/s);
 });
 
-await test('normalizes both Playwright CLI filename formats to the tracked E2E path', () => {
+await test('normalizes Playwright CLI filenames on POSIX and Windows to the tracked E2E path', () => {
   assert.equal(normalizePlaywrightLocation('accessibility.spec.ts:33:1'), 'e2e/accessibility.spec.ts:33:1');
   assert.equal(normalizePlaywrightLocation('e2e/accessibility.spec.ts:33:1'), 'e2e/accessibility.spec.ts:33:1');
+  assert.equal(normalizePlaywrightLocation('account\\guest-revocation.spec.ts:18:4'), 'e2e/account/guest-revocation.spec.ts:18:4');
+  assert.equal(normalizePlaywrightLocation('e2e\\account\\guest-revocation.spec.ts:18:4'), 'e2e/account/guest-revocation.spec.ts:18:4');
 });
 
 await test('critical coverage selection is invariant under functional test folder moves', () => {
