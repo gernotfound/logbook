@@ -39,11 +39,13 @@ altri dati del giorno non sono toccati. Un esito offline resta un journal
 durevole in attesa di ricevuta D1, non un ACK cloud. Nessun accesso
 fitness pubblico è stato autorizzato da questa integrazione.
 
-Il percorso candidato dei passi legge e modifica il giorno selezionato
-nell'archivio Kinde. La bozza e la testimonianza cifrate sopravvivono al
-reload del dispositivo. Salvataggio e rimozione controllano i valori di
-partenza dentro il commit del journal e conservano gli altri dati del
-giorno. Il cardio autonomo resta da portare nel realm candidato.
+Il percorso candidato delle attività mostra il riepilogo settimanale e
+usa la stessa data per passi e cardio autonomo. Le bozze e le
+testimonianze cifrate vengono recuperate dopo il reload. Salvataggio e
+rimozione controllano i valori di partenza dentro il commit del journal
+e conservano gli altri dati del giorno. Una bozza cardio resta
+consultabile dalla data anche se un altro dispositivo elimina la
+sessione originale. In quel caso il salvataggio della bozza è bloccato.
 
 Il candidato allenamento mostra i cicli e la sequenza di schede dallo
 snapshot dell'account. Il cambio del ciclo attivo usa il journal e

@@ -1,4 +1,5 @@
 import { HeartPulse } from 'lucide-react';
+import { useId } from 'react';
 import type { useActivityTracking } from '../../../hooks/useActivityTracking';
 
 type ActivityOverviewProps = Pick<ReturnType<typeof useActivityTracking>, 'currentWeek' | 'trainingActivityContext'>;
@@ -7,12 +8,13 @@ const integerFormatter = new Intl.NumberFormat('it-IT', { maximumFractionDigits:
 const decimalFormatter = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 2 });
 
 export function ActivityOverview({ currentWeek: week, trainingActivityContext }: ActivityOverviewProps) {
+    const title = useId();
     return (
         <>
-            <section className="section-divider activity-summary" aria-labelledby="activity-week-title">
+            <section className="section-divider activity-summary" aria-labelledby={title + '-week'}>
                 <div className="activity-heading-row">
                     <div>
-                        <h2 id="activity-week-title">Attività — questa settimana</h2>
+                        <h2 id={title + '-week'}>Attività — questa settimana</h2>
                         <p>Dati registrati, senza stime di consumo o prescrizioni.</p>
                     </div>
                     <HeartPulse size={22} aria-hidden="true" />
@@ -34,10 +36,10 @@ export function ActivityOverview({ currentWeek: week, trainingActivityContext }:
                 )}
             </section>
 
-            <section className="section-divider" aria-labelledby="activity-context-title">
+            <section className="section-divider" aria-labelledby={title + '-context'}>
                 <div className="activity-heading-row">
                     <div>
-                        <h2 id="activity-context-title">Contesto attività + allenamento</h2>
+                        <h2 id={title + '-context'}>Contesto attività + allenamento</h2>
                         <p>Co-visualizzazione descrittiva delle ultime 8 settimane. Passi, cardio e allenamento non vengono convertiti in un unico punteggio di fatica.</p>
                     </div>
                 </div>

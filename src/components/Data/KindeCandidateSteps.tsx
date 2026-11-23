@@ -1,30 +1,19 @@
 import { useId, useRef, useState, type FormEvent } from 'react';
 import type { useKindeCandidateFitnessLifecycle } from '../../contexts/auth/useKindeCandidateFitnessLifecycle';
-import { useLocalToday } from '../../hooks/useLocalToday';
-import { captureActivitySteps } from '../../lib/activity';
+import type { ActivitySteps } from '../../lib/activity';
 import type { KindeStepsDraft } from '../../lib/auth/kindeCandidateStepsDraft';
 import { useDialogStore } from '../../store/useDialogStore';
-import './data.css';
+import type { ActivityEditorAccess } from './KindeCandidateActivity';
 
 type Realm = ReturnType<typeof useKindeCandidateFitnessLifecycle>;
 type Editor = { draft: KindeStepsDraft; isCurrent: () => boolean };
 const formatSteps = new Intl.NumberFormat('it-IT');
 
-export function KindeCandidateSteps({ realm }: { realm: Realm }) {
-    const today = useLocalToday();
-    const [selected, setSelected] = useState<string | null>(null);
-    if (realm.state.phase !== 'ready') return null;
-    const date = selected ?? today;
-    return <StepsEditor key={date} realm={realm} date={date} today={today}
-        selectDate={setSelected} saved={captureActivitySteps(realm.state.snapshot.data.nutrition?.[date])} />;
-}
-
-function StepsEditor({ realm, date, today, selectDate, saved }: {
+export function KindeCandidateSteps({ realm, date, access, saved }: {
     realm: Realm;
     date: string;
-    today: string;
-    selectDate: (date: string) => void;
-    saved: ReturnType<typeof captureActivitySteps>;
+    access: ActivityEditorAccess;
+    saved: ActivitySteps;
 }) {
     const id = useId();
     const [editor, setEditor] = useState<Editor | null>(null);
@@ -43,15 +32,19 @@ function StepsEditor({ realm, date, today, selectDate, saved }: {
     };
     const open = () => run(async () => {
         const witness = realm.captureEditWitness();
-        if (!witness?.isCurrent() || !date || date > today) return;
+        if (!witness?.isCurrent() || !access.claim()) return;
+        let opened = false;
         try {
             const draft = await realm.openStepsDraft(date);
             if (!witness.isCurrent()) { draft.close(); return; }
             setSteps(draft.initial.steps);
             setBlocked(false);
             setEditor({ draft, isCurrent: witness.isCurrent });
+            opened = true;
         } catch {
             if (witness.isCurrent()) await showAlert('Impossibile aprire i passi. Verifica la copia di recupero.');
+        } finally {
+            if (!opened) access.release();
         }
     });
     const edit = (value: string) => {
@@ -63,6 +56,7 @@ function StepsEditor({ realm, date, today, selectDate, saved }: {
         if (busy.current || !editor) return;
         editor.draft.close();
         setEditor(null);
+        access.release();
     };
     const discard = () => run(async () => {
         if (!editor?.isCurrent()) return;
@@ -70,6 +64,7 @@ function StepsEditor({ realm, date, today, selectDate, saved }: {
             if (!(await showConfirm('Eliminare la bozza dei passi da questo dispositivo?')) || !editor.isCurrent()) return;
             editor.draft.discard();
             setEditor(null);
+            access.release();
         } catch {
             if (editor.isCurrent()) await showAlert('Impossibile eliminare la bozza. Copia conservata.');
         }
@@ -89,6 +84,7 @@ function StepsEditor({ realm, date, today, selectDate, saved }: {
                     await showAlert('Passi salvati. Verifica la copia di recupero sul dispositivo.');
                 }
                 setEditor(null);
+                access.release();
             } catch {
                 setBlocked(true);
                 if (editor.isCurrent()) await showAlert('Impossibile salvare i passi. La bozza cifrata resta sul dispositivo.');
@@ -97,21 +93,20 @@ function StepsEditor({ realm, date, today, selectDate, saved }: {
     };
     const remove = () => run(async () => {
         const witness = realm.captureEditWitness();
-        if (!witness?.isCurrent() || saved.steps === undefined) return;
+        if (!witness?.isCurrent() || saved.steps === undefined || !access.claim()) return;
         try {
             if (!(await showConfirm('Rimuovere i passi registrati per questo giorno?')) || !witness.isCurrent()) return;
             await realm.submit({ type: 'activity-steps.clear', date, expected: saved });
         } catch {
             if (witness.isCurrent()) await showAlert('Impossibile rimuovere i passi. Verifica il dato corrente.');
+        } finally {
+            access.release();
         }
     });
 
     return (
         <section aria-label="Passi account">
             <h2>Passi</h2>
-            <label htmlFor={id + '-date'}>Giorno dei passi</label>
-            <input id={id + '-date'} type="date" value={date} max={today}
-                disabled={working || editor !== null} onChange={event => selectDate(event.target.value)} />
             {saved.steps === undefined ? <p>Nessun dato per questo giorno.</p> : <p>{formatSteps.format(saved.steps)} passi</p>}
             {editor ? (
                 <form onSubmit={save} aria-label="Bozza passi account" aria-busy={working}>
@@ -134,9 +129,9 @@ function StepsEditor({ realm, date, today, selectDate, saved }: {
                 </form>
             ) : (
                 <div className="data-action-row">
-                    <button type="button" className="btn btn-primary" disabled={working || !date}
+                    <button type="button" className="btn btn-primary" disabled={working || access.disabled}
                         onClick={() => { void open(); }}>Modifica o riprendi passi</button>
-                    {saved.steps !== undefined && <button type="button" className="btn" disabled={working}
+                    {saved.steps !== undefined && <button type="button" className="btn" disabled={working || access.disabled}
                         onClick={() => { void remove(); }}>Rimuovi passi registrati</button>}
                 </div>
             )}

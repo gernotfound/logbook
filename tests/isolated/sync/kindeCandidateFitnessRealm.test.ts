@@ -32,7 +32,7 @@ const owner = 'user:' + uid;
 const expected = { uid, fenceEpoch: 1, healthConsentRevision: 1 };
 const witnessNamePrefix = 'draft:dated-intent:';
 const witnessKeyPrefix = protectedDeviceKey(witnessNamePrefix, owner);
-const stepWitnessKeys = () => Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index))
+const datedWitnessKeys = () => Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index))
     .filter((key): key is string => key?.startsWith(witnessKeyPrefix) === true);
 let online: boolean;
 const catalog = {
@@ -97,6 +97,65 @@ afterEach(() => {
 });
 
 describe('isolated Kinde fitness realm with trusted owner, no Firebase/global grant', () => {
+    it('recovers a Kinde cardio draft and saves it without replacing steps or sleep', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        const date = '2026-10-12';
+        try {
+            await fixture.consent(uid);
+            const first = await openKindeCandidateFitnessRealm({ ...browser(fixture), expected });
+            try {
+                await first.submit([
+                    { type: 'activity-steps.set', date, steps: 4200 },
+                    { type: 'nutrition-day.patch', date, patch: { sleepHours: '07:00' } },
+                ]);
+                const draft = await first.openCardioDraft(date, null);
+                draft.write({ ...draft.initial.values, modality: 'bike', durationMinutes: '35',
+                    intensity: 'moderate', distanceKm: '8,2', notes: 'Sessione fixture' });
+                expect(datedWitnessKeys()).toHaveLength(1);
+            } finally { first.close(); }
+            const reopened = await openKindeCandidateFitnessRealm({ ...browser(fixture), expected });
+            try {
+                const draft = await reopened.openCardioDraft(date, null);
+                expect(draft.initial.values).toMatchObject({ modality: 'bike', durationMinutes: '35', distanceKm: '8,2' });
+                await expect(reopened.saveCardioDraft(draft)).resolves.toMatchObject({
+                    outcome: { kind: 'cloud-acknowledged' }, draftCleared: true,
+                });
+                expect(reopened.snapshot()?.data.nutrition?.[date]).toMatchObject({
+                    steps: 4200, sleepHours: '07:00',
+                    cardioSessions: [{ modality: 'bike', durationMinutes: 35, intensity: 'moderate', distanceKm: 8.2 }],
+                });
+                expect(fixture.count('sync_receipts', uid)).toBe(2);
+                expect(datedWitnessKeys()).toEqual([]);
+            } finally { reopened.close(); }
+        } finally { fixture.close(); }
+    });
+
+    it('preserves cardio when a confirmed edit and removal both observe a stale session', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        const date = '2026-10-12';
+        const original = { id: 'bike-example', modality: 'bike', durationMinutes: 35, intensity: 'moderate' } as const;
+        try {
+            await fixture.consent(uid);
+            const first = await openKindeCandidateFitnessRealm({ ...browser(fixture), expected });
+            const second = await openKindeCandidateFitnessRealm({ ...browser(fixture), expected });
+            try {
+                await first.submit({ type: 'cardio-session.upsert', date, session: original });
+                await second.refresh();
+                const draft = await first.openCardioDraft(date, original.id);
+                draft.write({ ...draft.initial.values, durationMinutes: '40' });
+                const [key] = datedWitnessKeys();
+                const before = localStorage.getItem(key);
+                await second.submit({ type: 'cardio-session.upsert', date, session: { ...original, durationMinutes: 28 } });
+                await expect(first.saveCardioDraft(draft)).rejects.toThrow('Sessione cardio cambiata');
+                expect(localStorage.getItem(key)).toBe(before);
+                await expect(first.submit({ type: 'cardio-session.delete', date, sessionId: original.id, expected: original }))
+                    .rejects.toThrow('è cambiata');
+                expect(fixture.count('sync_receipts', uid)).toBe(2);
+                expect((await second.refresh()).data.nutrition?.[date]?.cardioSessions).toMatchObject([{ durationMinutes: 28 }]);
+            } finally { first.close(); second.close(); }
+        } finally { fixture.close(); }
+    });
+
     it('recovers the separately witnessed steps draft and acknowledges only the selected day', async () => {
         const fixture = await createCloudKeyHttpFixture([uid]);
         const date = '2026-10-12';
@@ -109,7 +168,7 @@ describe('isolated Kinde fitness realm with trusted owner, no Firebase/global gr
                 await first.submit({ type: 'nutrition-day.patch', date, patch: { sleepHours: '07:00' } });
                 const draft = await first.openStepsDraft(date);
                 draft.write('8124');
-                const [key] = stepWitnessKeys();
+                const [key] = datedWitnessKeys();
                 const initialDraft = localStorage.getItem(slot);
                 const witness = localStorage.getItem(key);
                 expect(initialDraft).toMatch(/^tlb-sealed:v1:/);
@@ -128,7 +187,7 @@ describe('isolated Kinde fitness realm with trusted owner, no Firebase/global gr
                 });
                 expect(reopened.snapshot()?.data.nutrition?.[date]).toMatchObject({ steps: 8124, sleepHours: '07:00' });
                 expect(fixture.count('sync_receipts', uid)).toBe(2);
-                expect(stepWitnessKeys()).toEqual([]);
+                expect(datedWitnessKeys()).toEqual([]);
                 expect(localStorage.getItem(slot)).toMatch(/^tlb-sealed:v1:/);
                 expect(isVaultUnlocked(owner)).toBe(false);
             } finally { reopened.close(); }
@@ -176,7 +235,7 @@ describe('isolated Kinde fitness realm with trusted owner, no Firebase/global gr
                 });
                 try { expect(() => draft.write('8124')).toThrow(); }
                 finally { write.mockRestore(); }
-                const [key] = stepWitnessKeys();
+                const [key] = datedWitnessKeys();
                 const witness = localStorage.getItem(key);
                 expect(witness).toMatch(/^tlb-sealed:v1:/);
                 expect(localStorage.getItem(slot)).toBeNull();
