@@ -281,8 +281,15 @@ describe('server-mediated cloud export during consent withdrawal', () => {
     }
   });
 
-  it('never reads another account even when it has similarly named documents', async () => {
-    const response = await readWithdrawnHealthExportPage('owner-1','history_months',null);
-    expect(response.documents.every(doc=>doc.data.value !== 'Private')).toBe(true);
+  it('returns only the owning account’s documents when another account has the same month ID', async () => {
+    const response = await readWithdrawnHealthExportPage('owner-1', 'history_months', null);
+
+    // An empty result would make a negative-only .every() assertion pass.
+    // Require the actual owner records and exclude the foreign February shard.
+    expect(response.documents).toEqual([
+      { path: 'history_months/2026-01', data: { value: 'January' } },
+      { path: 'history_months/2026-02', data: { value: 'February' } },
+    ]);
+    expect(response.nextCursor).toBe('2026-02');
   });
 });
