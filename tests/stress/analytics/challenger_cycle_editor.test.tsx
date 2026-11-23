@@ -1,18 +1,20 @@
 import React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { TrainingCycleSchema } from '../../../src/lib/schema';
+import { useDialogStore } from '../../../src/store/useDialogStore';
 import { CycleEditor } from '../../../src/components/Training/planning/CycleEditor';
 import type { TrainingCycle } from '../../../src/types';
 import { sampleRoutines } from './cycleChallengerFixtures';
 
 describe('Empirical Challenger: Cycle editor calendar interactions', () => {
+    afterEach(() => vi.restoreAllMocks());
     describe('Inverted date UI', () => {
         it('CycleEditor clamps durationWeeks to 1 when user sets an end date before start date', () => {
             const onSave = vi.fn();
             const onCancel = vi.fn();
 
-            render(
+            const { container } = render(
                 <CycleEditor
                     initialCycle={{
                         id: 'c_edit_inv',
@@ -34,8 +36,16 @@ describe('Empirical Challenger: Cycle editor calendar interactions', () => {
             fireEvent.change(endDateInput, { target: { value: '10/09/2026' } });
             fireEvent.blur(endDateInput);
 
-            // Duration is clamped safely to 1
+            // Duration preview is clamped, but an inverted interval must not
+            // be submitted as a valid cycle merely because its duration is 1.
             expect(durationInput.value).toBe('1');
+            expect((screen.getByLabelText('Data di inizio') as HTMLInputElement).value).toBe('15/09/2026');
+            expect(endDateInput.value).toBe('10/09/2026');
+
+            const alert = vi.spyOn(useDialogStore.getState(), 'showAlert').mockResolvedValue(undefined);
+            fireEvent.submit(container.querySelector('form')!);
+            expect(onSave).not.toHaveBeenCalled();
+            expect(alert).toHaveBeenCalledWith(expect.stringContaining('fine non precedente'));
         });
     });
 
