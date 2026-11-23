@@ -33,7 +33,8 @@ describe('Kinde measurement BF draft choice', () => {
         const checkbox = screen.getByRole('checkbox', { name: /Calcola la massa grassa/i }) as HTMLInputElement;
         expect(checkbox.checked).toBe(false);
         fireEvent.click(checkbox);
-        expect(onChoice).toHaveBeenCalledExactlyOnceWith(true);
+        expect(onChoice).toHaveBeenCalledTimes(1);
+        expect(onChoice).toHaveBeenCalledWith(true);
         expect(checkbox.checked).toBe(false);
         rerender(<DataMeasurements {...props(true, onChoice, onSave)} />);
         expect(checkbox.checked).toBe(true);
