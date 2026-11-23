@@ -177,7 +177,8 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert, draft 
                 createdAt: initialCycle?.createdAt || Date.now(),
                 isActive: initialCycle?.isActive ?? false,
             });
-        } catch {
+        } catch (error) {
+            if (!draft) console.error('Errore salvataggio ciclo:', error);
             await showAlert(draft
                 ? 'Impossibile salvare il ciclo. La bozza cifrata resta sul dispositivo.'
                 : 'Salvataggio del ciclo non riuscito. Le modifiche sono ancora nel form: riprova.');
