@@ -376,11 +376,11 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                 return;
             }
             const session = captureSession();
-            const generation = get().syncGeneration;
+            const observedGeneration = get().syncGeneration;
             const saved = await readLocal(session.owner);
             // A new edit may have entered the queue while IndexedDB was read.
             // Its UI status belongs to that newer generation, not this idle replay.
-            if (!isCurrentSession(session) || !saved || get().syncGeneration !== generation
+            if (!isCurrentSession(session) || !saved || get().syncGeneration !== observedGeneration
                 || pending.length || running) return;
             if (saved.cloudIntegrityFence) {
                 // An empty journal is not cloud integrity evidence. Only the
