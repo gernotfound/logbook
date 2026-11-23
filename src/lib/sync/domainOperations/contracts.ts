@@ -63,6 +63,7 @@ export type DomainOperation =
     | { type: 'exercise.upsert'; exercise: Exercise }
     | { type: 'exercise.delete'; id: string }
     | { type: 'food.upsert'; food: Food & { id: string | number } }
+    | { type: 'food.edit'; food: Food & { id: string | number } }
     | { type: 'food.delete'; id: string | number }
     | { type: 'catalog.exercise.patch'; id: string; patch: ExerciseOverride }
     | { type: 'catalog.food.patch'; id: string; patch: FoodOverride }

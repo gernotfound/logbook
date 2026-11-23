@@ -1,6 +1,7 @@
 import { useId, useMemo, useState } from 'react';
 import type { useKindeCandidateFitnessLifecycle } from '../../contexts/auth/useKindeCandidateFitnessLifecycle';
 import { useLocalToday } from '../../hooks/useLocalToday';
+import { useNutritionFoodArchive } from '../../hooks/useNutritionFoodArchive';
 import { useNutritionMealEditor } from '../../hooks/useNutritionMealEditor';
 import { useNutritionSupplementEditor } from '../../hooks/useNutritionSupplementEditor';
 import { selectNutritionHistory } from '../../lib/nutrition/nutritionHistory';
@@ -8,6 +9,7 @@ import { createSupplementActions, EMPTY_INTAKES, EMPTY_SUPPLEMENTS } from '../..
 import type { DomainOperation } from '../../lib/sync/domainOperations';
 import { useDialogStore } from '../../store/useDialogStore';
 import SubNav from '../UI/SubNav';
+import { NutritionFoodArchiveForm } from './NutritionFoodArchiveForm';
 import NutritionHistory, { NUTRITION_HISTORY_PAGE_SIZE } from './NutritionHistory';
 import { NutritionMealsForm } from './NutritionMealsForm';
 import { NutritionSupplementsForm } from './NutritionSupplementsForm';
@@ -19,6 +21,7 @@ const DIARY_TABS = [
     { id: 'meals', label: 'Pasti' },
     { id: 'history', label: 'Storico' },
     { id: 'supplements', label: 'Integratori' },
+    { id: 'foods', label: 'Alimenti' },
 ] as const;
 type DiaryTab = typeof DIARY_TABS[number]['id'];
 
@@ -54,6 +57,9 @@ export function KindeCandidateNutritionMeals({ realm }: { realm: Realm }) {
         actions: supplementActions,
         capture: realm.captureEditWitness,
     });
+    const foodArchive = useNutritionFoodArchive({
+        foods: data?.customFoods, capture: realm.captureEditWitness, dispatch,
+    });
 
     if (!snapshot) return null;
     return (
@@ -74,6 +80,7 @@ export function KindeCandidateNutritionMeals({ realm }: { realm: Realm }) {
                         }} />}
                 {tab === 'supplements' && <NutritionSupplementsForm editor={supplementEditor}
                     date={date} setSelectedDate={selectDate} />}
+                {tab === 'foods' && <NutritionFoodArchiveForm editor={foodArchive} />}
             </div>
         </section>
     );

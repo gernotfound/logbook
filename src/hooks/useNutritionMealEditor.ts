@@ -146,7 +146,10 @@ export function useNutritionMealEditor(targetDateStr: string, source: {
             const currentEditingId = editingFoodId;
             const id = currentEditingId ?? Logic.generateId('food');
             try {
-                await persistNutrition({ type: 'food.upsert', food: { ...validation.cleanData, id } });
+                await persistNutrition({
+                    type: currentEditingId === null ? 'food.upsert' : 'food.edit',
+                    food: { ...validation.cleanData, id },
+                });
                 if (!session.isCurrent()) return false;
                 setShowCustomModal(false);
                 setEditingFoodId(null);
