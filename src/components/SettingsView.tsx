@@ -241,6 +241,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                     isIOSInstallable={isIOSInstallable}
                     onInstall={promptInstall}
                     isOffline={isOffline}
+                    isGuest={isGuest}
                     checkingForUpdate={checkingForUpdate}
                     onCheckUpdate={handleCheckUpdate}
                 />
