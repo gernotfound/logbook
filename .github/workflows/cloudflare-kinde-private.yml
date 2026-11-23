@@ -50,6 +50,7 @@ jobs:
         id: relevance
         env:
           TRIGGER_EVENT: ${{ github.event_name }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
         run: |
           if [ "${TRIGGER_EVENT}" = "workflow_dispatch" ]; then
             echo "required=true" >> "$GITHUB_OUTPUT"
