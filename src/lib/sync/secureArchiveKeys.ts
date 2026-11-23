@@ -1,11 +1,11 @@
 import { get, update } from 'idb-keyval';
 
-// Keys are anchored to an owner-scoped, non-extractable Web Crypto key stored
-// in this device's IndexedDB. Firebase Auth gates the account owner before
-// application bootstrap; Firebase tokens, API keys and UIDs are NOT KDF secrets.
-// This protects ciphertext without the local device-key store; copying the
-// complete browser profile or compromising same-origin JavaScript can still
-// provide decryption access. It is NOT end-to-end encryption.
+// The device DEK is wrapped by an owner-scoped, non-extractable Web Crypto
+// key stored in this browser's IndexedDB. The calling lifecycle must verify
+// the current owner and session before provisioning or unlocking; identity
+// credentials and UIDs are authorization inputs, never key derivation secrets.
+// Theft of the whole browser profile or same-origin compromise can still
+// expose the data. This is not end-to-end encryption.
 const VERSION = 2 as const;
 const KEY_BYTES = 32;
 const NONCE_BYTES = 12;
