@@ -191,8 +191,8 @@ jobs:
               if node scripts/verify-cloudflare-served-asset.mjs \
                   "${path}" "${local_file}" /tmp/cloudflare-served-asset; then
                 case "${path}:${initial_http}" in
-                  /about:200\ text/html*|/privacy:200\ text/html*|/verifica-accesso:200\ text/html*|/verifica-accesso.js:200\ text/javascript*|/verifica-accesso.js:200\ application/javascript*|/legal-pages.css:200\ text/css*) ;;
-                  /about:*|/privacy:*|/verifica-accesso:*|/verifica-accesso.js:*|/legal-pages.css:*) echo "Unexpected public page status/MIME: ${path} ${initial_http}"; exit 1 ;;
+                  /:200\ text/html*|/about:200\ text/html*|/privacy:200\ text/html*|/verifica-accesso:200\ text/html*|/verifica-accesso.js:200\ text/javascript*|/verifica-accesso.js:200\ application/javascript*|/legal-pages.css:200\ text/css*|/sw.js:200\ text/javascript*|/sw.js:200\ application/javascript*|/manifest.webmanifest:200\ application/manifest+json*|/manifest.webmanifest:200\ application/json*|/robots.txt:200\ text/plain*|/sitemap.xml:200\ application/xml*|/sitemap.xml:200\ text/xml*) ;;
+                  *) echo "Unexpected public page status/MIME: ${path} ${initial_http}"; exit 1 ;;
                 esac
                 verified=true
                 break
@@ -233,8 +233,9 @@ jobs:
               "${CLOUDFLARE_APP_ORIGIN}/?tab=training" -o /tmp/cloudflare-tab-shortcut)"
             if node scripts/verify-cloudflare-served-asset.mjs \
                 / dist/index.html /tmp/cloudflare-tab-shortcut; then
-              shortcut_verified=true
-              break
+              case "${shortcut_http}" in
+                200\ text/html*) shortcut_verified=true; break ;;
+              esac
             fi
             if [ "${attempt}" != 4 ]; then sleep 3; fi
           done
