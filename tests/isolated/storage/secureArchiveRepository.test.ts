@@ -65,6 +65,19 @@ describe('secure archive repository capability and transaction boundaries', () =
         await unlockVaultForOwner(owner);
     };
 
+    it('uses the canonical owner vault for a bare UID without creating a shadow archive', async () => {
+        const bareUid = owner.slice('user:'.length);
+        const originalCiphertext = await get(archive);
+        const current = await getArchiveRecord<LocalEnvelope>(owner);
+
+        expect(await getArchiveRecord<LocalEnvelope>(bareUid)).toEqual(current);
+        await updateArchiveRecord<LocalEnvelope>(bareUid, changeHeight);
+
+        expect((await readLocal(owner))?.data.profile?.height).toBe('171');
+        expect(await get(archive)).not.toBe(originalCiphertext);
+        expect(await get('logbook:v2:' + bareUid)).toBeUndefined();
+    });
+
     it.each(['read', 'write'] as const)('rejects a %s begun without vault control even if another tab restores it', async mode => {
         const ciphertext = await get(archive);
         localStorage.removeItem(controlKey);

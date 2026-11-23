@@ -2,6 +2,7 @@ import { get, update } from 'idb-keyval';
 import { LocalCiphertextError, openLocalJson, sealLocalJson, SEALED_LOCAL_PREFIX } from './secureArchiveCipher';
 import { readVaultControl, requireUnlockedLocalKey, LocalVaultLockedError } from './secureArchiveSession';
 import { assertNoLocalPurge } from './localPurgeFence';
+import { normalizeStorageOwner } from './owner';
 
 /**
  * The ONE LocalEnvelope IndexedDB gateway, used by local repository modules.
@@ -9,6 +10,7 @@ import { assertNoLocalPurge } from './localPurgeFence';
  * The bootstrap provisions or resumes that vault before accessing this gateway.
  */
 export async function getArchiveRecord<T>(owner: string): Promise<T | undefined> {
+    owner = normalizeStorageOwner(owner);
     const storageKey = 'logbook:v2:' + owner;
     assertNoLocalPurge(owner);
     const control = readVaultControl(owner);
@@ -44,6 +46,7 @@ function transformSynchronously<T>(
 export async function updateArchiveRecord<T>(
     owner: string, transform: (current: T | undefined) => T | undefined,
 ): Promise<void> {
+    owner = normalizeStorageOwner(owner);
     const storageKey = 'logbook:v2:' + owner;
     assertNoLocalPurge(owner);
     const control = readVaultControl(owner);
