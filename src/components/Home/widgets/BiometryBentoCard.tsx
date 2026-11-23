@@ -1,11 +1,8 @@
 import { Scale } from 'lucide-react';
+import type { HomeViewState } from '../../../hooks/useHomeView';
 
-interface BiometryBentoCardProps {
-    weightStats: any;
-    lastRecordedWeight: number | null;
-    bf: string | number;
-    bfSource?: string | null;
-}
+type BiometryBentoCardProps = Pick<Extract<HomeViewState, { loading: false }>,
+    'weightStats' | 'lastRecordedWeight' | 'bf' | 'bfSource'>;
 
 const BiometryBentoCard = ({ weightStats, lastRecordedWeight, bf, bfSource }: BiometryBentoCardProps) => {
     const delta = weightStats?.weightDelta;
