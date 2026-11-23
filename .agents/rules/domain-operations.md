@@ -126,6 +126,11 @@ momento del commit, anche con un ID numerico valido come zero. Crea e
 duplica tramite `food.upsert` con un nuovo ID. La rimozione della voce
 non cambia le copie nutrizionali già registrate nei pasti.
 
+`routine.edit` applica nome ed esercizi alla scheda presente al momento del
+commit, conservando gli altri campi e la posizione nell'elenco. Se una
+cancellazione è già recepita nell'archivio locale, un intento di modifica
+preparato prima della cancellazione fallisce senza ricreare la scheda.
+
 ## Patch
 
 Per operazioni `*.patch`:

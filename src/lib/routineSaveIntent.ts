@@ -47,9 +47,8 @@ export function buildRoutineSaveOperations({
     const savedName = name.trim();
 
     if (editingRoutineId) {
-        const existing = routines.find(routine => routine.id === editingRoutineId);
-        if (!existing) throw new Error('Routine non trovata');
-        return { type: 'routine.upsert', routine: { ...existing, name: savedName, exercises: savedExercises } };
+        if (!routines.some(routine => routine.id === editingRoutineId)) throw new Error('Routine non trovata');
+        return { type: 'routine.edit', id: editingRoutineId, name: savedName, exercises: savedExercises };
     }
 
     const id = normalizeBusinessId(createId);

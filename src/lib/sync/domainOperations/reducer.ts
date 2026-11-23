@@ -237,6 +237,15 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
             data.routines = upsertById(data.routines, routine, item => requireId(item.id, 'Routine'), 'Routine');
             break;
         }
+        case 'routine.edit': {
+            // Resolve the routine inside the commit, against the current archive.
+            const { index, value } = findRoutine(data, operation.id);
+            const { name, exercises } = operation;
+            assertUnique(exercises, item => requireId(item.exId, 'Esercizio routine'), 'Esercizi routine');
+            data.routines = [...(data.routines ?? [])];
+            data.routines[index] = { ...value, name, exercises };
+            break;
+        }
         case 'routine.delete':
             data.routines = deleteById(data.routines, requireId(operation.id, 'Routine'), item => requireId(item.id, 'Routine'), 'Routine');
             break;
