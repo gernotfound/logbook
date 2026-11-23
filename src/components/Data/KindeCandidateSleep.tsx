@@ -27,9 +27,9 @@ function SleepDraftEditor({ editor, realm, onClose }: {
     const showConfirm = useDialogStore(state => state.showConfirm);
     const showAlert = useDialogStore(state => state.showAlert);
 
-    const update = (patch: Partial<SleepDraftValues>) => {
+    const update = (field: 'sleepHours' | 'sleepDeep' | 'sleepLight' | 'sleepRem' | 'sleepAwake', value: string) => {
         if (busy.current || blocked.current || submitted || !isCurrent()) return;
-        const next = { ...latest.current, ...patch };
+        const next: SleepDraftValues = { ...latest.current, [field]: value };
         try {
             draft.write(next);
             latest.current = next;
@@ -100,11 +100,11 @@ function SleepDraftEditor({ editor, realm, onClose }: {
                         setEditingDate: () => {},
                         cancelEdit: () => { close(); return true; },
                         saveSleep: save,
-                        sleepHours: values.sleepHours, setSleepHours: value => update({ sleepHours: value }),
-                        sleepDeep: values.sleepDeep, setSleepDeep: value => update({ sleepDeep: value }),
-                        sleepLight: values.sleepLight, setSleepLight: value => update({ sleepLight: value }),
-                        sleepRem: values.sleepRem, setSleepRem: value => update({ sleepRem: value }),
-                        sleepAwake: values.sleepAwake, setSleepAwake: value => update({ sleepAwake: value }),
+                        sleepHours: values.sleepHours, setSleepHours: value => update('sleepHours', value),
+                        sleepDeep: values.sleepDeep, setSleepDeep: value => update('sleepDeep', value),
+                        sleepLight: values.sleepLight, setSleepLight: value => update('sleepLight', value),
+                        sleepRem: values.sleepRem, setSleepRem: value => update('sleepRem', value),
+                        sleepAwake: values.sleepAwake, setSleepAwake: value => update('sleepAwake', value),
                     }}
                 />
             )}
