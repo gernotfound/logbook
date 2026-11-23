@@ -10,6 +10,11 @@ type HealthErasureMockFixture = {
 
 // This fake preserves write atomicity but does not simulate Firestore's
 // optimistic read-version retries. The lease tests exercise explicit fences.
+// Firestore document-name ordering uses UTF-8 byte order, not locale collation.
+// The difference matters when identical purge times are paginated by document ID.
+const compareDocumentNames = (left: string, right: string): number =>
+  Buffer.compare(Buffer.from(left, 'utf8'), Buffer.from(right, 'utf8'));
+
 export function makeHealthErasureAdminMock(fixture: HealthErasureMockFixture) {
   const getSnapshot = (path: string) => {
     const data = fixture.records.get(path);
@@ -83,9 +88,9 @@ export function makeHealthErasureAdminMock(fixture: HealthErasureMockFixture) {
             return false;
           });
         }).sort((left, right) => {
-          if (orderedField === '__name__') return left.localeCompare(right);
+          if (orderedField === '__name__') return compareDocumentNames(left, right);
           return orderValue(fixture.records.get(left)) - orderValue(fixture.records.get(right))
-            || left.localeCompare(right);
+            || compareDocumentNames(left, right);
         });
         const eligible = after ? docs.filter(key => {
           if (orderedField === '__name__') return key > after.path;
