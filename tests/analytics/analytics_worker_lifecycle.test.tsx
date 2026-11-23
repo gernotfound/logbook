@@ -327,3 +327,49 @@ it('never dispatches an outdated correlation after awaiting the shared volume', 
     volumeHook.unmount();
     correlationHook.unmount();
 });
+
+it('does not dispatch a stale shared correlation after disable and reactivation without a new request', async () => {
+    const volumeHook = renderHook(() => useAnalyticsWorker(true, true));
+    const volumeWorker = worker.instance;
+    const correlationHook = renderHook(({ enabled }) => useAnalyticsWorker(enabled, true), {
+        initialProps: { enabled: true },
+    });
+    const oldCorrelationWorker = worker.instance;
+    const history = [{ id: 'w-generation', date: '2026-11-09', exercises: [] }];
+    const library: unknown[] = [];
+
+    try {
+        const volume = volumeHook.result.current.calculateVolumeStats(history, library, 80, 8);
+        const stale = correlationHook.result.current.calculateCorrelationStats(history, {}, library, 80, 8)
+            .then(() => 'unexpected success', (error: Error) => error.message);
+        expect(worker.post).toHaveBeenCalledTimes(1);
+        const volumeId = worker.post.mock.lastCall![0].id;
+
+        correlationHook.rerender({ enabled: false });
+        correlationHook.rerender({ enabled: true });
+        const nextCorrelationWorker = worker.instance;
+        expect(nextCorrelationWorker).not.toBe(oldCorrelationWorker);
+
+        await act(async () => {
+            volumeWorker.onmessage({ data: { id: volumeId, type: 'SUCCESS', result: worker.volumeResult } });
+            await volume;
+        });
+        expect(worker.post).toHaveBeenCalledTimes(1);
+        expect(await stale).toContain('superata');
+        expect(worker.fromVolume).not.toHaveBeenCalled();
+        expect(worker.correlation).not.toHaveBeenCalled();
+
+        const fresh = correlationHook.result.current.calculateCorrelationStats(history, {}, library, 80, 8);
+        await act(async () => { await Promise.resolve(); });
+        const request = worker.post.mock.lastCall![0];
+        expect(worker.post).toHaveBeenCalledTimes(2);
+        expect(request.type).toBe('CALCULATE_CORRELATION_STATS');
+        await act(async () => {
+            nextCorrelationWorker.onmessage({ data: { id: request.id, type: 'SUCCESS', result: worker.correlationResult } });
+        });
+        expect(await fresh).toEqual(worker.correlationResult);
+    } finally {
+        volumeHook.unmount();
+        correlationHook.unmount();
+    }
+});

@@ -57,6 +57,8 @@ jobs:
           package-manager-cache: false
       - name: Decide private API deployment relevance
         id: relevance
+        env:
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
         run: echo "required=$(node scripts/cloudflare-private-deploy-plan.mjs .github/workflows/cloudflare-api-isolated.yml)" >> "$GITHUB_OUTPUT"
       - name: Wait for verified release gate of this exact main SHA
         if: steps.relevance.outputs.required == 'true'

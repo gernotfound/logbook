@@ -239,6 +239,30 @@ describe('Storage bootstrap and owner integrity checks', () => {
     expect(rendered.props.children.props.id).toBe('storage-unavailable');
   });
 
+  it('refuses an orphan guest opt-in flag before opening the encrypted archive', async () => {
+    localStorage.removeItem('logbook_authenticated_owner');
+    await prepareUnlockedTestArchive('guest');
+    await initializeLocal('guest', UserDataSchema.parse({ profile: { height: '171' } }));
+    updateStorageMarker(1000, undefined, 'guest');
+    const archive = await idbKeyval.get('logbook:v2:guest');
+    const control = localStorage.getItem(vaultControlKey('guest'));
+    lockVault('guest');
+    localStorage.setItem('logbook_is_guest', 'true');
+    localStorage.removeItem(GUEST_SESSION_KEY);
+
+    const getSpy = vi.spyOn(idbKeyval, 'get');
+    await initApp();
+
+    expect(getSpy.mock.calls.some(([key]) => key === 'logbook:v2:guest')).toBe(false);
+    expect(isVaultUnlocked('guest')).toBe(false);
+    expect(useAppStore.getState().userData).toBeNull();
+    expect(useAppStore.getState().localWorkout).toBeNull();
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+    expect(getStorageMarker(undefined, 'guest')?.timestamp).toBe(1000);
+    expect(await idbKeyval.get('logbook:v2:guest')).toEqual(archive);
+    expect(localStorage.getItem(vaultControlKey('guest'))).toBe(control);
+  });
+
   it('Flow 4: First launch without a marker or cache remains empty', async () => {
     vi.spyOn(idbKeyval, 'get').mockResolvedValue(null);
 

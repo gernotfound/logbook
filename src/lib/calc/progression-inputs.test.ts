@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { WorkoutSession } from '../../types';
-import { computeProgressionEngine, normalizeExerciseExposure } from './progression';
+import { computeProgressionEngine, formatProgressionReference, normalizeExerciseExposure } from './progression';
 import { bench, pullup, plank, library, set, timedSet, workout } from './progressionTestFixtures';
+import { createHistoricalBodyweightLookup, historicalBodyweight } from './progressionExposure';
 
 describe('contextual progression engine: incomplete and invalid inputs', () => {
     it('does not use unperformed planned sets as reference exposures', () => {
@@ -347,4 +348,107 @@ describe('contextual progression engine: incomplete and invalid inputs', () => {
         expect(exposure.workSets).toBe(0);
         expect(exposure.referenceSet).toBeUndefined();
     });
+    it('rejects calendar-impossible weigh-in days and noncanonical targets in both weight lookups', () => {
+        const weighIn = (date: string, weight: number) => ({
+            date, kcal: 0, carbs: 0, pro: 0, fat: 0, weight,
+        });
+        const nutrition = {
+            '2024-02-29': weighIn('2024-02-29', 70),
+            '2026-02-27': weighIn('2026-02-27', 78),
+            '2026-02-29': weighIn('2026-02-29', 900),
+            '2026-02-31': weighIn('2026-02-31', 901),
+            '2026-03-03': weighIn('2026-03-03', 100),
+        };
+        const indexed = createHistoricalBodyweightLookup(nutrition);
+
+        for (const [date, weight] of [
+            ['2024-02-28', undefined],
+            ['2024-02-29', 70],
+            ['2026-02-27', 78],
+            ['2026-03-01', 78],
+            ['2026-03-04', 100],
+            ['2026-02-31', undefined],
+            ['2026-2-27', undefined],
+        ] as const) {
+            expect(historicalBodyweight(date, { nutrition })).toBe(weight);
+            expect(indexed(date)).toBe(weight);
+        }
+    });
+
+    it('uses the same valid dated bodyweight for standalone normalization and indexed progression', () => {
+        const weighIn = (date: string, weight: number) => ({
+            date, kcal: 0, carbs: 0, pro: 0, fat: 0, weight,
+        });
+        const nutrition = {
+            '2026-02-27': weighIn('2026-02-27', 78),
+            '2026-02-31': weighIn('2026-02-31', 901),
+            '2026-03-03': weighIn('2026-03-03', 100),
+        };
+        const previous = workout({
+            id: 'valid-history', date: '2026-02-27', exId: 'pullup', sets: [set(20, 10, 2)],
+        });
+        const current = workout({
+            id: 'valid-current', date: '2026-03-01', exId: 'pullup', sets: [set(20, 10, 2)],
+        });
+
+        const standalone = normalizeExerciseExposure(current, current.exercises[0], pullup, { nutrition });
+        const fromEngine = computeProgressionEngine(current, [previous], library, { nutrition }).exercises[0];
+
+        expect(standalone.bodyweightKg).toBe(78);
+        expect(standalone.referenceSet?.effectiveKg).toBe(98);
+        expect(fromEngine.current.bodyweightKg).toBe(78);
+        expect(fromEngine.current.tonnageKg).toBe(980);
+        expect(fromEngine.previousComparable?.bodyweightKg).toBe(78);
+    });
+
+
+    it('reads cardio time inputs as decimal minutes while keeping timed sets in seconds', () => {
+        const cardio = { ...plank, id: 'cardio-run', name: 'Corsa', trackingType: 'cardio' as const };
+        const reference = (time: string, exercise: typeof cardio | typeof plank) => {
+            const session = workout({
+                id: 'cardio-units', date: '2026-09-08', exId: exercise.id, sets: [timedSet(time)],
+            });
+            return normalizeExerciseExposure(session, session.exercises[0], exercise);
+        };
+
+        const thirtyMinutes = reference('30', cardio);
+        expect(thirtyMinutes.workSets).toBe(1);
+        expect(thirtyMinutes.referenceSet?.timeSeconds).toBe(1800);
+        expect(thirtyMinutes.totalReps).toBe(0);
+        expect(thirtyMinutes.tonnageComplete).toBe(false);
+        expect(formatProgressionReference(thirtyMinutes)).toBe('30 min');
+
+        const decimalMinutes = reference('30,5', cardio);
+        expect(decimalMinutes.referenceSet?.timeSeconds).toBe(1830);
+        expect(formatProgressionReference(decimalMinutes)).toBe('30.5 min');
+
+        const timedStrength = reference('30', plank);
+        expect(timedStrength.referenceSet?.timeSeconds).toBe(30);
+        expect(formatProgressionReference(timedStrength)).toBe('30s');
+    });
+
+    it('does not invent cardio time, load, or records from invalid minute inputs', () => {
+        const cardio = { ...plank, id: 'cardio-run', name: 'Corsa', trackingType: 'cardio' as const };
+        for (const time of ['1e309', '1:30', '-1', '0', '30s', 'not-a-duration']) {
+            const current = workout({
+                id: 'cardio-invalid', date: '2026-09-08', exId: cardio.id, sets: [timedSet(time)],
+            });
+            const exposure = normalizeExerciseExposure(current, current.exercises[0], cardio);
+            expect(exposure.sets[0].timeSeconds).toBeUndefined();
+            expect(exposure.workSets).toBe(0);
+            expect(exposure.referenceSet).toBeUndefined();
+            expect(formatProgressionReference(exposure)).toBe('dati insufficienti');
+        }
+
+        const current = workout({
+            id: 'cardio-valid', date: '2026-09-08', exId: cardio.id, sets: [timedSet('45')],
+        });
+        const result = computeProgressionEngine(current, [], new Map([[cardio.id, cardio]])).exercises[0];
+        expect(result.current.referenceSet?.timeSeconds).toBe(2700);
+        expect(result.isRecord).toBe(false);
+        expect(result.detail).toContain('45 min');
+        expect(result.detail).not.toContain('kg');
+    });
+
+
 });

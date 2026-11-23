@@ -69,11 +69,12 @@ test('guest logout revokes another tab and removes its durable archive without r
   )).toBeNull();
   await expect.poll(() => guestArchiveState(background)).toEqual({ envelope: false, mirror: false, key: false });
 
-  await background.evaluate(() => {
-    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
-    document.dispatchEvent(new Event('visibilitychange'));
-  });
-  await expect.poll(() => guestArchiveState(background)).toEqual({ envelope: false, mirror: false, key: false });
+  // Resume the real background tab instead of dispatching an inert synthetic
+  // "hidden" event after the archive is already gone.
+  await page.bringToFront();
+  await background.bringToFront();
+  await expect(background.locator('.guest-banner')).toHaveCount(0);
+  await expect(background.getByText(routineName, { exact: true })).toHaveCount(0);
   await expect.poll(() => background.evaluate(() =>
     Object.keys(localStorage).filter(key => key.startsWith('logbook:v2:guest:')).length
   )).toBe(0);

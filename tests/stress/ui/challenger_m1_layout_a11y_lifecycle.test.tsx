@@ -195,23 +195,44 @@ describe('Empirical Challenger: Layout Geometry, Accessibility, Z-Index & Online
   // 4. OFFLINE / ONLINE EVENT LIFECYCLE & AUTO-DISMISSAL
   // ============================================================================
   describe('Offline/Online Event Lifecycle & Auto-Dismissal', () => {
-    it('clears saveError immediately when browser fires "online" event', async () => {
+    it('keeps failed synchronization visible across online events until recovery is confirmed', async () => {
       const { container } = await renderSettledApp();
       
       act(() => {
-        useAppStore.setState({ saveError: 'Connessione assente durante il salvataggio' });
+        useAppStore.setState({ saveError: 'Connessione assente durante il salvataggio', syncHealth: 'failed' });
       });
       expect(useAppStore.getState().saveError).toBe('Connessione assente durante il salvataggio');
       expect(container.querySelector('.sync-error-toast')).not.toBeNull();
 
-      // Trigger browser online event
       act(() => {
         window.dispatchEvent(new Event('online'));
+        vi.advanceTimersByTime(6000);
       });
+      expect(useAppStore.getState().saveError).toBe('Connessione assente durante il salvataggio');
+      expect(container.querySelector('.sync-error-toast')).not.toBeNull();
+      expect(container.querySelector('.sync-error-close')).toBeNull();
 
-      // Immediately cleared without waiting for 5s timer
-      expect(useAppStore.getState().saveError).toBeNull();
+      // Verified sync state, not network reachability, removes the alert.
+      act(() => useAppStore.setState({ syncHealth: 'synced', saveError: null }));
       expect(container.querySelector('.sync-error-toast')).toBeNull();
+    });
+
+    it('keeps rejected writes visible and non-dismissible after timeout and reconnection', async () => {
+      const { container } = await renderSettledApp();
+      act(() => useAppStore.setState({
+        syncing: false,
+        syncHealth: 'rejected',
+        saveError: 'Sincronizzazione rifiutata dal server.',
+      }));
+
+      act(() => {
+        window.dispatchEvent(new Event('online'));
+        vi.advanceTimersByTime(10000);
+      });
+      expect(useAppStore.getState().syncHealth).toBe('rejected');
+      expect(useAppStore.getState().saveError).toBe('Sincronizzazione rifiutata dal server.');
+      expect(container.querySelector('.sync-error-close')).toBeNull();
+      expect(container.querySelector('.sync-error-toast')).not.toBeNull();
     });
 
     it('handles multiple rapid online/offline/error transitions without unhandled rejections or crashes', async () => {
@@ -230,12 +251,12 @@ describe('Empirical Challenger: Layout Geometry, Accessibility, Z-Index & Online
         expect(useAppStore.getState().saveError).toBe(transientError);
       }
       act(() => {
-        useAppStore.setState({ saveError: 'Connessione assente durante il salvataggio' });
+        useAppStore.setState({ saveError: 'Connessione assente durante il salvataggio', syncHealth: 'failed' });
       });
       act(() => {
         window.dispatchEvent(new Event('online'));
       });
-      expect(useAppStore.getState().saveError).toBeNull();
+      expect(useAppStore.getState().saveError).toBe('Connessione assente durante il salvataggio');
 
       // Cleanup
       act(() => {

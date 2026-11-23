@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { dirname, isAbsolute, relative, resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { validateIsolatedWorkers, validateIsolatedKindeCandidate } from '../../scripts/check-cloudflare-api-isolation.mjs';
 
 const api = JSON.parse(readFileSync('cloudflare/api/wrangler.isolated.jsonc', 'utf8'));
@@ -171,6 +173,58 @@ void test('version-only releases skip private redeploy, but dependency or import
     ...currentLock, packages: { ...currentLock.packages, 'node_modules/jose': { version: '6.0.0' } } } }), true);
   assert.equal(mustDeployPrivateWorker({ ...base, previousLock: null }), true);
   assert.equal(mustDeployPrivateWorker({ ...base, changed: [] }), true);
+});
+
+void test('multi-commit push planning includes earlier Worker changes and fails closed without a verified base', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'logbook-private-push-'));
+  const workflow = '.github/workflows/cloudflare-api-isolated.yml';
+  const planner = resolve('scripts/cloudflare-private-deploy-plan.mjs');
+  const git = (...args) => execFileSync('git', args, {
+    cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim();
+  const write = (path, data) => writeFileSync(join(dir, path), data + '\n');
+  const pack = { name: 'synthetic', version: '1.0.0', dependencies: { jose: '5.0.0' } };
+  const lock = { version: '1.0.0', packages: {
+    '': { version: '1.0.0' }, 'node_modules/jose': { version: '5.0.0' },
+  } };
+  const commit = label => {
+    git('add', '.');
+    git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-m', label);
+  };
+  try {
+    mkdirSync(join(dir, '.github/workflows'), { recursive: true });
+    mkdirSync(join(dir, 'cloudflare/api'), { recursive: true });
+    writeFileSync(join(dir, workflow), readFileSync(workflow, 'utf8'));
+    write('package.json', JSON.stringify(pack));
+    write('package-lock.json', JSON.stringify(lock));
+    write('cloudflare/api/worker.mjs', 'export const version = 1;');
+    git('init', '-q');
+    commit('initial synthetic manifest');
+    const before = git('rev-parse', 'HEAD');
+    write('cloudflare/api/worker.mjs', 'export const version = 2;');
+    commit('update Worker');
+    const lastParent = git('rev-parse', 'HEAD');
+    write('package.json', JSON.stringify({ ...pack, version: '1.1.0' }));
+    write('package-lock.json', JSON.stringify({
+      ...lock, version: '1.1.0',
+      packages: { ...lock.packages, '': { version: '1.1.0' } },
+    }));
+    commit('bump version only');
+
+    const plan = beforeSha => execFileSync(process.execPath, [planner, workflow], {
+      cwd: dir, encoding: 'utf8',
+      env: { PATH: process.env.PATH ?? '', PUSH_BEFORE_SHA: beforeSha },
+    }).trim();
+    assert.equal(plan(lastParent), 'false', 'a version-only event range may skip deploy');
+    assert.equal(plan(before), 'true', 'full push includes an earlier Worker code change');
+    assert.equal(plan('invalid-sha'), 'true', 'invalid base must require deployment');
+    assert.equal(plan('0'.repeat(40)), 'true', 'new-branch sentinel must require deployment');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  for (const path of [workflow, '.github/workflows/cloudflare-kinde-private.yml']) {
+    assert.match(readFileSync(path, 'utf8'), /PUSH_BEFORE_SHA:\s*\$\{\{ github\.event\.before \}\}/);
+  }
 });
 
 void test('private Workers wait boundedly for the actual exact-main gate and stop on terminal failure', () => {

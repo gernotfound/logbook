@@ -58,7 +58,8 @@ function blockReadinessPersistence(error: unknown, original?: ReturnType<typeof 
         catch { return; }
         // A revoked consent in the same owner's mounted editor must still
         // block edits; a previous Auth epoch must not fence an unrelated session.
-        if (current.owner !== original.owner
+        if (current.owner !== original.owner || current.epoch !== original.epoch
+            || current.guestSessionId !== original.guestSessionId
             || (current.consentMarker === original.consentMarker
                 && current.consentGeneration === original.consentGeneration)) return;
     }
