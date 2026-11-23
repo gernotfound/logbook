@@ -159,7 +159,7 @@ describe('biometric profile draft persistence', () => {
             status: 'rejected',
             error: new Error('Local journal unavailable'),
         });
-        const { result } = renderHook(() => useSettingsProfile());
+        const { result, rerender } = renderHook(() => useSettingsProfile());
         act(() => result.current.setHeight('185'));
 
         await act(async () => { await result.current.handleSaveProfile(); });
@@ -171,13 +171,21 @@ describe('biometric profile draft persistence', () => {
         expect(result.current.height).toBe('185');
         expect(state.showAlert).toHaveBeenCalledExactlyOnceWith('Errore durante il salvataggio del profilo.');
 
+        // An accepted commit updates the owner's profile projection. Keeping
+        // the mock profile stale would make a successful retry look like an undo.
+        state.dispatch.mockImplementationOnce(async () => {
+            state.profile = { ...state.profile, height: '185' };
+            return { ok: true, status: 'synced' };
+        });
         await act(async () => { await result.current.handleSaveProfile(); });
+        rerender();
         expect(state.dispatch).toHaveBeenCalledTimes(2);
         expect(state.dispatch).toHaveBeenNthCalledWith(2, {
             type: 'profile.patch',
             patch: { height: '185' },
         });
-        expect(result.current.height).toBe('170');
+        expect(result.current.height).toBe('185');
+        expect(state.showAlert).toHaveBeenCalledTimes(1);
     });
 
     it('does not clear the draft or show an old-session error after the session changes', async () => {
