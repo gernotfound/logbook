@@ -328,7 +328,7 @@ describe('M5 nutrition account flow through useNutritionMeals', () => {
             expect(result.current.showCustomModal).toBe(false);
             expect(dispatch).toHaveBeenCalledTimes(2);
             expect(dispatch).toHaveBeenLastCalledWith(expect.objectContaining({
-                type: 'food.upsert', food: expect.objectContaining({ id: 'food-chicken' }),
+                type: 'food.edit', food: expect.objectContaining({ id: 'food-chicken' }),
             }));
         } finally {
             useAppStore.setState({ dispatchDomainOperation: originalDispatch });
