@@ -74,6 +74,7 @@ function collectScope(before: UserData, after: UserData, operations: readonly Do
             case 'exercise.upsert': root('library', 'catalogOverrides'); break;
             case 'exercise.delete': root('library', 'catalogOverrides', 'routines'); break;
             case 'food.upsert':
+            case 'food.edit':
             case 'food.delete': root('customFoods', 'catalogOverrides'); break;
             case 'catalog.exercise.patch':
             case 'catalog.food.patch':

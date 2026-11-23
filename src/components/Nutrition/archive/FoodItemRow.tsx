@@ -23,7 +23,7 @@ export const FoodItemRow: React.FC<FoodItemRowProps> = ({
     onQuickAddToMeal
 }) => {
     return (
-        <div 
+        <article aria-label={food.name}
             style={{
                 padding: '14px 0',
                 borderBottom: isLast ? 'none' : '1px solid var(--glass-border)',
@@ -96,7 +96,7 @@ export const FoodItemRow: React.FC<FoodItemRowProps> = ({
                     </button>
                 ))}
             </div>
-        </div>
+        </article>
     );
 };
 
