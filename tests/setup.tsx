@@ -616,17 +616,20 @@ export const defaultMockUserData: UserData = {
 };
 
 export function createMockUserData(overrides?: Partial<UserData>): UserData {
+  // Each generated snapshot must own its nested arrays and objects. Otherwise
+  // one UI test's edits can alter the defaults observed by a later test.
+  const defaults = structuredClone(defaultMockUserData);
   return {
-    ...defaultMockUserData,
+    ...defaults,
     ...overrides,
-    profile: { ...defaultMockUserData.profile, ...(overrides?.profile || {}) },
+    profile: { ...defaults.profile, ...(overrides?.profile || {}) },
     catalogOverrides: {
-      ...defaultMockUserData.catalogOverrides,
+      ...defaults.catalogOverrides,
       ...(overrides?.catalogOverrides || {})
     },
     nutritionPlanning: overrides?.nutritionPlanning !== undefined
       ? overrides.nutritionPlanning
-      : defaultMockUserData.nutritionPlanning,
+      : defaults.nutritionPlanning,
   };
 }
 
