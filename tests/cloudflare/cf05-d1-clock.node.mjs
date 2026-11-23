@@ -6,6 +6,7 @@ import { activeSessionPredicateSql } from '../../cloudflare/auth/session-write-f
 import { hashSessionSecret } from '../../cloudflare/auth/session-gate.mjs';
 import { issueVerifiedSession } from '../../cloudflare/auth/session-issuer.mjs';
 import { acceptance, call, fixture } from './cf05-consent-fixture.mjs';
+import { createCloudKeyHttpFixture, SYNC } from './cloud-key-http-fixture.mjs';
 
 void test('D1 clock uses integer milliseconds, including fixed second boundaries', () => {
   const db = new DatabaseSync(':memory:');
@@ -53,5 +54,23 @@ void test('session issuance, initial consent and the sync fence agree even when 
     assert.equal(allowedAt(sqlDate(consent.accepted_at_ms - 1)), 0);
     assert.equal(allowedAt(sqlDate(consent.accepted_at_ms)), 1);
     assert.equal(allowedAt(sqlDate(issued.idleExpiresAtMs)), 0);
+  } finally { f.close(); }
+});
+
+void test('ADK HTTP uses the primary D1 clock to recheck consent and session after AuthGate', async t => {
+  const uid = 'owner-a';
+  const f = await createCloudKeyHttpFixture([uid]);
+  try {
+    await f.consent(uid);
+    const consent = f.sqlite.prepare('SELECT accepted_at_ms FROM health_consent_acceptances WHERE uid=?').get(uid);
+    const session = f.sqlite.prepare('SELECT idle_expires_at_ms FROM auth_sessions WHERE uid=?').get(uid);
+    // SQLite is left on its own clock. Simulate a Worker behind fresh consent,
+    // then ahead of the idle limit, while D1 considers the session active.
+    let workerTime = consent.accepted_at_ms - 1;
+    t.mock.method(Date, 'now', () => workerTime);
+    assert.equal((await f.call(uid, SYNC)).response.status, 200, 'Worker behind consent');
+    workerTime = session.idle_expires_at_ms + 1;
+    assert.equal((await f.call(uid, SYNC)).response.status, 200, 'Worker ahead of session expiry');
+    assert.equal(f.count('cloud_key_issuance', uid), 1);
   } finally { f.close(); }
 });

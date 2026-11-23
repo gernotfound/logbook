@@ -1,4 +1,5 @@
 import { requireIndependentOwnerFence } from './independent-owner-fence.mjs';
+import { D1_NOW_MS } from '../sql/d1-time.mjs';
 
 // The registry is independent of the application's Time Travel timeline.
 // Both primary reads are necessary: neither trusted AuthGate claims nor the
@@ -48,7 +49,8 @@ export async function requireCurrentIndependentSyncFence(env, claims) {
     throw new RuntimeSyncFenceUnavailableError();
   }
   let row;
-  const now = Date.now();
+  // Consent and session timestamps are issued by D1. Evaluate their bounds
+  // on the same primary that reads them, including after AuthGate returns.
   try {
     row = await env.DB.withSession('first-primary').prepare(`
       SELECT s.uid, s.status, s.consent_revision, s.fence_epoch,
@@ -59,20 +61,20 @@ export async function requireCurrentIndependentSyncFence(env, claims) {
       JOIN health_consent_acceptances c ON c.uid = s.uid
       WHERE s.uid = ? AND p.status = 'active'
         AND p.auth_epoch = ? AND p.verified_at_ms > 0
-        AND p.verified_at_ms <= ? AND s.status = 'active'
+        AND p.verified_at_ms <= ${D1_NOW_MS} AND s.status = 'active'
         AND s.fence_epoch = p.auth_epoch
         AND s.consent_revision = ? AND c.consent_revision = s.consent_revision
         AND c.over_18_confirmed = 1 AND c.accepted_at_ms > 0
-        AND c.accepted_at_ms <= ?
+        AND c.accepted_at_ms <= ${D1_NOW_MS}
         AND c.privacy_version = ? AND c.terms_version = ?
         AND t.token_hash = ? AND t.uid = p.uid
         AND t.auth_epoch = p.auth_epoch AND t.revoked_at_ms IS NULL
-        AND t.issued_at_ms <= ? AND t.idle_expires_at_ms > ?
-        AND t.absolute_expires_at_ms > ?
+        AND t.issued_at_ms <= ${D1_NOW_MS} AND t.idle_expires_at_ms > ${D1_NOW_MS}
+        AND t.absolute_expires_at_ms > ${D1_NOW_MS}
     `).bind(
-      claims.uid, claims.fenceEpoch, now, claims.healthConsentRevision, now,
+      claims.uid, claims.fenceEpoch, claims.healthConsentRevision,
       env.CONSENT_PRIVACY_VERSION, env.CONSENT_TERMS_VERSION,
-      claims.sessionHash, now, now, now,
+      claims.sessionHash,
     ).first();
   } catch {
     throw new RuntimeSyncFenceUnavailableError();
