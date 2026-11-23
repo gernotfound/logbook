@@ -43,15 +43,13 @@ describe('routine editor domain intents shared by guest and Kinde', () => {
         const ops = buildRoutineSaveOperations({
             name: '  Alpha  ', exercises, routines: current, createId: 'new-id',
         });
-        expect(ops).toEqual([
-            { type: 'routine.upsert', routine: {
+        expect(ops).toEqual({ type: 'routine.create', routine: {
                 id: 'new-id', name: 'Alpha',
                 exercises: [{ ...exercises[0], setsCount: 3 }],
-            } },
-            { type: 'routine.reorder', ids: ['new-id', 'b', 'z'] },
-        ]);
-        const reduced = applyDomainOperations(initial(current), ops);
-        expect(reduced.routines?.map(item => item.id)).toEqual(['new-id', 'b', 'z']);
+        } });
+        const reduced = applyDomainOperations(initial([...current, routine('c', 'Carla')]), ops);
+        expect(reduced.routines?.map(item => item.id)).toEqual(['new-id', 'b', 'c', 'z']);
+        expect(() => applyDomainOperations(reduced, ops)).toThrow('Scheda già esistente');
         expect(reduced.routines?.[0].exercises[0].setsCount).toBe(3);
         expect({ current, exercises }).toEqual(before);
     });

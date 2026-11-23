@@ -76,14 +76,12 @@ describe('routine editor durable failures', () => {
 
         mocks.dispatch.mockResolvedValue({ ok: true, status: 'synced' });
         await act(async () => { expect(await result.current.handleSave()).toBe(true); });
-        expect(mocks.dispatch).toHaveBeenCalledWith(expect.arrayContaining([
-            expect.objectContaining({
-                type: 'routine.upsert',
-                routine: expect.objectContaining({
-                    exercises: [expect.objectContaining({ exId: 'bench', setsCount: 2 })],
-                }),
+        expect(mocks.dispatch).toHaveBeenCalledWith(expect.objectContaining({
+            type: 'routine.create',
+            routine: expect.objectContaining({
+                exercises: [expect.objectContaining({ exId: 'bench', setsCount: 2 })],
             }),
-        ]));
+        }));
     });
 
     it('rejects an empty set count rather than saving an invented three-set routine', async () => {

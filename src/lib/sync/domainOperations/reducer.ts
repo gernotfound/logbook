@@ -231,10 +231,14 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
         case 'supplement.reorder':
             data.supplements = reorderByIds(data.supplements, operation.ids, item => requireId(item.id, 'Integratore'), 'Integratori');
             break;
-        case 'routine.upsert': {
+        case 'routine.upsert':
+        case 'routine.create': {
             const routine = { ...operation.routine, id: requireId(operation.routine.id, 'Routine') };
             assertUnique(routine.exercises ?? [], item => requireId(item.exId, 'Esercizio routine'), 'Esercizi routine');
+            const creating = operation.type === 'routine.create';
+            if (creating && data.routines?.some(item => item.id === routine.id)) throw new Error('Scheda già esistente');
             data.routines = upsertById(data.routines, routine, item => requireId(item.id, 'Routine'), 'Routine');
+            if (creating) data.routines.sort((a, b) => a.name.localeCompare(b.name));
             break;
         }
         case 'routine.edit': {

@@ -600,6 +600,13 @@
   }
 }
 
+.routine-draft-preview {
+  border: 0;
+  margin: 0;
+  min-inline-size: 0;
+  padding: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .routine-card-chevron,
   .routine-muscle-summary svg {

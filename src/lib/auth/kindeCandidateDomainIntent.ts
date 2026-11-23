@@ -1,7 +1,7 @@
 import equal from 'fast-deep-equal';
 import type { DomainOperationBatch } from '../sync/domainOperations';
 import { normalizeDomainOperationBatch } from '../sync/domainOperations';
-import { commitDomainOperations } from '../sync/localDomainCommit';
+import { commitDomainOperations, type LocalWriteGuard } from '../sync/localDomainCommit';
 import { readLocal } from '../sync/localArchiveBootstrap';
 import { coversVectorClock, type SemanticOperation } from '../sync/semanticProjection';
 import { deliverKindeCandidateJournal } from '../sync/kindeCandidateJournalBridge';
@@ -38,11 +38,12 @@ export function normalizeKindeFitnessIntents(operation: DomainOperationBatch) {
  * until the account owner/foreground/offline lifecycle is installed.
  */
 export async function submitKindeCandidateDomainIntent({
-    expected, operation, stillCurrent, send = fetch, browserCookies = () => document.cookie,
+    expected, operation, stillCurrent, beforeCommit, send = fetch, browserCookies = () => document.cookie,
 }: {
     expected: Readonly<Principal>;
     operation: DomainOperationBatch;
     stillCurrent: () => boolean;
+    beforeCommit?: LocalWriteGuard;
     send?: typeof fetch;
     browserCookies?: () => string;
 }): Promise<CandidateMutationOutcome> {
@@ -60,7 +61,8 @@ export async function submitKindeCandidateDomainIntent({
 
             // commitDomainOperations checks the pinned guard inside the same
             // IndexedDB update that persists both business data and journal.
-            const committed = await commitDomainOperations(owner, intents, initial.data, isCurrent);
+            const committed = await commitDomainOperations(owner, intents, initial.data,
+                record => isCurrent() && (!beforeCommit || beforeCommit(record)));
             assertCurrent();
             const durable = await readLocal(owner);
             assertCurrent();

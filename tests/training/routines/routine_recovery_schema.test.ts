@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseRoutineRecovery } from '../../../src/hooks/trainingRoutines/routineRecoverySchema';
+import { parseRoutineRecovery } from '../../../src/lib/routineRecoverySchema';
 
 describe('routine recovery schema boundary', () => {
     it('leaves a missing draft absent without inventing a new routine', () => {
