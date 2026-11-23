@@ -29,18 +29,34 @@ export function makeHealthErasureAdminMock(fixture: HealthErasureMockFixture) {
     },
     ...query(path, []),
   });
-  function query(path: string, constraints: Array<[string, string, unknown]>, max = 1000, after: { path: string; time: number } | null = null) {
+  type OrderedField = '__name__' | 'purgeAfter' | 'updatedAt';
+  function query(
+    path: string, constraints: Array<[string, string, unknown]>,
+    max = 1000, after: { path: string; time: number } | null = null,
+    orderedField: OrderedField = '__name__',
+  ) {
+    const orderValue = (entry: Entry | undefined): number => {
+      const value = entry?.[orderedField];
+      return value instanceof Timestamp ? value.toMillis() : 0;
+    };
     return {
-      where: (field: string, op: string, value: unknown) => query(path, [...constraints, [field, op, value]], max, after),
-      limit: (count: number) => query(path, constraints, count, after),
-      select: () => query(path, constraints, max, after),
-      orderBy: () => query(path, constraints, max, after),
-      startAfter: (snapshot: { ref: { path: string }; data: () => Entry | undefined }) => {
-        const timestamp = snapshot.data()?.purgeAfter;
-        return query(path, constraints, max, {
-          path: snapshot.ref.path, time: timestamp instanceof Timestamp ? timestamp.toMillis() : 0,
-        });
+      where: (field: string, op: string, value: unknown) =>
+        query(path, [...constraints, [field, op, value]], max, after, orderedField),
+      limit: (count: number) => query(path, constraints, count, after, orderedField),
+      select: () => query(path, constraints, max, after, orderedField),
+      orderBy: (field: unknown, direction: string = 'asc') => {
+        if (direction !== 'asc') throw new Error('Unsupported Firestore ordering direction');
+        // FieldPath.documentId() is a secondary sort after the timestamp.
+        if (typeof field !== 'string') return query(path, constraints, max, after, orderedField);
+        if (field !== 'purgeAfter' && field !== 'updatedAt') throw new Error('Unsupported Firestore ordering field');
+        if (orderedField !== '__name__') throw new Error('Unsupported additional Firestore ordering');
+        return query(path, constraints, max, after, field);
       },
+      startAfter: (snapshot: { ref: { path: string }; data: () => Entry | undefined }) =>
+        query(path, constraints, max, {
+          path: snapshot.ref.path,
+          time: orderedField === '__name__' ? 0 : orderValue(snapshot.data()),
+        }, orderedField),
       get: async () => {
         if (fixture.pauseQuery?.path === path) {
           const pause = fixture.pauseQuery;
@@ -56,6 +72,8 @@ export function makeHealthErasureAdminMock(fixture: HealthErasureMockFixture) {
         const docs = [...fixture.records.keys()].filter(key => {
           if (!key.startsWith(path + '/') || key.split('/').length !== depth) return false;
           const data = fixture.records.get(key)!;
+          // Firestore orderBy excludes documents without the ordered field.
+          if (orderedField !== '__name__' && !(data[orderedField] instanceof Timestamp)) return false;
           return constraints.every(([field, op, value]) => {
             if (op === '==') return data[field] === value;
             if (op === 'in' && Array.isArray(value)) return value.includes(data[field]);
@@ -65,15 +83,13 @@ export function makeHealthErasureAdminMock(fixture: HealthErasureMockFixture) {
             return false;
           });
         }).sort((left, right) => {
-          const a = fixture.records.get(left)?.purgeAfter;
-          const b = fixture.records.get(right)?.purgeAfter;
-          const timeA = a instanceof Timestamp ? a.toMillis() : 0;
-          const timeB = b instanceof Timestamp ? b.toMillis() : 0;
-          return timeA - timeB || left.localeCompare(right);
+          if (orderedField === '__name__') return left.localeCompare(right);
+          return orderValue(fixture.records.get(left)) - orderValue(fixture.records.get(right))
+            || left.localeCompare(right);
         });
         const eligible = after ? docs.filter(key => {
-          const timestamp = fixture.records.get(key)?.purgeAfter;
-          const time = timestamp instanceof Timestamp ? timestamp.toMillis() : 0;
+          if (orderedField === '__name__') return key > after.path;
+          const time = orderValue(fixture.records.get(key));
           return time > after.time || (time === after.time && key > after.path);
         }) : docs;
         const paged = eligible.slice(0, max).map(key => getSnapshot(key));
