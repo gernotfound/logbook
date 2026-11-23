@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { computeWorkoutReport } from './workoutReport';
 import type { WorkoutSession } from '../../types';
+import type { ProgressionExerciseRef } from './progression';
 
 describe('R2: Workout Report Volume & PR Calculation (FNC-REPORT-01)', () => {
     const mockLibrary = [
@@ -298,5 +299,89 @@ describe('R2: Workout Report Volume & PR Calculation (FNC-REPORT-01)', () => {
         expect(report.exerciseComparisons[0].volumeDeltaPercent).toBeNull();
         expect(report.volumeDeltaPercent).toBeUndefined();
     });
+
+    it('keeps mixed cardio and timed work from invalidating strength tonnage', () => {
+        const mixedLibrary = new Map<string, ProgressionExerciseRef>(libraryMap);
+        mixedLibrary.set('ex-cardio', {
+            id: 'ex-cardio', name: 'Corsa', trackingType: 'cardio',
+            isBodyweight: false, equipmentWeight: 0,
+        });
+        mixedLibrary.set('ex-plank', {
+            id: 'ex-plank', name: 'Plank', trackingType: 'time',
+            isBodyweight: false, equipmentWeight: 0,
+        });
+        const workoutWithMixedSets = (id: string, date: string, kg: string, cardioMinutes: string): WorkoutSession => ({
+            id, date, routineId: 'mixed-workout',
+            exercises: [
+                { exId: 'ex-bench', sessionNote: '', sets: [{ id: id + '-bench', kg, reps: '10', rir: 2 }] },
+                { exId: 'ex-cardio', sessionNote: '', sets: [{ id: id + '-cardio', kg: '', reps: '', time: cardioMinutes }] },
+                { exId: 'ex-plank', sessionNote: '', sets: [{ id: id + '-plank', kg: '', reps: '', time: '40' }] },
+            ],
+        });
+        const previous = workoutWithMixedSets('prev-mixed', '2026-09-01', '80', '20');
+        const current = workoutWithMixedSets('current-mixed', '2026-09-08', '90', '30');
+        const report = computeWorkoutReport(current, [previous], mixedLibrary, userWeight);
+
+        expect(report.exerciseComparisons).toHaveLength(3);
+        expect(report.exerciseComparisons.find(item => item.exId === 'ex-cardio')?.progression.current.tonnageComplete).toBe(false);
+        expect(report.exerciseComparisons.find(item => item.exId === 'ex-plank')?.progression.current.tonnageComplete).toBe(false);
+        expect(report.totalVolume).toBe(900);
+        expect(report.totalVolumeIsComplete).toBe(true);
+        expect(report.previousTotalVolume).toBe(800);
+        expect(report.previousVolumeIsComplete).toBe(true);
+        expect(report.volumeDeltaPercent).toBe(12.5);
+    });
+
+    it('still marks an invalid strength load incomplete beside valid cardio work', () => {
+        const mixedLibrary = new Map<string, ProgressionExerciseRef>(libraryMap);
+        mixedLibrary.set('ex-cardio', {
+            id: 'ex-cardio', name: 'Corsa', trackingType: 'cardio',
+            isBodyweight: false, equipmentWeight: 0,
+        });
+        const previous: WorkoutSession = {
+            id: 'prev-unsafe-load', date: '2026-09-01', routineId: 'mixed-workout',
+            exercises: [
+                { exId: 'ex-bench', sessionNote: '', sets: [{ id: 'old-bench', kg: '80', reps: '10', rir: 2 }] },
+                { exId: 'ex-cardio', sessionNote: '', sets: [{ id: 'old-run', kg: '', reps: '', time: '20' }] },
+            ],
+        };
+        const current: WorkoutSession = {
+            id: 'now-unsafe-load', date: '2026-09-08', routineId: 'mixed-workout',
+            exercises: [
+                { exId: 'ex-bench', sessionNote: '', sets: [{ id: 'invalid-bench', kg: 'invalid', reps: '10', rir: 2 }] },
+                { exId: 'ex-cardio', sessionNote: '', sets: [{ id: 'new-run', kg: '', reps: '', time: '30' }] },
+            ],
+        };
+        const report = computeWorkoutReport(current, [previous], mixedLibrary, userWeight);
+
+        expect(report.totalVolumeIsComplete).toBe(false);
+        expect(report.previousTotalVolume).toBe(800);
+        expect(report.previousVolumeIsComplete).toBe(true);
+        expect(report.volumeDeltaPercent).toBeUndefined();
+        expect(report.exerciseComparisons.find(item => item.exId === 'ex-bench')?.progression.current.tonnageComplete).toBe(false);
+    });
+
+    it('reports zero mechanical tonnage for a cardio-only session without inventing kilograms', () => {
+        const cardioLibrary = new Map<string, ProgressionExerciseRef>(libraryMap);
+        cardioLibrary.set('ex-cardio', {
+            id: 'ex-cardio', name: 'Corsa', trackingType: 'cardio',
+            isBodyweight: false, equipmentWeight: 0,
+        });
+        const workout: WorkoutSession = {
+            id: 'cardio-only', date: '2026-09-08', routineId: 'cardio-session',
+            exercises: [
+                { exId: 'ex-cardio', sessionNote: '', sets: [{ id: 'run', kg: '', reps: '', time: '30' }] },
+            ],
+        };
+        const report = computeWorkoutReport(workout, [], cardioLibrary, userWeight);
+
+        expect(report.totalVolume).toBe(0);
+        expect(report.totalVolumeIsComplete).toBe(true);
+        expect(report.exerciseComparisons).toHaveLength(1);
+        expect(report.exerciseComparisons[0].progression.current.tonnageComplete).toBe(false);
+        expect(report.exerciseComparisons[0].progression.current.tonnageKg).toBeUndefined();
+        expect(report.newPRs).toEqual([]);
+    });
+
 
 });

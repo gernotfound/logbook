@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Exercise, WorkoutSession } from '../../types';
+import type { Exercise, SessionExerciseSet, WorkoutSession } from '../../types';
 import {
     buildHomeMuscleExposureIndex,
     calculateHomeWorkoutStreak,
@@ -57,4 +57,51 @@ describe('Home workout selectors', () => {
         expect(getRecentHomeMuscles(index, now + 60_000).has('future_area')).toBe(true);
         expect(history).toEqual(snapshot);
     });
+    it('rejects nonrepresentable timestamps instead of inventing a date or muscle exposure', () => {
+        const outOfRange = 8_640_000_000_000_001;
+        const validEnd = new Date('2026-11-19T12:00:00').getTime();
+        const workout: WorkoutSession = {
+            globalStartTime: outOfRange,
+            exercises: [{ exId: 'press', sessionNote: '', sets: [{ id: 's1', kg: '50', reps: '8' }] }],
+        };
+
+        expect(getHomeWorkoutDate(workout)).toBeNull();
+        expect(buildHomeMuscleExposureIndex([workout], library)).toEqual([]);
+
+        const withValidEnd = { ...workout, globalEndTime: validEnd };
+        expect(getHomeWorkoutDate(withValidEnd)).toBe('2026-11-19');
+        expect(buildHomeMuscleExposureIndex([withValidEnd], library).map(entry => entry.time)).toEqual([validEnd]);
+    });
+
+    it('preserves the Unix epoch as a valid workout time rather than treating zero as missing', () => {
+        const workout: WorkoutSession = {
+            globalStartTime: 0,
+            exercises: [{ exId: 'press', sessionNote: '', sets: [{ id: 's1', kg: '50', reps: '8' }] }],
+        };
+        const index = buildHomeMuscleExposureIndex([workout], library);
+        expect(getHomeWorkoutDate(workout)).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        expect(index.map(entry => entry.time)).toEqual([0]);
+        expect(getRecentHomeMuscles(index, 0).has('chest_lower')).toBe(true);
+    });
+
+    it('excludes empty sets but includes explicit completion, recorded values and continuation segments', () => {
+        const time = new Date('2026-11-19T12:00:00').getTime();
+        const empty: SessionExerciseSet = { id: 'empty', kg: '', reps: '' };
+        const exposed = (sets: SessionExerciseSet[]) => getRecentHomeMuscles(
+            buildHomeMuscleExposureIndex([
+                { globalStartTime: time, exercises: [{ exId: 'press', sessionNote: '', sets }] },
+            ], library),
+            time,
+        ).has('chest_lower');
+
+        expect(exposed([empty])).toBe(false);
+        expect(exposed([{ ...empty, done: false }])).toBe(false);
+        expect(exposed([{ ...empty, done: true }])).toBe(true);
+        expect(exposed([{ ...empty, kg: '25' }])).toBe(true);
+        expect(exposed([{ ...empty, reps: '8' }])).toBe(true);
+        expect(exposed([{ ...empty, time: '30' }])).toBe(true);
+        expect(exposed([{ ...empty, segments: [{ id: 'segment', kg: '', reps: '5' }] }])).toBe(true);
+        expect(exposed([empty, { ...empty, id: 'observed', reps: '8' }])).toBe(true);
+    });
+
 });
