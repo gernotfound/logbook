@@ -44,6 +44,24 @@ function revision(value: unknown, minimum = 0): value is number {
     return typeof value === 'number' && Number.isSafeInteger(value) && value >= minimum;
 }
 
+export function parseKindeConsentProof(value: Record<string, unknown>) {
+    if (!exactKeys(value, ['uid', 'status', 'revision', 'fenceEpoch', 'acceptedAt', 'observedAtMs', 'privacyVersion', 'termsVersion'])
+        || value.status !== 'active' || value.revision !== 1
+        || typeof value.privacyVersion !== 'string' || !VERSION.test(value.privacyVersion)
+        || typeof value.termsVersion !== 'string' || !VERSION.test(value.termsVersion)
+        || typeof value.acceptedAt !== 'string'
+        || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value.acceptedAt)
+        || !revision(value.observedAtMs, 1) || !Number.isFinite(new Date(value.observedAtMs).getTime())) return null;
+    // Compare clocks from the same primary read. The device clock cannot
+    // establish when the user's consent was valid on the server.
+    const acceptedMs = Date.parse(value.acceptedAt);
+    if (!Number.isFinite(acceptedMs) || acceptedMs <= 0 || acceptedMs > value.observedAtMs
+        || new Date(acceptedMs).toISOString() !== value.acceptedAt) return null;
+    return {
+        acceptedAt: value.acceptedAt, privacyVersion: value.privacyVersion, termsVersion: value.termsVersion,
+    };
+}
+
 function assertCurrent(stillCurrent: () => boolean): void {
     if (typeof stillCurrent !== 'function' || stillCurrent() !== true) {
         throw new KindeCandidateBoundaryError();
@@ -173,33 +191,19 @@ function consentState(value: unknown, owner: CandidatePrincipal): KindeCandidate
         return { kind: 'consent-required', principal: owner };
     }
     if (value.status === 'active') {
-        if (!exactKeys(value, ['uid', 'status', 'revision', 'fenceEpoch', 'acceptedAt', 'privacyVersion', 'termsVersion'])
-            || value.revision !== 1 || value.fenceEpoch !== owner.fenceEpoch
-            || typeof value.privacyVersion !== 'string' || !VERSION.test(value.privacyVersion)
-            || typeof value.termsVersion !== 'string' || !VERSION.test(value.termsVersion)
-            || typeof value.acceptedAt !== 'string' || !Number.isFinite(Date.parse(value.acceptedAt))) {
+        const proof = parseKindeConsentProof(value);
+        if (!proof || value.fenceEpoch !== owner.fenceEpoch) {
             throw new KindeCandidateBoundaryError();
         }
-        if (value.privacyVersion !== LEGAL_VERSIONS.privacy
-            || value.termsVersion !== LEGAL_VERSIONS.terms) {
+        if (proof.privacyVersion !== LEGAL_VERSIONS.privacy
+            || proof.termsVersion !== LEGAL_VERSIONS.terms) {
             return { kind: 'legal-update-required', principal: owner };
-        }
-        // D1 emits an ISO UTC timestamp from the primary consent record.
-        // Do not turn an unparseable, ambiguous or future date into a
-        // device-local legal acceptance.
-        const acceptedAt = value.acceptedAt;
-        const acceptedMs = Date.parse(acceptedAt);
-        if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(acceptedAt)
-            || !Number.isFinite(acceptedMs) || acceptedMs <= 0
-            || acceptedMs > Date.now() || new Date(acceptedMs).toISOString() !== acceptedAt) {
-            throw new KindeCandidateBoundaryError();
         }
         return {
             kind: 'consent-confirmed', principal: owner,
             legalConsent: {
                 hasAcceptedTerms: true, hasAcceptedHealthData: true,
-                acceptedAt, privacyVersion: value.privacyVersion,
-                termsVersion: value.termsVersion,
+                ...proof,
             },
         };
     }

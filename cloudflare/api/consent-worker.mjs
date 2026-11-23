@@ -115,6 +115,7 @@ async function readConsent(db, claims, { forWithdrawal = false, includeSessionEx
     uid: row.uid, status: row.status, revision: row.consent_revision, fenceEpoch: row.fence_epoch,
     ...(row.status === 'active' ? {
       acceptedAt: new Date(row.accepted_at_ms).toISOString(),
+      observedAtMs: row.observed_at_ms,
       privacyVersion: row.privacy_version,
       termsVersion: row.terms_version,
       ...(includeSessionExpiry ? { sessionExpiresAtMs: row.session_expires_at_ms } : {}),
@@ -387,7 +388,7 @@ export default {
         );
         // D1 constrains idle expiry to be at or before absolute expiry.
         // This deadline comes from the same primary read as the consent proof.
-        const headers = Number.isSafeInteger(sessionExpiresAtMs) && sessionExpiresAtMs > Date.now()
+        const headers = Number.isSafeInteger(sessionExpiresAtMs) && sessionExpiresAtMs > active.observedAtMs
           ? { 'X-Logbook-Session-Expires-At-Ms': String(sessionExpiresAtMs) } : {};
         return json(active, 200, headers);
       }

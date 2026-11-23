@@ -4,6 +4,7 @@ import consent from '../../cloudflare/api/consent-worker.mjs';
 import apiWorker from '../../cloudflare/api/worker.mjs';
 import sessionGate from '../../cloudflare/auth/session-gate.mjs';
 import { issueVerifiedSession } from '../../cloudflare/auth/session-issuer.mjs';
+import { D1_NOW_MS } from '../../cloudflare/sql/d1-time.mjs';
 import { ORIGIN, acceptance, withdrawal, fixture, call, count } from './cf05-consent-fixture.mjs';
 
 void test('consent status accepts a gateway-forwarded empty stream, never forged Content-Length', async () => {
@@ -123,8 +124,13 @@ void test('consent status returns the exact trusted SQL owner for all five state
     const active = { ...expected('active', 1),
       acceptedAt: new Date(acceptedAtMs).toISOString(),
       privacyVersion: '1.3.9', termsVersion: '1.2.5' };
-    assert.deepEqual(accepted.body, active);
-    assert.deepEqual((await call(f, '/v1/consent/status')).body, active);
+    const status = await call(f, '/v1/consent/status');
+    const lastObserved = f.sqlite.prepare('SELECT ' + D1_NOW_MS + ' AS now').get().now;
+    for (const { observedAtMs, ...body } of [accepted.body, status.body]) {
+      assert.deepEqual(body, active);
+      assert.ok(Number.isSafeInteger(observedAtMs));
+      assert.ok(observedAtMs >= acceptedAtMs && observedAtMs <= lastObserved);
+    }
 
     const withdrawn = await call(f, '/v1/consent/withdraw', {
       body: { action: 'withdraw', expectedRevision: 1, confirmsErasure: true },

@@ -100,9 +100,13 @@ sono collaudati sul runtime pubblico previsto.
 
 Il lettore `readKindeCandidateAccess()` conserva i campi `acceptedAt`, versione
 Privacy e versione Termini soltanto dallo stato `consent-confirmed` della D1 primaria,
-dopo due prove della stessa sessione, UID, epoca e revisione. L'istante deve
-essere UTC ISO canonico, nel passato e senza normalizzazioni. Il checkpoint
-completo confronta anche la prova legale prima e dopo la scansione AEAD.
+dopo due prove della stessa sessione, UID, epoca e revisione. Lo stato attivo
+riporta `observedAtMs` dalla stessa lettura primaria. L'istante di accettazione
+deve essere UTC ISO canonico, senza normalizzazioni e al più pari a questa
+osservazione, anche quando l'orologio del browser è disallineato. La stessa
+validazione si applica alla risposta del primo consenso e alla verifica
+prima della revoca. La prova legale persistita conserva la data di accettazione.
+Il checkpoint completo confronta anche la prova legale prima e dopo la scansione AEAD.
 
 `hydrateKindeCandidateArchive()` installa questa prova nel baseline cifrato
 device anche quando non esiste un root business. Non crea pending/ACK,

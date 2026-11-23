@@ -45,6 +45,8 @@ void test('session issuance, initial consent and the sync fence agree even when 
     assert.equal(response.status, 200);
     const consent = f.sqlite.prepare('SELECT accepted_at_ms FROM health_consent_acceptances WHERE uid=?').get(f.uid);
     assert.ok(consent.accepted_at_ms >= session.issued_at_ms && consent.accepted_at_ms < workerTime);
+    assert.equal(Date.parse(response.body.acceptedAt), consent.accepted_at_ms);
+    assert.ok(response.body.observedAtMs >= consent.accepted_at_ms && response.body.observedAtMs < workerTime);
 
     const allowedAt = time => {
       const sql = activeSessionPredicateSql.replaceAll("'now'", "'" + time + "'");

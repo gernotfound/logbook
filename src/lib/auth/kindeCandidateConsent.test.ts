@@ -19,6 +19,7 @@ const accepted = (uid = A) => ({
     uid, status: 'active', revision: 1, fenceEpoch: 1,
     privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
     acceptedAt: '2026-11-15T10:00:00.000Z',
+    observedAtMs: Date.parse('2026-11-15T10:00:00.000Z'),
 });
 const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
     status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
@@ -64,6 +65,7 @@ describe('Kinde D1 first health-consent candidate (no UI/production calls)', () 
     });
 
     it('sends only fixed legal versions and requires a trusted active readback', async () => {
+        vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-11-15T09:59:59.999Z'));
         const send = replies(...preflight(), reply(accepted()), ...readback());
         await expect(acceptKindeCandidateInitialConsent({
             expectedOwner, decision, send, stillCurrent: () => true, browserCookies: cookie,
@@ -122,6 +124,7 @@ describe('Kinde D1 first health-consent candidate (no UI/production calls)', () 
             { ...accepted(), revision: 0 },
             { ...accepted(), privacyVersion: 'outdated' },
             { ...accepted(), acceptedAt: 'bad-timestamp' },
+            { ...accepted(), observedAtMs: Date.parse('2026-11-15T09:59:59.999Z') },
             { ...accepted(), injected: 'untrusted' },
         ]) {
             const send = replies(...preflight(), reply(invalid));

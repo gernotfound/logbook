@@ -21,6 +21,7 @@ const session = (uid = UID) => ({ authenticated: true, emailVerified: true, uid,
     fenceEpoch: 1, healthConsentRevision: 1 });
 const consent = (uid = UID) => ({ uid, status: 'active', revision: 1, fenceEpoch: 1,
     acceptedAt: '2026-11-16T00:00:00.000Z',
+    observedAtMs: Date.parse('2026-11-16T00:00:00.000Z'),
     privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms });
 const keyResponse = () => ({
     format: 'thelogbook-account-data-key', version: 1, uid: UID, fenceEpoch: 1,

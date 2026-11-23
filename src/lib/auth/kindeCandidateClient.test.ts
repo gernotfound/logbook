@@ -15,6 +15,7 @@ const status = (state: string, revision: number, epoch = 1, uid = A) => ({
     uid, status: state, revision, fenceEpoch: epoch,
     ...(state === 'active' ? {
         acceptedAt: '2026-11-14T10:00:00.000Z',
+        observedAtMs: Date.parse('2026-11-14T10:00:00.000Z'),
         privacyVersion: '1.3.9', termsVersion: '1.2.5',
     } : {}),
 });
@@ -134,6 +135,14 @@ describe('candidate first-party Kinde client boundary', () => {
         ))).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
     });
 
+    it('uses the primary consent clock when the device clock is behind a valid acceptance', async () => {
+        vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-11-14T09:59:59.999Z'));
+        const send = responses(reply(session(A, 1, 1)), reply(status('active', 1)), reply(session(A, 1, 1)));
+        await expect(read(send)).resolves.toMatchObject({
+            kind: 'consent-confirmed', legalConsent: { acceptedAt: '2026-11-14T10:00:00.000Z' },
+        });
+    });
+
     it('rejects forged, noncanonical and future acceptance dates before publishing a legal proof', async () => {
         for (const acceptedAt of [
             new Date(Date.now() + 60_000).toISOString(),
@@ -144,6 +153,15 @@ describe('candidate first-party Kinde client boundary', () => {
             const send = responses(reply(session(A, 1, 1)), reply({
                 ...status('active', 1), acceptedAt,
             }), reply(session(A, 1, 1)));
+            await expect(read(send)).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        }
+    });
+
+    it('rejects a missing or invalid primary observation and an acceptance after that observation', async () => {
+        const event = status('active', 1);
+        for (const observedAtMs of [undefined, '1794650400000', -1, 1.5, Number.MAX_SAFE_INTEGER,
+            Date.parse(event.acceptedAt!) - 1]) {
+            const send = responses(reply(session(A, 1, 1)), reply({ ...event, observedAtMs }), reply(session(A, 1, 1)));
             await expect(read(send)).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
         }
     });
