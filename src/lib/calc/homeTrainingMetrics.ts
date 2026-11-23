@@ -61,7 +61,7 @@ export function buildHomeMuscleExposureIndex(
     const entries: HomeMuscleExposure[] = [];
     for (const workout of history) {
         const time = getHomeWorkoutTimestamp(workout);
-        if (!time) continue;
+        if (time === null) continue;
         const muscles = new Set<string>();
         for (const exercise of workout.exercises || []) {
             const libraryExercise = library.get(exercise.exId);
