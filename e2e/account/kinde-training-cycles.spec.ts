@@ -57,3 +57,54 @@ test('reads and switches the active Kinde cycle with a verified second-device re
         expect(await readActive()).toBeNull();
     }, { planningUi: true });
 });
+
+test('duplicates and removes a Kinde cycle without deleting its routine or training history', async ({ browser }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, allowFirstCommit }) => {
+        const seed = await second.evaluate(() => window.kindeReplicaFixture!.submit([
+            { type: 'routine.create', routine: { id: 'kept-routine', name: 'Seduta', exercises: [] } },
+            { type: 'training-cycle.upsert', cycle: {
+                id: 'original-cycle', name: 'Forza', durationWeeks: 6,
+                routines: [{ routineId: 'kept-routine', frequencyPerWeek: 1 }],
+            } },
+            { type: 'active-cycle.switch', id: 'original-cycle', expectedActiveId: null },
+            { type: 'history.upsert', workout: {
+                id: 'kept-workout', date: '2026-10-01', cycleId: 'original-cycle', routineName: 'Seduta', exercises: [],
+            } },
+        ]));
+        expect(seed.kind).toBe('cloud-acknowledged');
+        const initialReceipts = receipts();
+        allowFirstCommit();
+        await first.bringToFront();
+        await mountKindePlanning(first);
+        await first.getByRole('button', { name: 'Apri archivio account' }).click();
+        const archive = first.getByRole('region', { name: 'Cicli di allenamento account' });
+        const original = archive.getByRole('article').filter({ has: first.getByText('Forza', { exact: true }) });
+        const duplicate = archive.getByRole('article').filter({ has: first.getByText('Forza - 1', { exact: true }) });
+        await original.getByRole('button', { name: 'Opzioni' }).click();
+        await original.getByRole('menuitem', { name: 'Duplica' }).click();
+        await expect(duplicate).toBeVisible();
+        await expect(original.getByText('Ciclo attivo', { exact: true })).toBeVisible();
+        expect(receipts()).toBe(initialReceipts + 1);
+
+        const requestDelete = async () => {
+            await original.getByRole('button', { name: 'Opzioni' }).click();
+            await original.getByRole('menuitem', { name: 'Elimina' }).click();
+            return first.getByRole('alertdialog', { name: 'Conferma' });
+        };
+        await (await requestDelete()).getByRole('button', { name: 'Annulla' }).click();
+        await expect(original).toBeVisible();
+        expect(receipts()).toBe(initialReceipts + 1);
+        await (await requestDelete()).getByRole('button', { name: 'Conferma' }).click();
+        await expect(duplicate.getByText('Ciclo attivo', { exact: true })).toBeVisible();
+        await expect(original).toHaveCount(0);
+        expect(receipts()).toBe(initialReceipts + 2);
+        const data = await second.evaluate(async () => (await window.kindeReplicaFixture!.refresh()).data);
+        expect(data.trainingCycles).toHaveLength(1);
+        expect(data.trainingCycles?.[0]).toMatchObject({
+            name: 'Forza - 1', routines: [{ routineId: 'kept-routine', frequencyPerWeek: 1 }],
+        });
+        expect(data.activeCycleId).toBe(data.trainingCycles?.[0]?.id);
+        expect(data.routines).toMatchObject([{ id: 'kept-routine' }]);
+        expect(data.history).toMatchObject([{ id: 'kept-workout', cycleId: 'original-cycle' }]);
+    }, { planningUi: true });
+});

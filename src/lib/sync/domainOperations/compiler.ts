@@ -65,11 +65,13 @@ function collectScope(before: UserData, after: UserData, operations: readonly Do
             case 'routine-exercise.delete':
             case 'routine-exercise.reorder': root('routines'); break;
             case 'training-cycle.upsert':
+            case 'training-cycle.duplicate':
             case 'training-cycle.delete':
             case 'training-cycle.reorder':
             case 'training-cycle-routine.upsert':
             case 'training-cycle-routine.delete':
             case 'training-cycle-routine.reorder': root('trainingCycles'); break;
+            case 'training-cycle.remove': root('trainingCycles', 'activeCycleId'); break;
             case 'active-cycle.set':
             case 'active-cycle.switch': root('activeCycleId'); break;
             case 'active-workout.set': root('activeWorkout'); break;
