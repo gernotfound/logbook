@@ -634,3 +634,54 @@ for (const concurrentWrites of [1, 2]) {
         });
     });
 }
+
+test('finds and duplicates a personal Kinde exercise without modifying routines or the source', async ({ browser }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
+        const exercise = {
+            id: 'ex-custom-candidate', name: 'Rematore personale', notes: 'Presa neutra',
+            setsCount: 4, muscles: ['lats_left'], sets: [],
+        };
+        expect(await second.evaluate(exercise => window.kindeReplicaFixture!.submit([
+            { type: 'exercise.upsert', exercise },
+            { type: 'routine.upsert', routine: { id: 'exercise-test-routine', name: 'Trazione',
+                exercises: [{ exId: exercise.id, setsCount: 4 }] } },
+        ]), exercise)).toMatchObject({ kind: 'cloud-acknowledged' });
+        const before = receipts();
+
+        await first.bringToFront();
+        await mountKindePlanning(first);
+        const archive = first.getByRole('region', { name: 'Esercizi personali account' });
+        await expect(archive).toHaveCount(0);
+        await first.getByRole('button', { name: 'Apri archivio account' }).click();
+        const search = archive.getByRole('searchbox', { name: 'Cerca esercizio' });
+        await search.fill('non presente');
+        await expect(archive.getByText('Nessun esercizio trovato.')).toBeVisible();
+        await search.fill('rematore neutra');
+        await archive.getByRole('button', { name: 'Apri dettaglio di Rematore personale', exact: true }).click();
+        const detail = archive.getByRole('region', { name: 'Dettaglio esercizio' });
+        await expect(detail.getByText('Presa neutra')).toBeVisible();
+        await expect(detail.getByText('1 scheda', { exact: true })).toBeVisible();
+        await expect(detail.getByRole('button', { name: 'Modifica' })).toHaveCount(0);
+        await expect(detail.getByRole('button', { name: 'Elimina' })).toHaveCount(0);
+        expect(receipts()).toBe(before);
+
+        await detail.getByRole('button', { name: 'Duplica' }).click();
+        await expect.poll(() => firstCommitStatuses).toEqual([429]);
+        await expect(archive).toHaveCount(0);
+        expect(receipts()).toBe(before);
+        allowFirstCommit();
+        await first.getByRole('button', { name: 'Verifica salvataggio' }).click();
+        await expect(archive.getByRole('button', { name: 'Apri dettaglio di Rematore personale - 1' })).toBeVisible();
+        expect(firstCommitStatuses).toEqual([429, 200]);
+        expect(receipts()).toBe(before + 1);
+
+        const { data } = await second.evaluate(() => window.kindeReplicaFixture!.refresh());
+        expect(data.library).toHaveLength(2);
+        expect(data.library).toContainEqual(expect.objectContaining(exercise));
+        const duplicate = data.library?.find(item => item.name === 'Rematore personale - 1');
+        expect(duplicate).toMatchObject({ notes: exercise.notes, muscles: exercise.muscles, setsCount: 4 });
+        expect(duplicate?.id).not.toBe(exercise.id);
+        expect(data.routines?.find(routine => routine.id === 'exercise-test-routine')?.exercises)
+            .toEqual([{ exId: exercise.id, setsCount: 4 }]);
+    }, { planningUi: true });
+});
