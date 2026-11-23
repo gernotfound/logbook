@@ -65,6 +65,7 @@ export function useNutritionPlanningEditor(source: Source, showAlert: (message: 
     const [save, setSave] = useState<{ witness: EditWitness; status: SaveStatus } | null>(null);
     const draftRevision = useRef(0);
     const isCurrent = (witness: EditWitness) => source.owner === witness.owner && witness.isCurrent();
+    const savingWitness = useRef<EditWitness | null>(null);
 
     // Use the shared parser to handle decimal commas and invalid measurements.
     const latestWeight = useMemo(() => Logic.getLatestUserWeight(nutritionMap), [nutritionMap]);
@@ -143,6 +144,7 @@ export function useNutritionPlanningEditor(source: Source, showAlert: (message: 
 
     const handleSave = async (e?: { preventDefault(): void }) => {
         if (e) e.preventDefault();
+        if (savingWitness.current && isCurrent(savingWitness.current)) return;
 
         const weight = numericInput(planning.weight, latestWeight);
         const onDaysCount = parseOnDaysCount(planning.onDaysCount);
@@ -203,6 +205,7 @@ export function useNutritionPlanningEditor(source: Source, showAlert: (message: 
             return;
         }
         const revisionAtSubmit = draftRevision.current;
+        savingWitness.current = witness;
         setSave({ witness, status: 'saving' });
         try {
             const result = await source.dispatch({
@@ -223,6 +226,8 @@ export function useNutritionPlanningEditor(source: Source, showAlert: (message: 
             setSave({ witness, status: 'unsaved' });
             // The draft remains editable, but must not be confused with a saved plan.
             await showAlert("Errore durante il salvataggio della pianificazione.");
+        } finally {
+            if (savingWitness.current === witness) savingWitness.current = null;
         }
     };
 

@@ -4,9 +4,10 @@ export function generateUniqueName(baseName: string, existingNames: string[]): s
     if (match) {
         rawName = match[1];
     }
+    const usedNames = new Set(existingNames);
     let counter = 1;
     let newName = `${rawName} - ${counter}`;
-    while (existingNames.includes(newName)) {
+    while (usedNames.has(newName)) {
         counter++;
         newName = `${rawName} - ${counter}`;
     }

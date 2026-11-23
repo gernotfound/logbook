@@ -376,8 +376,24 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                 return;
             }
             const session = captureSession();
+            const observedGeneration = get().syncGeneration;
             const saved = await readLocal(session.owner);
-            if (!isCurrentSession(session) || !saved) return;
+            // A new edit may have entered the queue while IndexedDB was read.
+            // Its UI status belongs to that newer generation, not this idle replay.
+            if (!isCurrentSession(session) || !saved || get().syncGeneration !== observedGeneration
+                || pending.length || running) return;
+            if (saved.cloudIntegrityFence) {
+                // An empty journal is not cloud integrity evidence. Only the
+                // authenticated checkpoint recovery may clear this durable fence.
+                set({
+                    syncing: false,
+                    syncPresentation: 'normal',
+                    cloudIntegrityBlocked: true,
+                    syncHealth: 'failed',
+                    saveError: 'Snapshot cloud non verificato: copia locale preservata. Sincronizzazione sospesa fino al recupero.',
+                });
+                return;
+            }
             if (!saved.pending.length) {
                 // A previous ambiguous cloud outcome can have completed and
                 // acknowledged while the UI was suspended. An empty durable
