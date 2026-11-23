@@ -1,6 +1,8 @@
 // Private, read-only Auth service binding for the candidate D1 replica API.
 // Only a future trusted Auth issuer may create/revoke these sessions.
 // This Worker has no public route and cannot mint an identity on request.
+import { D1_NOW_MS } from '../sql/d1-time.mjs';
+
 const SESSION_COOKIE = '__Host-logbook_session';
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const HASH = /^[a-f0-9]{64}$/;
@@ -109,7 +111,7 @@ async function authorize(request, env) {
     SELECT p.uid, p.auth_epoch AS fence_epoch, p.verified_at_ms,
       COALESCE(s.consent_revision, 0) AS consent_revision,
       t.csrf_hash, t.issued_at_ms, t.idle_expires_at_ms,
-      t.absolute_expires_at_ms
+      t.absolute_expires_at_ms, ${D1_NOW_MS} AS observed_at_ms
     FROM auth_sessions t
     JOIN auth_principals p ON p.uid = t.uid
     LEFT JOIN sync_subjects s ON s.uid = p.uid
@@ -119,7 +121,7 @@ async function authorize(request, env) {
   const syncSql = `
     SELECT p.uid, p.auth_epoch, s.consent_revision, s.fence_epoch,
       p.verified_at_ms, t.csrf_hash, t.issued_at_ms, t.idle_expires_at_ms,
-      t.absolute_expires_at_ms
+      t.absolute_expires_at_ms, ${D1_NOW_MS} AS observed_at_ms
     FROM auth_sessions t
     JOIN auth_principals p ON p.uid = t.uid
     JOIN sync_subjects s ON s.uid = p.uid
@@ -140,8 +142,9 @@ async function authorize(request, env) {
     : [tokenHash, env.CONSENT_PRIVACY_VERSION, env.CONSENT_TERMS_VERSION];
   const row = await env.DB.withSession('first-primary')
     .prepare(identityOnly ? identitySql : syncSql).bind(...parameters).first();
-  const now = Date.now();
-  if (!row || !Number.isSafeInteger(row.issued_at_ms) || row.issued_at_ms > now
+  const now = row?.observed_at_ms;
+  if (!row || !Number.isSafeInteger(now) || now <= 0
+    || !Number.isSafeInteger(row.issued_at_ms) || row.issued_at_ms <= 0 || row.issued_at_ms > now
     || !Number.isSafeInteger(row.idle_expires_at_ms) || now >= row.idle_expires_at_ms
     || !Number.isSafeInteger(row.absolute_expires_at_ms) || now >= row.absolute_expires_at_ms
     || !Number.isSafeInteger(row.consent_revision) || row.consent_revision < 0

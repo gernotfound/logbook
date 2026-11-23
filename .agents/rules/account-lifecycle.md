@@ -1,5 +1,15 @@
 # Ciclo account, Auth e guest — TheLogBook
 
+### CF-03 — Orologio D1 per sessione e consenso
+
+Le scritture D1 dei timestamp di identità, sessione, logout e consenso
+usano l'orologio SQL. I predicati di validità confrontano gli stessi
+timestamp con l'ora D1 nella relativa lettura o scrittura. L'emissione
+restituisce cookie solo dopo aver ricevuto la riga SQL con le scadenze
+esatte. La transazione che autorizza la replica verifica anche l'istante
+di emissione e rifiuta la sessione dall'istante esatto della scadenza.
+Il controllo temporale delle credenziali OIDC resta nel boundary OIDC.
+
 ### CF-03 — Pianificazione condivisa delle mutazioni schede (22/11/2026)
 
 `src/lib/routineSaveIntent.ts` valida il nome, le identità `exId`,

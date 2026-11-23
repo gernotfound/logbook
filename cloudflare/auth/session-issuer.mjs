@@ -1,4 +1,5 @@
 import { hashSessionSecret } from './session-gate.mjs';
+import { D1_NOW_MS } from '../sql/d1-time.mjs';
 
 const SESSION_COOKIE = '__Host-logbook_session';
 const IDLE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -26,41 +27,42 @@ function randomToken() {
  * the current principal epoch; the separate sync gate also requires consent.
  */
 export async function issueVerifiedSession(db, authenticatedUid) {
-  const nowMs = Date.now();
   if (!db || typeof db.prepare !== 'function' ||
     typeof authenticatedUid !== 'string' || authenticatedUid.length < 1 ||
     authenticatedUid.length > 128 || authenticatedUid.includes('/') ||
-    authenticatedUid.trim() !== authenticatedUid ||
-    !Number.isSafeInteger(nowMs) || nowMs <= 0 ||
-    nowMs > Number.MAX_SAFE_INTEGER - ABSOLUTE_TTL_MS) {
+    authenticatedUid.trim() !== authenticatedUid) {
     throw new SessionIssuanceError();
   }
 
   const sessionToken = randomToken();
   const csrfToken = randomToken();
-  const idleExpiresAtMs = nowMs + IDLE_TTL_MS;
-  const absoluteExpiresAtMs = nowMs + ABSOLUTE_TTL_MS;
-
   try {
     // A single conditional INSERT is atomic with a concurrent principal
     // revocation: a stale epoch either cannot be inserted or is rejected by
     // the read-side session gate. No unverified or disabled principal can mint.
+    // Use the same clock as the subsequent D1 authorization predicates.
+    // SQLite resolves 'now' once per statement, including both TTL boundaries.
     const result = await db.prepare(`
+      WITH clock(now_ms) AS (SELECT ${D1_NOW_MS})
       INSERT INTO auth_sessions (
         token_hash, uid, auth_epoch, csrf_hash,
         issued_at_ms, idle_expires_at_ms, absolute_expires_at_ms
       )
-      SELECT ?, p.uid, p.auth_epoch, ?, ?, ?, ?
-      FROM auth_principals p
+      SELECT ?, p.uid, p.auth_epoch, ?, clock.now_ms, clock.now_ms + ?, clock.now_ms + ?
+      FROM auth_principals p CROSS JOIN clock
       WHERE p.uid = ? AND p.status = 'active'
-        AND p.verified_at_ms IS NOT NULL
-        AND p.verified_at_ms <= ?
+        AND p.verified_at_ms > 0 AND p.verified_at_ms <= clock.now_ms
+        AND clock.now_ms > 0 AND clock.now_ms <= ?
+      RETURNING issued_at_ms, idle_expires_at_ms, absolute_expires_at_ms
     `).bind(
       await hashSessionSecret(sessionToken), await hashSessionSecret(csrfToken),
-      nowMs, idleExpiresAtMs, absoluteExpiresAtMs,
-      authenticatedUid, nowMs,
-    ).run();
-    if (result?.success !== true || result.meta?.changes !== 1) {
+      IDLE_TTL_MS, ABSOLUTE_TTL_MS, authenticatedUid, Number.MAX_SAFE_INTEGER - ABSOLUTE_TTL_MS,
+    ).first();
+    if (!result || !Number.isSafeInteger(result.issued_at_ms) || result.issued_at_ms <= 0
+      || !Number.isSafeInteger(result.idle_expires_at_ms)
+      || !Number.isSafeInteger(result.absolute_expires_at_ms)
+      || result.idle_expires_at_ms - result.issued_at_ms !== IDLE_TTL_MS
+      || result.absolute_expires_at_ms - result.issued_at_ms !== ABSOLUTE_TTL_MS) {
       throw new SessionIssuanceError();
     }
     return {
@@ -73,8 +75,8 @@ export async function issueVerifiedSession(db, authenticatedUid) {
         '__Host-logbook_csrf=' + csrfToken +
           '; Path=/; Secure; SameSite=Lax; Max-Age=' + IDLE_TTL_MS / 1000,
       ],
-      idleExpiresAtMs,
-      absoluteExpiresAtMs,
+      idleExpiresAtMs: result.idle_expires_at_ms,
+      absoluteExpiresAtMs: result.absolute_expires_at_ms,
     };
   } catch {
     // The caller must not return an auth success or cookie after a failed or

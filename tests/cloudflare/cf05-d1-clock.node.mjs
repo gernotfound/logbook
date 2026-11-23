@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { D1_NOW_MS } from '../../cloudflare/sql/d1-time.mjs';
 import { activeSessionPredicateSql } from '../../cloudflare/auth/session-write-fence.mjs';
+import { hashSessionSecret } from '../../cloudflare/auth/session-gate.mjs';
+import { issueVerifiedSession } from '../../cloudflare/auth/session-issuer.mjs';
+import { acceptance, call, fixture } from './cf05-consent-fixture.mjs';
 
 void test('D1 clock uses integer milliseconds, including fixed second boundaries', () => {
   const db = new DatabaseSync(':memory:');
@@ -21,16 +24,34 @@ void test('D1 clock uses integer milliseconds, including fixed second boundaries
   } finally { db.close(); }
 });
 
-void test('a just-issued Worker timestamp is not spuriously in the SQL future', () => {
-  const db = new DatabaseSync(':memory:');
+void test('session issuance, initial consent and the sync fence agree even when the Worker clock is ahead', async t => {
+  const f = await fixture();
   try {
-    const stmt = db.prepare('SELECT ? <= ' + D1_NOW_MS + ' AS accepted, ' + D1_NOW_MS + ' AS server_ms');
-    for (let i = 0; i < 150; i += 1) {
-      const issuedAtMs = Date.now();
-      const row = stmt.get(issuedAtMs);
-      const after = Date.now();
-      assert.equal(row.accepted, 1, 'SQL must not reject a fresh same-millisecond session');
-      assert.ok(row.server_ms >= issuedAtMs && row.server_ms <= after);
-    }
-  } finally { db.close(); }
+    const before = f.sqlite.prepare(`SELECT ${D1_NOW_MS} AS ms`).get().ms;
+    const workerTime = before + 300_000;
+    t.mock.method(Date, 'now', () => workerTime);
+    const issued = await issueVerifiedSession(f.db, f.uid);
+    const cookie = issued.setCookies.map(item => item.split(';')[0]).join('; ');
+    const csrf = issued.setCookies[1].split(';')[0].split('=')[1];
+    const hash = await hashSessionSecret(issued.setCookies[0].split(';')[0].split('=')[1]);
+    const session = f.sqlite.prepare(`
+      SELECT token_hash, issued_at_ms FROM auth_sessions
+      WHERE token_hash = ?
+    `).get(hash);
+    assert.ok(session.issued_at_ms >= before && session.issued_at_ms < workerTime);
+
+    const response = await call(f, '/v1/consent/initial', { body: acceptance, cookie, csrf });
+    assert.equal(response.status, 200);
+    const consent = f.sqlite.prepare('SELECT accepted_at_ms FROM health_consent_acceptances WHERE uid=?').get(f.uid);
+    assert.ok(consent.accepted_at_ms >= session.issued_at_ms && consent.accepted_at_ms < workerTime);
+
+    const allowedAt = time => {
+      const sql = activeSessionPredicateSql.replaceAll("'now'", "'" + time + "'");
+      return f.sqlite.prepare('SELECT ' + sql + ' AS allowed').get(session.token_hash, f.uid, 1).allowed;
+    };
+    const sqlDate = ms => new Date(ms).toISOString().slice(0, -1).replace('T', ' ');
+    assert.equal(allowedAt(sqlDate(consent.accepted_at_ms - 1)), 0);
+    assert.equal(allowedAt(sqlDate(consent.accepted_at_ms)), 1);
+    assert.equal(allowedAt(sqlDate(issued.idleExpiresAtMs)), 0);
+  } finally { f.close(); }
 });

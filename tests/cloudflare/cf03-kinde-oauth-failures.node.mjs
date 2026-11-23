@@ -53,7 +53,7 @@ void test('one-use OAuth failures reveal only a bounded phase after browser-stat
     const originalPrepare = f.db.prepare;
     f.db.prepare = function prepare(sql) {
       if (/INSERT INTO auth_sessions/.test(sql)) {
-        return { bind: () => ({ run: async () => { throw Error('synthetic D1 session failure'); } }) };
+        return { bind: () => ({ first: async () => { throw Error('synthetic D1 session failure'); } }) };
       }
       return originalPrepare.call(this, sql);
     };
