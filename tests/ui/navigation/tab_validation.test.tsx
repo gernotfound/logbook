@@ -107,6 +107,29 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
         });
     });
 
+    describe('owner-scoped navigation persistence', () => {
+        it('rebinds a mounted useLocalStorage hook when the owner key changes', () => {
+            const firstOwnerKey = ownerUiPreferenceKey('user:first', LOCAL_STORAGE_ACTIVE_TAB);
+            const secondOwnerKey = ownerUiPreferenceKey('user:second', LOCAL_STORAGE_ACTIVE_TAB);
+            window.localStorage.setItem(firstOwnerKey, JSON.stringify('training'));
+            window.localStorage.setItem(secondOwnerKey, JSON.stringify('nutrition'));
+
+            const { result, rerender } = renderHook(
+                ({ key }: { key: string }) => useLocalStorage(key, 'home', AppTabSchema),
+                { initialProps: { key: firstOwnerKey } },
+            );
+            expect(result.current[0]).toBe('training');
+
+            rerender({ key: secondOwnerKey });
+            expect(result.current[0]).toBe('nutrition');
+            expect(window.localStorage.getItem(firstOwnerKey)).toBe(JSON.stringify('training'));
+
+            rerender({ key: firstOwnerKey });
+            expect(result.current[0]).toBe('training');
+            expect(window.localStorage.getItem(secondOwnerKey)).toBe(JSON.stringify('nutrition'));
+        });
+    });
+
     describe('App Component Fallback on Corrupted LocalStorage', () => {
         beforeEach(async () => {
             await prepareUnlockedTestArchive();
