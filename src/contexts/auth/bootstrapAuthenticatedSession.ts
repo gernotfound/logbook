@@ -4,6 +4,7 @@ import type { UserData } from '../../types';
 import { isAccountDeletionPending } from '../../lib/sync/accountGate';
 import { refreshHealthConsent } from '../../lib/healthConsent';
 import { userOwner } from '../../lib/sync/session';
+import { BrowserStorageError } from '../../lib/sync/browserStorage';
 import { ensureLocalVaultReady } from '../../lib/sync/secureArchiveUnlockFlow';
 import { useAppStore } from '../../store/useAppStore';
 import { guardAuthenticatedBootstrap } from './guardAuthenticatedBootstrap';
@@ -128,8 +129,24 @@ export async function bootstrapAuthenticatedSession(
             }
         } else {
             setGuestMigrationStatus('idle');
-            await loadData(user);
-            if (isCurrentRun()) setLoading(false);
+            try {
+                await loadData(user);
+            } catch (error) {
+                if (!isCurrentRun()) return;
+                // A failed journal drain is not a cloud ACK. Keep the local
+                // archive and expose a retryable failure rather than leaving
+                // the authenticated bootstrap stuck behind its loading screen.
+                console.error('Caricamento archivio account non completato:', error);
+                useAppStore.setState({
+                    syncHealth: 'failed',
+                    ...(error instanceof BrowserStorageError ? { localPersistenceBlocked: true } : {}),
+                });
+                setSaveError(error instanceof BrowserStorageError
+                    ? 'Archivio locale non leggibile. I dati sul dispositivo sono conservati: riprova.'
+                    : 'Caricamento account non completato. I dati locali sono conservati: riprova.');
+            } finally {
+                if (isCurrentRun()) setLoading(false);
+            }
         }
     }
 }
