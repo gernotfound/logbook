@@ -14,6 +14,12 @@
 | Erasure e inattività | Registro D1, finalizzatore, runner e [manifest CF-06 candidato](../../cloudflare/jobs/README.md) | GET Cloudflare del 22/11: elenco Cron Trigger vuoto per tutti e quattro i Worker TheLogBook; runner non schedulato | Esecuzione isolata, terminazione atomica, eliminazione Kinde per ultima, inattività 12 mesi |
 | Free, abuso e privacy | Rate-limit binding, verifiche statiche, smoke e test con dati sintetici | Nessun GO utenti esterni o account fitness | Quote/abuso, mail, custodia segreti e collaudo indipendente delle condizioni GDPR |
 
+L'archivio candidato degli esercizi personali legge lo snapshot del realm
+Kinde. Riusa la ricerca e il dettaglio della vista ospite, inclusi i
+riferimenti dalle schede. La duplicazione crea un nuovo esercizio personale
+attraverso il journal cifrato. Creazione, modifica ed eliminazione degli
+esercizi restano fuori da questa vista candidata.
+
 ## Lettura del provider — 22 novembre 2026
 
 Il connettore Cloudflare ha restituito quattro Worker TheLogBook: `thelogbook-frontend`, `thelogbook-api-isolated`, `thelogbook-cf03-auth-gate-isolated` e `thelogbook-cf03-kinde-http-isolated`. Il frontend ha `APP_ORIGIN`, `ASSETS`, `KINDE_HTTP` e **non** `D1_API`; l'API privata ha `DB`, `RECOVERY_DB`, `AUTH_GATE` e `CLOUD_ACCOUNT_KEK_V1` come `secret_text`. Entrambi i database D1 isolati riportano `jurisdiction=eu`. Il Worker frontend riporta modifica del 22/11; gli altri tre del 21/11. Lettura GET dei Cron Trigger con risposta `success:true`: nessuno schedulato su tutti e quattro i Worker. Questa lettura **non** certifica commit distribuito, valori di segreti, restore, rotte, Cron Trigger, sicurezza effettiva delle API, collocazione di ogni trattamento o GDPR.

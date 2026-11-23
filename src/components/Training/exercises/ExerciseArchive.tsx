@@ -7,25 +7,23 @@ import {
     Timer,
     X,
 } from 'lucide-react';
-import type { useTrainingExercises } from '../../../hooks/useTrainingExercises';
+import type { Exercise, WorkoutRoutine } from '../../../types';
 import { ExerciseDetail } from './ExerciseDetail';
 import { muscleName, normalizeSearch, trackingLabel } from './exerciseArchivePresentation';
 
-type TrainingExercisesHook = ReturnType<typeof useTrainingExercises>;
-type ExerciseItem = TrainingExercisesHook['library'][number];
 const ARCHIVE_PAGE_SIZE = 50;
 
 interface ExerciseArchiveProps {
-    library: TrainingExercisesHook['library'];
-    routines: TrainingExercisesHook['routines'];
+    library: readonly Exercise[];
+    routines: readonly WorkoutRoutine[];
     selectedExId: string | null;
     onSelectedExIdChange: (id: string | null) => void;
-    onEditItem: (exercise: ExerciseItem) => void;
-    onDuplicate: TrainingExercisesHook['handleDuplicate'];
-    onDelete: (id: string, event: MouseEvent) => void | Promise<void>;
+    onEditItem?: (exercise: Exercise) => void;
+    onDuplicate: (exercise: Exercise) => Promise<void>;
+    onDelete?: (id: string, event: MouseEvent) => void | Promise<void>;
 }
 
-function TrackingIcon({ exercise }: { exercise: ExerciseItem }) {
+function TrackingIcon({ exercise }: { exercise: Exercise }) {
     if (exercise.trackingType === 'cardio') return <Activity size={18} aria-hidden="true" />;
     if (exercise.trackingType === 'time') return <Timer size={18} aria-hidden="true" />;
     return <Dumbbell size={18} aria-hidden="true" />;

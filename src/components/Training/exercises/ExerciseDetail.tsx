@@ -8,9 +8,9 @@ interface ExerciseDetailProps {
     exercise: Exercise;
     routineCount: number;
     onBack: () => void;
-    onEditItem: (exercise: Exercise) => void;
+    onEditItem?: (exercise: Exercise) => void;
     onDuplicate: (exercise: Exercise) => Promise<void>;
-    onDelete: (id: string, event: MouseEvent) => void | Promise<void>;
+    onDelete?: (id: string, event: MouseEvent) => void | Promise<void>;
 }
 
 export function ExerciseDetail({
@@ -101,15 +101,17 @@ export function ExerciseDetail({
             </div>
 
             <div className="exercise-detail-actions">
-                <button
-                    className="btn exercise-action-button"
-                    type="button"
-                    disabled={detailActionPending}
-                    onClick={() => onEditItem(exercise)}
-                >
-                    <Pencil size={17} aria-hidden="true" />
-                    Modifica
-                </button>
+                {onEditItem && (
+                    <button
+                        className="btn exercise-action-button"
+                        type="button"
+                        disabled={detailActionPending}
+                        onClick={() => onEditItem(exercise)}
+                    >
+                        <Pencil size={17} aria-hidden="true" />
+                        Modifica
+                    </button>
+                )}
                 <button
                     className="btn exercise-action-button"
                     type="button"
@@ -119,7 +121,7 @@ export function ExerciseDetail({
                     <Copy size={17} aria-hidden="true" />
                     Duplica
                 </button>
-                {!exercise.isDefault && (
+                {!exercise.isDefault && onDelete && (
                     <button
                         className="btn exercise-action-button exercise-action-danger"
                         type="button"

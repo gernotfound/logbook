@@ -4,6 +4,7 @@ import type { MuscleDef } from '../lib/constants/muscles';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
+import { buildExerciseDuplicateOperation } from '../lib/exerciseDuplicateIntent';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { getCachedCatalog } from '../lib/catalog/catalogService';
 import { filterMuscles } from './trainingExercises/muscleSelection';
@@ -121,15 +122,8 @@ export function useTrainingExercises() {
 
     const handleDuplicate = async (ex: Exercise) => {
         if (!isCurrentSession(draftSession)) return;
-        const newName = Logic.generateUniqueName(ex.name, library.map(l => l.name));
-        const duplicated = {
-            ...ex,
-            id: Logic.generateId('ex'),
-            name: newName,
-            isDefault: false
-        };
         try {
-            await persistExercise({ type: 'exercise.upsert', exercise: duplicated });
+            await persistExercise(buildExerciseDuplicateOperation(ex, library, Logic.generateId('ex')));
         } catch (err) {
             if (!isCurrentSession(draftSession)) return;
             console.error(err);
