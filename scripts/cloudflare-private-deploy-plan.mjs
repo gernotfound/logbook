@@ -46,16 +46,22 @@ function gitJson(ref, path) {
   return JSON.parse(execFileSync('git', ['show', ref + ':' + path], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
 }
 
-export function planFromGit(workflowPath) {
+export function planFromGit(workflowPath, pushBeforeSha = process.env.PUSH_BEFORE_SHA) {
   const paths = readPrivatePushPaths(readFileSync(workflowPath, 'utf8'));
   if (!paths.includes('package.json') || !paths.includes('package-lock.json')) throw new Error('Missing dependency triggers');
-  const changed = execFileSync('git', ['diff', '--name-only', '-z', 'HEAD^', 'HEAD'], { encoding: 'utf8' })
+  if (!/^[a-f0-9]{40}$/.test(pushBeforeSha ?? '') || /^0{40}$/.test(pushBeforeSha)) {
+    throw new Error('Missing or invalid push before SHA');
+  }
+  // A push may contain multiple commits: HEAD^ can hide an earlier Worker
+  // change followed by a version-only commit. Unknown history must deploy.
+  execFileSync('git', ['merge-base', '--is-ancestor', pushBeforeSha, 'HEAD'], { stdio: 'ignore' });
+  const changed = execFileSync('git', ['diff', '--name-only', '-z', pushBeforeSha, 'HEAD', '--'], { encoding: 'utf8' })
     .split('\0').filter(Boolean);
   return mustDeployPrivateWorker({
     changed, paths,
-    previousPackage: gitJson('HEAD^', 'package.json'),
+    previousPackage: gitJson(pushBeforeSha, 'package.json'),
     currentPackage: JSON.parse(readFileSync('package.json', 'utf8')),
-    previousLock: gitJson('HEAD^', 'package-lock.json'),
+    previousLock: gitJson(pushBeforeSha, 'package-lock.json'),
     currentLock: JSON.parse(readFileSync('package-lock.json', 'utf8')),
   });
 }

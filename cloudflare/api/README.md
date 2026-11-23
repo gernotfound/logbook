@@ -74,8 +74,9 @@ This is a candidate API, **not an enabled production route**. The existing
 Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
 
 - Schema: migrations/0001_encrypted_replica.sql through
-  migrations/0010_atomic_health_erasure_finalization.sql; all 0001–0010 have remote
-  isolated D1 schema readback evidence (15/11/2026). Local-only rollback is **destructive,
+  migrations/0011_integer_cloud_key_clock.sql. Remote isolated D1 schema
+  readback evidence dated 15/11/2026 covers 0001–0010 only; it does not
+  attest the later integer-clock migration 0011. Local-only rollback is **destructive,
   disposable-only** rollback in rollback/ (never apply it to user data).
 - Local-only Wrangler configuration: wrangler.local.jsonc; placeholder database
   ID, workers.dev and preview URLs disabled, no domain route or public fixture.
