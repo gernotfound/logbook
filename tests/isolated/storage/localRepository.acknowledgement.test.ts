@@ -48,11 +48,14 @@ describe('durable owner-scoped journal', () => {
             { clock: {}, syncMetaByDocument: {} });
         await commitLocal('a', data(171), base);
         const delivered = (await readLocal('a'))!;
+        expect(delivered.pending.length).toBeGreaterThan(0);
         const second = { ...first, slot: 's01', replicaId: 'ack-new-replica' };
         await adoptReplicaCheckpoint('a', { identity: second, baseSeq: 0 },
             { clock: {}, syncMetaByDocument: {} });
         const before = (await readLocal('a'))!;
         expect(before.actorId).toBe('s01');
+        // A disappearing journal would make the .every() assertion vacuously pass.
+        expect(before.pending.length).toBeGreaterThan(0);
         expect(before.pending.every(op => op.actorId === 's01')).toBe(true);
 
         await expect(acknowledgeThrough('a', delivered.pending.at(-1)!.seq, data(171), [], undefined,

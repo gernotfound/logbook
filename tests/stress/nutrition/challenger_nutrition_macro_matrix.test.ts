@@ -25,18 +25,20 @@ describe('Nutrition macro boundary permutations', () => {
 
         it('FoodSchema validates and parses 100 deterministic macro combinations', () => {
             for (let i = 0; i < 100; i++) {
+                const carbs = (i * 1.5) % 100;
+                const pro = (i * 0.8) % 50;
+                const fat = (i * 0.5) % 40;
+                // The expected energy is independent of calculateCustomFoodKcal.
+                const kcal = Math.round(carbs * 4 + pro * 4 + fat * 9);
                 const food = {
                     id: `food_${i}`,
                     name: `Food Item ${i}`,
-                    carbs: (i * 1.5) % 100,
-                    pro: (i * 0.8) % 50,
-                    fat: (i * 0.5) % 40,
-                    kcal: calculateCustomFoodKcal((i * 1.5) % 100, (i * 0.8) % 50, (i * 0.5) % 40),
-                    isCustom: i % 2 === 0
+                    carbs, pro, fat, kcal,
+                    isCustom: i % 2 === 0,
                 };
-                const parsed = FoodSchema.parse(food);
-                expect(parsed.name).toBe(`Food Item ${i}`);
-                expect(Number.isFinite(parsed.kcal)).toBe(true);
+
+                expect(calculateCustomFoodKcal(carbs, pro, fat)).toBe(kcal);
+                expect(FoodSchema.parse(food)).toMatchObject(food);
             }
         });
     });

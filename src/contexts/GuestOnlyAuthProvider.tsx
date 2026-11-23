@@ -54,7 +54,11 @@ export function GuestOnlyAuthProvider({ children }: { children: ReactNode }) {
             useAppStore.getState().resetStore({ force: true });
         };
         const onStorage = (event: StorageEvent) => {
-            if ([GUEST_KEY, GUEST_SESSION_KEY, GUEST_REVOCATION_KEY].includes(event.key ?? '')) reconcile();
+            // Storage.clear() notifies other tabs with key=null; the guest's
+            // session proof may have disappeared without a per-key event.
+            if (event.key === null || [GUEST_KEY, GUEST_SESSION_KEY, GUEST_REVOCATION_KEY].includes(event.key)) {
+                reconcile();
+            }
         };
         const onVisible = () => {
             if (document.visibilityState === 'visible') reconcile();

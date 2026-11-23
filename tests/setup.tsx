@@ -468,10 +468,15 @@ beforeEach(() => {
 
 vi.mock('firebase/firestore', () => {
   const refPath = (ref: any) => typeof ref?.path === 'string' ? ref.path : '';
-  const snapshot = (data: any) => ({
-    exists: () => data !== undefined,
-    data: () => data,
-  });
+  // Firestore snapshots freeze the version read, not a live pointer to the
+  // mock store. Both separate data() calls and subsequent writes are isolated.
+  const snapshot = (data: any) => {
+    const captured = data === undefined ? undefined : structuredClone(data);
+    return {
+      exists: () => captured !== undefined,
+      data: () => captured === undefined ? undefined : structuredClone(captured),
+    };
+  };
   const defaultControl = () => {
     const now = Date.now();
     return {
@@ -616,17 +621,20 @@ export const defaultMockUserData: UserData = {
 };
 
 export function createMockUserData(overrides?: Partial<UserData>): UserData {
+  // Each generated snapshot must own its nested arrays and objects. Otherwise
+  // one UI test's edits can alter the defaults observed by a later test.
+  const defaults = structuredClone(defaultMockUserData);
   return {
-    ...defaultMockUserData,
+    ...defaults,
     ...overrides,
-    profile: { ...defaultMockUserData.profile, ...(overrides?.profile || {}) },
+    profile: { ...defaults.profile, ...(overrides?.profile || {}) },
     catalogOverrides: {
-      ...defaultMockUserData.catalogOverrides,
+      ...defaults.catalogOverrides,
       ...(overrides?.catalogOverrides || {})
     },
     nutritionPlanning: overrides?.nutritionPlanning !== undefined
       ? overrides.nutritionPlanning
-      : defaultMockUserData.nutritionPlanning,
+      : defaults.nutritionPlanning,
   };
 }
 
@@ -659,7 +667,7 @@ function authenticatedFixtureOwner(): string {
  * must not transiently present the guest timer while an account vault is active.
  */
 export function renderWithAuthenticatedTestOwner(ui: React.ReactElement, options: RenderOptions = {}) {
-  const initialUserData = options.userData !== undefined ? options.userData : defaultMockUserData;
+  const initialUserData = options.userData !== undefined ? options.userData : createMockUserData();
   const initialLocalWorkout = options.localWorkout !== undefined ? options.localWorkout : null;
   setOwnerBoundUserData(initialUserData, options.dataOwner ?? authenticatedFixtureOwner());
   useAppStore.setState({
@@ -682,7 +690,7 @@ export function renderWithAuthenticatedTestOwner(ui: React.ReactElement, options
 }
 
 export function renderWithProviders(ui: React.ReactElement, options: RenderOptions = {}) {
-  const initialUserData = options.userData !== undefined ? options.userData : defaultMockUserData;
+  const initialUserData = options.userData !== undefined ? options.userData : createMockUserData();
   const initialLocalWorkout = options.localWorkout !== undefined ? options.localWorkout : null;
   setOwnerBoundUserData(initialUserData, options.dataOwner ?? authenticatedFixtureOwner());
 

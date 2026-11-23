@@ -5,6 +5,13 @@ function validIndex(index: number, length: number): boolean {
     return Number.isSafeInteger(index) && index >= 0 && index < length;
 }
 
+// parseInt would silently turn '8.5' or '8e2' into eight repetitions.
+function parseExactInteger(value: string): number | null {
+    if (!/^[+-]?\d+$/.test(value.trim())) return null;
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
 export function routineExerciseEditorActions(setRoutineExercises: (update: (current: RoutineExercise[]) => RoutineExercise[]) => void) {
     const handleAddExerciseToRoutine = (exId: string) => {
         if (!exId) return;
@@ -49,12 +56,14 @@ export function routineExerciseEditorActions(setRoutineExercises: (update: (curr
         setRoutineExercises(prev => {
             if (!validIndex(index, prev.length)) return prev;
             const newExs = [...prev];
-            const parsed = parseInt(value);
-            if (isNaN(parsed)) {
+            if (value.trim() === '') {
                 const ex = { ...newExs[index] };
                 delete ex[field];
                 newExs[index] = ex;
             } else {
+                const parsed = parseExactInteger(value);
+                // Invalid intermediate input is not a request to erase a valid target.
+                if (parsed === null) return prev;
                 newExs[index] = { ...newExs[index], [field]: parsed };
             }
             return newExs;
@@ -98,8 +107,8 @@ export function routineExerciseEditorActions(setRoutineExercises: (update: (curr
                 ...(exercise.setPlans?.[index] || { technique: 'straight' as const }),
             }));
             const plan = { ...plans[setIndex] };
-            const parsed = value.trim() === '' ? undefined
-                : field === 'segmentCount' ? Number(value) : Number.parseInt(value, 10);
+            const parsed = value.trim() === '' ? undefined : parseExactInteger(value);
+            if (parsed === null) return prev;
 
             if (field === 'targetReps') {
                 if (parsed === undefined || !Number.isFinite(parsed) || parsed < 1) delete plan.target;

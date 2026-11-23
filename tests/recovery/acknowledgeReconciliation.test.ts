@@ -78,6 +78,54 @@ describe('acknowledgeThrough reconciliation', () => {
         expect(after?.pending.every(operation => operation.seq > 1)).toBe(true);
         expect(after?.pending.some(operation => operation.seq === 2)).toBe(true);
     });
+    it('preserves an independently hydrated nutrition month when acknowledging only a root edit', async () => {
+        await commitLocal(owner, data(171), data(170));
+        const delivered = structuredClone((await readLocal(owner))!.pending);
+        expect(delivered).toHaveLength(1);
+        expect(delivered[0]?.docPath).toBe('');
+
+        const date = '2026-09-20';
+        const monthPath = 'nutrition_months/2026-09';
+        const monthMeta = {
+            protocolVersion: 3 as const,
+            clock: { s01: 1 },
+            fields: {
+                '2026-09-20/steps': { actorId: 's01', seq: 1, clock: { s01: 1 } },
+            },
+        };
+        const cloudWithMonth = UserDataSchema.parse({
+            profile: { height: '170' },
+            nutrition: {
+                [date]: { date, kcal: 0, carbs: 0, pro: 0, fat: 0, steps: 11000 },
+            },
+        }) as unknown as UserData;
+
+        // A second tab installs a different document while the root delivery is in flight.
+        await hydrateLocal(owner, cloudWithMonth, ['2026-09'], new Map([
+            ['', { _sync: { protocolVersion: 3, clock: {}, fields: {} } }],
+            [monthPath, { _sync: monthMeta }],
+        ]));
+        const hydrated = await readLocal(owner);
+        expect(hydrated?.baseline.nutrition?.[date]?.steps).toBe(11000);
+        expect(hydrated?.data.profile?.height).toBe('171');
+        expect(hydrated?.syncMetaByDocument[monthPath]).toEqual(monthMeta);
+
+        await acknowledgeThrough(owner, 1, data(171), [], {
+            '': { protocolVersion: 3, clock: { s00: 1 }, fields: {} },
+        }, { operations: delivered, replica });
+
+        const after = await readLocal(owner);
+        expect(after?.pending).toEqual([]);
+        expect(after?.data.profile?.height).toBe('171');
+        expect(after?.baseline.profile?.height).toBe('171');
+        expect(after?.data.nutrition?.[date]).toMatchObject({
+            date, kcal: 0, carbs: 0, pro: 0, fat: 0, steps: 11000,
+        });
+        expect(after?.baseline.nutrition?.[date]).toEqual(hydrated?.baseline.nutrition?.[date]);
+        expect(after?.syncMetaByDocument[monthPath]).toEqual(monthMeta);
+        expect(after?.completeMonths).toContain('2026-09');
+    });
+
     it('rejects an older remote acknowledgement after a newer cloud frontier is hydrated', async () => {
         await commitLocal(owner, data(171), data(170));
         const delivered = structuredClone((await readLocal(owner))!.pending);

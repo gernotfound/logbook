@@ -50,6 +50,26 @@ describe('Catalog adversarial: large-scale delta resolution', () => {
 
             const item750 = resolved.find(e => e.id === 'ex_750');
             expect(item750).toBeUndefined();
+
+            const byId = new Map(resolved.map(exercise => [exercise.id, exercise]));
+            expect(byId.size).toBe(1000);
+            for (let i = 0; i < 200; i++) {
+                expect(byId.get(`custom_${i}`)).toMatchObject({
+                    name: `Custom Exercise ${i}`, isDefault: false,
+                });
+            }
+            for (let i = 0; i < 1000; i++) {
+                const exercise = byId.get(`ex_${i}`);
+                if (i >= 700 && i < 900) {
+                    expect(exercise).toBeUndefined();
+                } else {
+                    expect(exercise).toMatchObject({
+                        name: i < 500 ? `Overridden Exercise ${i}` : `Exercise ${i}`,
+                        isDefault: true,
+                    });
+                    if (i < 500) expect(exercise?.equipmentWeight).toBe(i * 0.5);
+                }
+            }
         });
 
         it('resolves 2,000 global foods with 1,000 overrides and 500 hidden items deterministically', () => {
@@ -98,6 +118,27 @@ describe('Catalog adversarial: large-scale delta resolution', () => {
 
             const food1600 = resolved.find(f => f.id === 'food_1600');
             expect(food1600).toBeUndefined();
+
+            const byId = new Map(resolved.map(food => [String(food.id), food]));
+            expect(byId.size).toBe(1800);
+            for (let i = 0; i < 300; i++) {
+                expect(byId.get(`custom_food_${i}`)).toMatchObject({
+                    name: `Custom Food ${i}`, kcal: 250, isCustom: true,
+                });
+            }
+            for (let i = 0; i < 2000; i++) {
+                const food = byId.get(`food_${i}`);
+                if (i >= 1500) {
+                    expect(food).toBeUndefined();
+                } else {
+                    expect(food).toMatchObject({
+                        name: `Food ${i}`,
+                        kcal: i < 1000 ? 999 : 100 + i,
+                        brand: i < 1000 ? `Premium Brand ${i}` : 'Brand',
+                        isCustom: false,
+                    });
+                }
+            }
         });
 
         it('merges two large CatalogOverrides structures without losing IDs', () => {
@@ -120,6 +161,14 @@ describe('Catalog adversarial: large-scale delta resolution', () => {
             expect(Object.keys(merged.foods || {}).length).toBe(750);
             expect(merged.hiddenExerciseIds?.length).toBe(1000);
             expect(merged.hiddenFoodIds?.length).toBe(1000);
+            expect(new Set(merged.hiddenExerciseIds).size).toBe(1000);
+            expect(new Set(merged.hiddenFoodIds).size).toBe(1000);
+            for (let i = 0; i < 750; i++) {
+                expect(merged.exercises?.[`ex_${i}`]?.notes)
+                    .toBe(i < 250 ? `A_${i}` : `B_${i - 250}`);
+                expect(merged.foods?.[`food_${i}`]?.brand)
+                    .toBe(i < 250 ? `A_${i}` : `B_${i - 250}`);
+            }
         });
     });
 

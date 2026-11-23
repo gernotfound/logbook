@@ -1,13 +1,14 @@
 import React from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
-import { expect, it } from 'vitest';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { expect, it, vi } from 'vitest';
 import NutritionSupplements from '../../src/components/Nutrition/NutritionSupplements';
 import { storageOwner } from '../../src/lib/sync/session';
 import { useAppStore } from '../../src/store/useAppStore';
 import { emptyUserData } from '../setup';
 
-it('preserves quick intake values for different supplements updated in one React batch', () => {
+it('keeps batched supplement drafts independent through two durable intake commits', async () => {
     const previous = useAppStore.getState();
+    const dispatch = vi.fn(async () => ({ ok: true as const, status: 'synced' as const }));
     useAppStore.setState({
         userData: {
             ...emptyUserData,
@@ -17,6 +18,7 @@ it('preserves quick intake values for different supplements updated in one React
             ],
         },
         dataOwner: storageOwner(),
+        dispatchDomainOperation: dispatch,
     });
 
     try {
@@ -31,8 +33,33 @@ it('preserves quick intake values for different supplements updated in one React
 
         expect(first.value).toBe('3');
         expect(second.value).toBe('200');
+
+        fireEvent.click(within(screen.getByRole('article', { name: 'Creatina' }))
+            .getByRole('button', { name: /Aggiungi/ }));
+        await waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1));
+        expect(dispatch).toHaveBeenNthCalledWith(1, expect.objectContaining({
+            type: 'supplement-intake.add',
+            date: '2026-09-14',
+            intake: expect.objectContaining({ supplementId: 'first', amount: 3 }),
+        }));
+        await waitFor(() => expect(first.value).toBe(''));
+        expect(second.value).toBe('200');
+
+        fireEvent.click(within(screen.getByRole('article', { name: 'Magnesio' }))
+            .getByRole('button', { name: /Aggiungi/ }));
+        await waitFor(() => expect(dispatch).toHaveBeenCalledTimes(2));
+        expect(dispatch).toHaveBeenNthCalledWith(2, expect.objectContaining({
+            type: 'supplement-intake.add',
+            date: '2026-09-14',
+            intake: expect.objectContaining({ supplementId: 'second', amount: 200 }),
+        }));
+        await waitFor(() => expect(second.value).toBe(''));
         view.unmount();
     } finally {
-        useAppStore.setState({ userData: previous.userData, dataOwner: previous.dataOwner });
+        useAppStore.setState({
+            userData: previous.userData,
+            dataOwner: previous.dataOwner,
+            dispatchDomainOperation: previous.dispatchDomainOperation,
+        });
     }
 });

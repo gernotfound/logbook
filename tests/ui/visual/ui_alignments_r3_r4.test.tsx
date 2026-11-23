@@ -10,6 +10,8 @@ import { useDialogStore } from '../../../src/store/useDialogStore';
 import { Logic } from '../../../src/lib/logic';
 import { storageOwner } from '../../../src/lib/sync/session';
 import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { readLocal } from '../../../src/lib/sync/localRepository';
+import { idbStore } from '../../setup';
 
 function renderMeasurements(overrides: Partial<React.ComponentProps<typeof DataMeasurements>>) {
     return render(
@@ -111,10 +113,9 @@ describe('UI Alignments - R3 & R4', () => {
             // Click previous button
             const prevBtn = screen.getByRole('button', { name: 'Giorno precedente' });
             fireEvent.click(prevBtn);
-            expect(mockSetSelectedDate).toHaveBeenCalledWith(
-                new Date(new Date(`${todayStr}T12:00:00`).getTime() - 24 * 60 * 60 * 1000)
-                    .toLocaleDateString('sv-SE'),
-            );
+            const previousDay = new Date(`${todayStr}T12:00:00`);
+            previousDay.setDate(previousDay.getDate() - 1);
+            expect(mockSetSelectedDate).toHaveBeenCalledWith(Logic.getLocalDateString(previousDay));
         });
 
         it('allows navigating forward on a past date and offers deletion instead of a meaningless cancel action', () => {
@@ -170,7 +171,7 @@ describe('UI Alignments - R3 & R4', () => {
             expect(result.current.hasExistingData).toBe(true);
         });
 
-        it('useNutritionMeasurements saves to selectedDate without a blocking success dialog', async () => {
+        it('useNutritionMeasurements durably saves to selectedDate without a blocking success dialog', async () => {
             const showAlertSpy = vi.spyOn(useDialogStore.getState(), 'showAlert');
             const { result } = renderHook(() => useNutritionMeasurements('2026-08-05'));
             
@@ -190,6 +191,18 @@ describe('UI Alignments - R3 & R4', () => {
             expect(updatedNutrition?.['2026-08-05'].waist).toBe(80);
             expect(updatedNutrition?.['2026-08-05'].neck).toBe(37);
             expect(updatedNutrition?.['2026-08-05'].bf).toBeUndefined();
+
+            const owner = storageOwner();
+            const durable = await readLocal(owner);
+            expect(durable?.owner).toBe(owner);
+            expect(durable?.data.nutrition?.['2026-08-05']).toMatchObject({
+                date: '2026-08-05',
+                weight: 75.2,
+                waist: 80,
+                neck: 37,
+            });
+            expect(durable?.data.nutrition?.['2026-08-05'].bf).toBeUndefined();
+            expect(idbStore[`logbook:v2:${owner}`]).toMatch(/^tlb-sealed:v1:/);
             expect(showAlertSpy).not.toHaveBeenCalled();
         });
 
@@ -207,9 +220,11 @@ describe('UI Alignments - R3 & R4', () => {
             });
 
             const day = useAppStore.getState().userData?.nutrition?.['2026-08-06'];
-            expect(day?.bf).toBeTypeOf('number');
-            expect(Number.isFinite(day?.bf)).toBe(true);
-            expect(day?.bfProvenance?.method).toBe('us_navy');
+            expect(day?.bf).toBe(13.7);
+            expect(day?.bfProvenance).toEqual({
+                method: 'us_navy',
+                inputs: { heightCm: 180, waistCm: 82, neckCm: 38, gender: 'M' },
+            });
         });
 
         it('does not promote BF without provenance during ordinary save', async () => {

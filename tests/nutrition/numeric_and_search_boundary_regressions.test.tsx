@@ -9,6 +9,7 @@ import { createLoggedMealItem } from '../../src/lib/nutrition/createLoggedMealIt
 import { calculateLoggedMealTotals } from '../../src/lib/nutrition/calculateLoggedMealTotals';
 import type { Food } from '../../src/types';
 import NutritionMeals from '../../src/components/Nutrition/NutritionMeals';
+import { useNutritionMeals } from '../../src/hooks/useNutritionMeals';
 
 describe('Nutrition numeric and hostile search inputs', () => {
 
@@ -211,22 +212,51 @@ describe('Nutrition numeric and hostile search inputs', () => {
       expect(calculateLoggedMealTotals([{ ...logged, quantity: 2 }]).kcal).toBe(145);
     });
 
-    test('NutritionMeals handles literal regex metacharacters and still finds a known food', async () => {
+    test('NutritionMeals preserves search identities and ordering after hostile literal queries', async () => {
       await prepareUnlockedTestArchive();
-      renderWithProviders(<NutritionMeals />, { userData: {
-        ...emptyUserData,
-        customFoods: [{ id: 'food-pollo', name: 'Pollo Test', kcal: 105, pro: 23, carbs: 0, fat: 1 }],
-      } });
+      const foods: Food[] = [
+        { id: 'pollo-z', name: 'Pollo zuppa', kcal: 105, pro: 23, carbs: 0, fat: 1 },
+        { id: 0, name: 'Pollo arrosto', kcal: 115, pro: 24, carbs: 0, fat: 2 },
+        { id: 'riso-1', name: 'Riso integrale', kcal: 125, pro: 3, carbs: 25, fat: 1 },
+      ];
+
+      function SearchHarness() {
+        const meals = useNutritionMeals('2026-10-20');
+        return (
+          <>
+            <span data-testid="search-identities">
+              {meals.searchResults.map(food => `${typeof food.id}:${food.id}`).join('|')}
+            </span>
+            <NutritionMeals mealsHook={meals} selectedDate="2026-10-20" />
+          </>
+        );
+      }
+
+      renderWithProviders(<SearchHarness />, { userData: { ...emptyUserData, customFoods: foods } });
       const searchInput = screen.getByPlaceholderText(/Cerca alimento/i) as HTMLInputElement;
+      const identities = screen.getByTestId('search-identities');
       const metacharacters = '[.*+?^$()|[\\]\\\\]';
 
       fireEvent.change(searchInput, { target: { value: metacharacters } });
       expect(searchInput.value).toBe(metacharacters);
+      expect(identities.textContent).toBe('');
       expect(screen.getByRole('status').textContent).toContain('Nessun alimento trovato');
 
       fireEvent.change(searchInput, { target: { value: 'Pollo' } });
       expect(searchInput.value).toBe('Pollo');
-      expect(screen.getByText('Pollo Test')).toBeDefined();
+      expect(identities.textContent).toBe('number:0|string:pollo-z');
+      expect(screen.getByText('Pollo arrosto')).toBeDefined();
+      expect(screen.getByText('Pollo zuppa')).toBeDefined();
       expect(screen.queryByRole('status')).toBeNull();
+
+      fireEvent.change(searchInput, { target: { value: 'Riso' } });
+      expect(identities.textContent).toBe('string:riso-1');
+      expect(screen.getByText('Riso integrale')).toBeDefined();
+      expect(screen.queryByText('Pollo arrosto')).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cancella ricerca' }));
+      expect(searchInput.value).toBe('');
+      expect(identities.textContent).toBe('');
+      expect(screen.queryByText('Riso integrale')).toBeNull();
     });
 });

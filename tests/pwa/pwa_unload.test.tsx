@@ -28,6 +28,23 @@ describe('PWA beforeunload guard', () => {
       unmount();
     });
 
+    test('removes the beforeunload guard on unmount even when the store is still syncing', () => {
+      useAppStore.getState().setSyncing(true);
+      const view = render(<App />);
+
+      const mountedEvent = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent;
+      window.dispatchEvent(mountedEvent);
+      expect(mountedEvent.defaultPrevented).toBe(true);
+
+      view.unmount();
+
+      const afterUnmount = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent;
+      const preventDefault = vi.spyOn(afterUnmount, 'preventDefault');
+      window.dispatchEvent(afterUnmount);
+      expect(preventDefault).not.toHaveBeenCalled();
+      expect(afterUnmount.defaultPrevented).toBe(false);
+    });
+
     test('beforeunload listener does NOT prevent default when syncing is false', () => {
       // Set syncing to false
       useAppStore.getState().setSyncing(false);

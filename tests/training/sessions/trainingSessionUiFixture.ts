@@ -18,6 +18,7 @@ export async function setupTrainingSessionUiFixture() {
         if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
         await prepareUnlockedTestArchive(owner);
         useAppStore.setState({
+            dataOwner: owner,
             userData: {
                 ...emptyUserData,
                 library: mockLibrary,

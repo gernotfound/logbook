@@ -87,7 +87,10 @@ export function useGuestLogin({
         // before the vault is ready. Never promote a stale guest into Zustand.
         if (!activation.session || activation.session.owner !== 'guest' || !isCurrentSession(activation.session)) return;
         const guestSession = activation.session;
-        const canPublishGuest = () => isGuestVaultReadinessCurrent(guestSession);
+        // The initiating Kinde/host action can expire while vault or catalog
+        // readiness awaits, even if the guest generation itself remains active.
+        const canPublishGuest = () => isOriginalAttemptCurrent()
+            && isGuestVaultReadinessCurrent(guestSession);
         await ensureLocalVaultReady('guest');
         // A cancelled readiness Promise may resolve without an unlocked vault.
         if (!canPublishGuest()) return;

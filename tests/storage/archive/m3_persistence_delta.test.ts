@@ -319,15 +319,16 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
 
             expect(loaded).not.toBeNull();
             expect(loaded?.profile?.height).toBe('180');
-            // Library: 1 custom + 2 unhidden globals (panca-declinata hidden) = 3
-            expect(loaded?.library?.length).toBeGreaterThan(1);
-            expect(loaded?.library?.find(e => e.id === 'cloud_custom_dip')).toBeDefined();
+            // The exact ID sets reject missing or duplicated catalog items.
+            expect(loaded?.library?.map(item => item.id).sort()).toEqual([
+                'cloud_custom_dip', 'panca-piana-bilanciere', 'squat-bilanciere',
+            ]);
             expect(loaded?.library?.find(e => e.id === 'panca-piana-bilanciere')?.notes).toBe('Presa stretta');
             expect(loaded?.library?.find(e => e.id === 'panca-declinata-bilanciere')).toBeUndefined();
 
-            // Foods: 1 custom + 2 standard globals = 3
-            expect(loaded?.customFoods?.length).toBeGreaterThan(1);
-            expect(loaded?.customFoods?.find(f => f.id === 'cloud_custom_quark')).toBeDefined();
+            expect(loaded?.customFoods?.map(item => String(item.id)).sort()).toEqual([
+                'cloud_custom_quark', 'petto-di-pollo-crudo', 'riso-bianco-cotto',
+            ]);
         });
 
         it('returns standard catalog defaults when user document does not exist', async () => {

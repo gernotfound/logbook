@@ -9,19 +9,21 @@ import {
     readLocal as __testReadLocal,
 } from '../src/lib/sync/localRepository';
 
-// Test-only fallback: production sync must not retain serialized UserData.
-let lastSavedTestStateStr: string | null = null;
+// Test-only fallback: snapshots from one owner must never be another owner's base.
+// Production sync does not retain serialized UserData outside its durable journal.
+const lastSavedTestStateByOwner = new Map<string, string>();
 
 export const TestDB = {
     ...RealDB,
     resetCache: () => {
-        lastSavedTestStateStr = null;
+        lastSavedTestStateByOwner.clear();
     },
     saveUserData: async (state: any, _rev?: any) => {
         const uid = __testAuth.currentUser?.uid;
         const owner = uid ? 'user:' + uid : 'guest';
         let durable = await __testReadLocal(owner);
-        const oldState = durable?.data ?? (lastSavedTestStateStr ? JSON.parse(lastSavedTestStateStr) : {});
+        const previous = lastSavedTestStateByOwner.get(owner);
+        const oldState = durable?.data ?? (previous ? JSON.parse(previous) : {});
         await __testCommitLocal(owner, state, oldState);
         durable = await __testReadLocal(owner);
         if (uid && durable && !durable.replica) {
@@ -38,7 +40,7 @@ export const TestDB = {
             }, { clock: {}, syncMetaByDocument: {} });
         }
         const result = await RealDB.saveUserData(state, _rev);
-        if (uid && result.ok) lastSavedTestStateStr = JSON.stringify(state);
+        if (uid && result.ok) lastSavedTestStateByOwner.set(owner, JSON.stringify(state));
         return result;
     }
 };
