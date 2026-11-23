@@ -378,6 +378,16 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             const session = captureSession();
             const saved = await readLocal(session.owner);
             if (!isCurrentSession(session) || !saved) return;
+            if (saved.cloudIntegrityFence) {
+                // An empty journal is not cloud integrity evidence. Only the
+                // authenticated checkpoint recovery may clear this durable fence.
+                set({
+                    cloudIntegrityBlocked: true,
+                    syncHealth: 'failed',
+                    saveError: 'Snapshot cloud non verificato: copia locale preservata. Sincronizzazione sospesa fino al recupero.',
+                });
+                return;
+            }
             if (!saved.pending.length) {
                 // A previous ambiguous cloud outcome can have completed and
                 // acknowledged while the UI was suspended. An empty durable
