@@ -8,6 +8,7 @@ import {
 } from '../../lib/auth/kindeCandidateFitnessRealm';
 import type { DomainOperationBatch } from '../../lib/sync/domainOperations';
 import type { KindeRoutineDraft } from '../../lib/auth/kindeCandidateRoutineDraft';
+import type { KindeExerciseDraft } from '../../lib/auth/kindeCandidateExerciseDraft';
 import type { useKindeAccountSession } from './useKindeAccountSession';
 
 type Session = ReturnType<typeof useKindeAccountSession>;
@@ -213,6 +214,7 @@ export function useKindeCandidateFitnessLifecycle({
     ).outcome;
 
     const saveRoutineDraft = (draft: KindeRoutineDraft) => runMutation(active => active.saveRoutineDraft(draft));
+    const saveExerciseDraft = (draft: KindeExerciseDraft) => runMutation(active => active.saveExerciseDraft(draft));
 
     const captureEditWitness = () => {
         const active = realm.current;
@@ -226,13 +228,13 @@ export function useKindeCandidateFitnessLifecycle({
         };
     };
 
-    const openRoutineDraft = async (routineId?: string) => {
+    const openDraft = async <T extends { close: () => void }>(open: (active: KindeCandidateFitnessRealm) => Promise<T>) => {
         const active = realm.current;
         const witness = captureEditWitness();
         if (!active || !witness || busy.current) throw new KindeCandidateBoundaryError();
         busy.current = true;
         try {
-            const opened = await active.openRoutineDraft(routineId);
+            const opened = await open(active);
             if (!witness.isCurrent()) {
                 opened.close();
                 throw new KindeCandidateBoundaryError();
@@ -246,6 +248,9 @@ export function useKindeCandidateFitnessLifecycle({
         // render that changes identity, before passive effects can dispose.
         state: state.phase !== 'closed' && (!enabled || state.view !== session.view)
             ? CLOSED : state,
-        open, submit, recheck, suspend, captureEditWitness, openRoutineDraft, saveRoutineDraft,
+        open, submit, recheck, suspend, captureEditWitness,
+        openRoutineDraft: (id?: string) => openDraft(active => active.openRoutineDraft(id)),
+        openExerciseDraft: (id?: string) => openDraft(active => active.openExerciseDraft(id)),
+        saveRoutineDraft, saveExerciseDraft,
     };
 }

@@ -1,22 +1,21 @@
 import { Search, X } from 'lucide-react';
-import type { useTrainingExercises } from '../../../hooks/useTrainingExercises';
+import type { MuscleSelectionMode } from '../../../hooks/trainingExercises/exerciseMuscleEditor';
+import type { MuscleDef } from '../../../lib/constants/muscles';
 import { getExpandedMuscleIds } from '../../../hooks/trainingExercises/muscleSelection';
 import MuscleModel from '../MuscleModel';
 
-type TrainingExercisesHook = ReturnType<typeof useTrainingExercises>;
-
 interface ExerciseMuscleSelectorProps {
     disabled: boolean;
-    muscleSearch: TrainingExercisesHook['muscleSearch'];
-    setMuscleSearch: TrainingExercisesHook['setMuscleSearch'];
-    selectedMuscles: TrainingExercisesHook['selectedMuscles'];
-    secondaryMuscles: TrainingExercisesHook['secondaryMuscles'];
-    selectionMode: TrainingExercisesHook['selectionMode'];
-    setSelectionMode: TrainingExercisesHook['setSelectionMode'];
-    filteredMuscles: TrainingExercisesHook['filteredMuscles'];
-    toggleMuscle: TrainingExercisesHook['toggleMuscle'];
-    handleToggleMuscleById: TrainingExercisesHook['handleToggleMuscleById'];
-    removeMuscleById: TrainingExercisesHook['removeMuscleById'];
+    muscleSearch: string;
+    setMuscleSearch: (query: string) => void;
+    selectedMuscles: MuscleDef[];
+    secondaryMuscles: MuscleDef[];
+    selectionMode: MuscleSelectionMode;
+    setSelectionMode: (mode: MuscleSelectionMode) => void;
+    filteredMuscles: MuscleDef[];
+    toggleMuscle: (muscle: MuscleDef) => void;
+    handleToggleMuscleById: (id: string) => void;
+    removeMuscleById: (id: string) => void;
 }
 
 export function ExerciseMuscleSelector({

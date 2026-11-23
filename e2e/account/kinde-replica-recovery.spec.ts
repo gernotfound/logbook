@@ -721,8 +721,8 @@ test('finds and duplicates a personal Kinde exercise without modifying routines 
         const detail = archive.getByRole('region', { name: 'Dettaglio esercizio' });
         await expect(detail.getByText('Presa neutra')).toBeVisible();
         await expect(detail.getByText('1 scheda', { exact: true })).toBeVisible();
-        await expect(detail.getByRole('button', { name: 'Modifica' })).toHaveCount(0);
-        await expect(detail.getByRole('button', { name: 'Elimina' })).toHaveCount(0);
+        await expect(detail.getByRole('button', { name: 'Modifica' })).toBeVisible();
+        await expect(detail.getByRole('button', { name: 'Elimina' })).toBeVisible();
         expect(receipts()).toBe(before);
 
         await detail.getByRole('button', { name: 'Duplica' }).click();
@@ -743,5 +743,81 @@ test('finds and duplicates a personal Kinde exercise without modifying routines 
         expect(duplicate?.id).not.toBe(exercise.id);
         expect(data.routines?.find(routine => routine.id === 'exercise-test-routine')?.exercises)
             .toEqual([{ exId: exercise.id, setsCount: 4 }]);
+    }, { planningUi: true });
+});
+
+test('recovers a Kinde exercise draft and replicates its creation, edit and confirmed deletion', async ({ browser }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
+        const archive = first.getByRole('region', { name: 'Esercizi personali account' });
+        const draft = archive.getByRole('region', { name: 'Bozza esercizio account' });
+        const start = receipts();
+        const sealedSlot = `logbook:v2:user:k_${'T'.repeat(43)}:sealed:draft_exercise`;
+        const openArchive = () => first.getByRole('button', { name: 'Apri archivio account' }).click();
+        const openDraft = () => archive.getByRole('button', { name: 'Crea o riprendi esercizio' }).click();
+
+        await first.bringToFront();
+        await mountKindePlanning(first);
+        await openArchive();
+        await openDraft();
+        await draft.getByRole('textbox', { name: 'Nome esercizio' }).fill('Panca dal dispositivo');
+        await draft.getByRole('textbox', { name: 'Note di setup' }).fill('Presa stretta');
+        await draft.getByRole('spinbutton', { name: 'Peso attrezzo, espresso in kg' }).fill('12.5');
+        await draft.getByRole('searchbox', { name: 'Seleziona muscoli dall’elenco' }).fill('petto');
+        await draft.getByRole('button', { name: 'Petto', exact: true }).click();
+        expect(await first.evaluate(key => {
+            const raw = localStorage.getItem(key);
+            return raw?.startsWith('tlb-sealed:v1:') && !raw.includes('Panca dal dispositivo')
+                && localStorage.getItem(key.replace(':sealed:', ':')) === null;
+        }, sealedSlot)).toBe(true);
+        expect(receipts()).toBe(start);
+
+        await first.reload();
+        await mountKindePlanning(first);
+        await openArchive();
+        await openDraft();
+        await expect(draft.getByRole('textbox', { name: 'Nome esercizio' })).toHaveValue('Panca dal dispositivo');
+        await expect(draft.getByRole('textbox', { name: 'Note di setup' })).toHaveValue('Presa stretta');
+        await expect(draft.getByRole('spinbutton', { name: 'Peso attrezzo, espresso in kg' })).toHaveValue('12.5');
+        await expect(draft.getByRole('button', { name: 'Rimuovi Petto dai muscoli primari' })).toBeVisible();
+        await draft.getByRole('button', { name: 'Salva', exact: true }).click();
+        await expect.poll(() => firstCommitStatuses).toEqual([429]);
+        await expect(first.getByRole('button', { name: 'Verifica salvataggio' })).toBeVisible();
+        expect(await first.evaluate(key => localStorage.getItem(key), sealedSlot)).toBeNull();
+        expect(receipts()).toBe(start);
+
+        allowFirstCommit();
+        await first.getByRole('button', { name: 'Verifica salvataggio' }).click();
+        await archive.getByRole('button', { name: 'Apri dettaglio di Panca dal dispositivo' }).click();
+        await archive.getByRole('button', { name: 'Modifica', exact: true }).click();
+        await draft.getByRole('textbox', { name: 'Nome esercizio' }).fill('Panca modificata');
+        await draft.getByRole('button', { name: 'Salva', exact: true }).click();
+        await expect(archive.getByRole('button', { name: 'Apri dettaglio di Panca modificata' })).toBeVisible();
+        expect(receipts()).toBe(start + 2);
+        const updated = await second.evaluate(async () => (await window.kindeReplicaFixture!.refresh()).data.library?.[0]);
+        expect(updated).toMatchObject({ name: 'Panca modificata', notes: 'Presa stretta', equipmentWeight: 12.5, muscles: ['chest'] });
+
+        expect(await second.evaluate(id => window.kindeReplicaFixture!.submit({
+            type: 'routine.create', routine: { id: 'exercise-linked-routine', name: 'Scheda collegata', exercises: [{ exId: id, setsCount: 4 }] },
+        }), updated!.id)).toMatchObject({ kind: 'cloud-acknowledged' });
+        await first.getByRole('button', { name: 'Torna alla gestione account' }).click();
+        await openArchive();
+        await archive.getByRole('button', { name: 'Apri dettaglio di Panca modificata' }).click();
+        const detail = archive.getByRole('region', { name: 'Dettaglio esercizio' });
+        await expect(detail.getByText('1 scheda', { exact: true })).toBeVisible();
+        const confirm = async () => {
+            await detail.getByRole('button', { name: 'Elimina' }).click();
+            const dialog = first.getByRole('alertdialog', { name: 'Conferma' });
+            await expect(dialog).toContainText('dalla scheda che lo usa');
+            return dialog;
+        };
+        await (await confirm()).getByRole('button', { name: 'Annulla' }).click();
+        expect(receipts()).toBe(start + 3);
+        await (await confirm()).getByRole('button', { name: 'Conferma' }).click();
+        await expect(archive.getByText('Nessun esercizio disponibile.')).toBeVisible();
+        expect(firstCommitStatuses).toEqual([429, 200, 200, 200]);
+        expect(receipts()).toBe(start + 4);
+        const result = await second.evaluate(async () => (await window.kindeReplicaFixture!.refresh()).data);
+        expect(result.library ?? []).toEqual([]);
+        expect(result.routines).toEqual([{ id: 'exercise-linked-routine', name: 'Scheda collegata', exercises: [] }]);
     }, { planningUi: true });
 });

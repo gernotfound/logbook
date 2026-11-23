@@ -9,8 +9,9 @@ import {
 } from '../../../src/hooks/trainingExercises/exerciseMuscleEditor';
 import {
     buildExerciseSavePayload,
+    exerciseDraftProblem,
     hasDuplicateExerciseName,
-} from '../../../src/hooks/trainingExercises/exerciseEditorModel';
+} from '../../../src/lib/exerciseEditorModel';
 import type { ExerciseDraft } from '../../../src/hooks/trainingExercises/exerciseDraft';
 
 function muscle(id: string): MuscleDef {
@@ -80,6 +81,15 @@ describe('exercise editor muscle selection', () => {
 });
 
 describe('exercise editor save payload', () => {
+    it('accepts existing decimal weights and rejects malformed weights without silently clearing them', () => {
+        for (const value of ['', '0', '12,5', '.5', '1e-7']) {
+            expect(exerciseDraftProblem([], null, { ...draft, equipmentWeight: value })).toBeNull();
+        }
+        for (const value of ['12kg', '-2', 'Infinity', '0x2']) {
+            expect(exerciseDraftProblem([], null, { ...draft, equipmentWeight: value })).toContain('peso attrezzo');
+        }
+    });
+
     it('preserves the stored fields of an existing exercise while changing only editable fields', () => {
         const generated = () => { throw new Error('Editing must not create an identity'); };
         const updated = buildExerciseSavePayload([original], original.id, draft, generated);

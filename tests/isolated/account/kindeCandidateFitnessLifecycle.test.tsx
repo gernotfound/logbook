@@ -40,6 +40,8 @@ function mockRealm() {
         submit: vi.fn(async () => ({ kind: 'cloud-acknowledged' as const, operations: 1 })),
         openRoutineDraft: vi.fn<KindeCandidateFitnessRealm['openRoutineDraft']>(),
         saveRoutineDraft: vi.fn<KindeCandidateFitnessRealm['saveRoutineDraft']>(),
+        openExerciseDraft: vi.fn<KindeCandidateFitnessRealm['openExerciseDraft']>(),
+        saveExerciseDraft: vi.fn<KindeCandidateFitnessRealm['saveExerciseDraft']>(),
         close: vi.fn(),
     };
     return mock;

@@ -3,6 +3,8 @@ import { withKindeCandidateLocalReadiness } from './kindeCandidateLocalReadiness
 import { submitKindeCandidateDomainIntent } from './kindeCandidateDomainIntent';
 import { createKindeCandidateOfflineJournal } from './kindeCandidateOfflineJournal';
 import { openKindeCandidateRoutineDraft, type KindeRoutineDraft } from './kindeCandidateRoutineDraft';
+import { openKindeCandidateExerciseDraft, type KindeExerciseDraft } from './kindeCandidateExerciseDraft';
+import type { KindeCatalogDraftController } from './kindeCandidateCatalogDraft';
 import { authenticatedIdentitySource } from '../sync/authenticatedIdentitySource';
 import { isKindeAccountLocalFitnessClear } from '../sync/kindeOwnerLocalFitnessFence';
 import { readLocal } from '../sync/localArchiveBootstrap';
@@ -27,7 +29,8 @@ export type KindeCandidateFitnessSnapshot = Readonly<{
 }>;
 
 type MutationOutcome = Awaited<ReturnType<typeof submitKindeCandidateDomainIntent>>;
-type RoutineDraftController = Awaited<ReturnType<typeof openKindeCandidateRoutineDraft>>;
+type DraftHandle = KindeRoutineDraft | KindeExerciseDraft;
+type DraftSave = { outcome: MutationOutcome; draftCleared: boolean };
 
 type SessionPermit = Readonly<{
     verifiedAtMs: number;
@@ -52,7 +55,9 @@ export type KindeCandidateFitnessRealm = {
     refresh: () => Promise<KindeCandidateFitnessSnapshot>;
     submit: (operation: DomainOperationBatch) => Promise<MutationOutcome>;
     openRoutineDraft: (routineId?: string) => Promise<KindeRoutineDraft>;
-    saveRoutineDraft: (draft: KindeRoutineDraft) => Promise<{ outcome: MutationOutcome; draftCleared: boolean }>;
+    saveRoutineDraft: (draft: KindeRoutineDraft) => Promise<DraftSave>;
+    openExerciseDraft: (exerciseId?: string) => Promise<KindeExerciseDraft>;
+    saveExerciseDraft: (draft: KindeExerciseDraft) => Promise<DraftSave>;
     close: () => void;
 };
 
@@ -75,7 +80,8 @@ export async function openKindeCandidateFitnessRealm({
     let busy = false;
     let visible: KindeCandidateFitnessSnapshot | null = null;
     let offlineJournal: ReturnType<typeof createKindeCandidateOfflineJournal> = null;
-    let routineDraft: RoutineDraftController | null = null;
+    let routineDraft: KindeCatalogDraftController<KindeRoutineDraft> | null = null;
+    let exerciseDraft: KindeCatalogDraftController<KindeExerciseDraft> | null = null;
     let needsReconciliation = false;
     let sessionPermit: SessionPermit | null = null;
     const offline = () => navigator.onLine === false;
@@ -98,9 +104,11 @@ export async function openKindeCandidateFitnessRealm({
     // fence; using the view check inside the journal would make it recursive.
     const viewPermitted = () => permitted() && (!offline() || offlineJournal?.isCurrent() === true);
     const request = { expected: principal, stillCurrent: current, send, browserCookies };
-    const closeRoutineDraft = () => {
+    const closeDrafts = () => {
         routineDraft?.handle.close();
+        exerciseDraft?.handle.close();
         routineDraft = null;
+        exerciseDraft = null;
     };
 
     const load = async (): Promise<KindeCandidateFitnessSnapshot> => {
@@ -189,13 +197,46 @@ export async function openKindeCandidateFitnessRealm({
         }
     };
 
+    const openDraft = async <T extends DraftHandle>(
+        create: (data: UserData, scope: { owner: string; revision: number; permitted: () => boolean }) => Promise<KindeCatalogDraftController<T>>,
+        register: (controller: KindeCatalogDraftController<T>) => void,
+    ): Promise<T> => {
+        if (busy || !visible || !viewPermitted()) throw new KindeCandidateBoundaryError();
+        busy = true;
+        try {
+            const journal = offlineJournal;
+            const draftCurrent = () => permitted() && (!offline() || journal?.isCurrent() === true);
+            const opened = await create(visible.data, { owner, revision: principal.healthConsentRevision, permitted: draftCurrent });
+            if (!draftCurrent()) {
+                opened.handle.close();
+                throw new KindeCandidateBoundaryError();
+            }
+            register(opened);
+            return opened.handle;
+        } finally { busy = false; }
+    };
+
+    const saveDraft = async (handle: DraftHandle): Promise<DraftSave> => {
+        const active = routineDraft?.handle === handle ? routineDraft : exerciseDraft?.handle === handle ? exerciseDraft : null;
+        if (busy || !visible || !viewPermitted() || !active) throw new KindeCandidateBoundaryError();
+        const { operation, beforeCommit, clearAfterCommit } = active.prepare(visible.data);
+        let draftCleared = false;
+        try {
+            const outcome = await submit(operation, beforeCommit, () => {
+                try { clearAfterCommit(); draftCleared = true; }
+                catch { /* The business save is durable even if the exact draft cannot be cleared. */ }
+            });
+            return { outcome, draftCleared };
+        } finally { closeDrafts(); }
+    };
+
     return {
         isCurrent: viewPermitted,
         snapshot: () => viewPermitted() && visible && (offline() || !needsReconciliation)
             ? structuredClone(visible) : null,
         close: () => {
             closed = true;
-            closeRoutineDraft();
+            closeDrafts();
             visible = null;
             offlineJournal = null;
             sessionPermit = null;
@@ -203,7 +244,7 @@ export async function openKindeCandidateFitnessRealm({
         refresh: async () => {
             if (busy || offline()) throw new KindeCandidateBoundaryError();
             requireCurrent();
-            closeRoutineDraft();
+            closeDrafts();
             busy = true;
             visible = null;
             offlineJournal = null;
@@ -212,40 +253,24 @@ export async function openKindeCandidateFitnessRealm({
             finally { busy = false; }
         },
         submit: operation => {
-            if (!busy) closeRoutineDraft();
+            if (!busy) closeDrafts();
             return submit(operation);
         },
-        openRoutineDraft: async routineId => {
-            if (busy || !visible || !viewPermitted()) throw new KindeCandidateBoundaryError();
-            const routine = routineId === undefined ? undefined : visible.data.routines?.find(item => item.id === routineId);
+        openRoutineDraft: routineId => openDraft((data, scope) => {
+            const routine = routineId === undefined ? undefined : data.routines?.find(item => item.id === routineId);
             if (routineId !== undefined && !routine) throw new KindeCandidateBoundaryError();
-            closeRoutineDraft();
-            busy = true;
-            try {
-                const journal = offlineJournal;
-                const draftCurrent = () => permitted() && (!offline() || journal?.isCurrent() === true);
-                const opened = await openKindeCandidateRoutineDraft({
-                    owner, revision: principal.healthConsentRevision, permitted: draftCurrent, routine,
-                });
-                if (!draftCurrent()) {
-                    opened.handle.close();
-                    throw new KindeCandidateBoundaryError();
-                }
-                routineDraft = opened;
-                return opened.handle;
-            } finally { busy = false; }
-        },
-        saveRoutineDraft: async handle => {
-            if (busy || !visible || !viewPermitted() || routineDraft?.handle !== handle) throw new KindeCandidateBoundaryError();
-            const { operation, beforeCommit, clearAfterCommit } = routineDraft.prepare(visible.data.routines ?? []);
-            let draftCleared = false;
-            try {
-                const outcome = await submit(operation, beforeCommit, () => {
-                    try { clearAfterCommit(); draftCleared = true; }
-                    catch { /* The business save is durable even if the exact draft cannot be cleared. */ }
-                });
-                return { outcome, draftCleared };
-            } finally { closeRoutineDraft(); }
-        },
+            routineDraft?.handle.close();
+            routineDraft = null;
+            return openKindeCandidateRoutineDraft({ ...scope, routine });
+        }, draft => { routineDraft = draft; }),
+        openExerciseDraft: exerciseId => openDraft((data, scope) => {
+            const exercise = exerciseId === undefined ? undefined : data.library?.find(item => item.id === exerciseId && !item.isDefault);
+            if (exerciseId !== undefined && !exercise) throw new KindeCandidateBoundaryError();
+            exerciseDraft?.handle.close();
+            exerciseDraft = null;
+            return openKindeCandidateExerciseDraft({ ...scope, exercise });
+        }, draft => { exerciseDraft = draft; }),
+        saveRoutineDraft: saveDraft,
+        saveExerciseDraft: saveDraft,
     };
 }
