@@ -21,6 +21,8 @@ export const ConsentOverlay: React.FC = () => {
     const [showPrivacy, setShowPrivacy] = useState(false);
     const [showTerms, setShowTerms] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    // React's disabled state can render after a second acceptance handler has entered.
+    const savingRef = useRef(false);
     const globalDialogOpen = useDialogStore(state => state.isOpen);
     const titleId = useId();
     const dialogRef = useRef<HTMLDivElement>(null);
@@ -32,7 +34,8 @@ export const ConsentOverlay: React.FC = () => {
     });
 
     const handleAccept = async () => {
-        if (!confirmedAdult || !acceptedTerms || !acceptedHealth || isSaving) return;
+        if (!confirmedAdult || !acceptedTerms || !acceptedHealth || savingRef.current) return;
+        savingRef.current = true;
         setIsSaving(true);
         try {
             await submitLegalConsent({
@@ -44,6 +47,7 @@ export const ConsentOverlay: React.FC = () => {
             });
             // App.tsx smonta l'overlay perché legalConsent è stato valorizzato.
         } catch {
+            savingRef.current = false;
             setIsSaving(false);
             void useDialogStore.getState().showAlert(
                 'Errore durante il salvataggio del consenso. Controlla la connessione e riprova.'
