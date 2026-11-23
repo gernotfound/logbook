@@ -60,6 +60,7 @@ function server(options: { consent?: () => Record<string, unknown>; session?: ()
         if (path === '/v1/consent/status') return response(options.consent?.() ?? {
             uid: UID, status: 'active', revision: 1, fenceEpoch: 1,
             acceptedAt: receipt.acceptedAt, privacyVersion: receipt.privacyVersion,
+            observedAtMs: Date.parse(receipt.acceptedAt),
             termsVersion: receipt.termsVersion,
         });
         throw new Error('Unexpected request: ' + String(path));
@@ -187,6 +188,7 @@ describe('Kinde candidate membership orchestration (not mounted in the PWA)', ()
             consentReads += 1;
             return { uid: UID, status: 'active', revision: 1, fenceEpoch: 1,
                 privacyVersion: receipt.privacyVersion, termsVersion: receipt.termsVersion,
+                observedAtMs: Date.parse('2026-11-16T00:00:00.000Z'),
                 acceptedAt: consentReads === 1
                     ? receipt.acceptedAt : '2026-11-16T00:00:00.000Z' };
         } });

@@ -1,6 +1,6 @@
 import {
     captureKindeCandidateSessionFence, KindeCandidateBoundaryError,
-    readKindeCandidateJson,
+    parseKindeConsentProof, readKindeCandidateJson,
 } from './kindeCandidateClient';
 import { readKindeCandidateIdentity } from './kindeCandidateIdentity';
 import { readBrowserValueStrict, writeBrowserValue } from '../sync/browserStorage';
@@ -38,8 +38,6 @@ function validReceipt(value: unknown, expected: Principal): value is {
         && response.fenceEpoch === expected.fenceEpoch
         && (response.deletionStatus === 'pending' || response.deletionStatus === 'processing');
 }
-
-const VERSION = /^[A-Za-z0-9._-]{1,32}$/;
 
 function originalConsentingPrincipal(expected: Readonly<Principal>): boolean {
     return expected?.healthConsentRevision === 1
@@ -95,15 +93,7 @@ async function readWithdrawalState(
     }
     let result: 'active' | 'withdrawn';
     if (state.status === 'active') {
-        if (keys !== 'acceptedAt,fenceEpoch,privacyVersion,revision,status,termsVersion,uid'
-            || state.revision !== 1 || state.fenceEpoch !== expected.fenceEpoch
-            || typeof state.acceptedAt !== 'string'
-            || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(state.acceptedAt)
-            || !Number.isFinite(Date.parse(state.acceptedAt))
-            || new Date(state.acceptedAt).toISOString() !== state.acceptedAt
-            || Date.parse(state.acceptedAt) > Date.now()
-            || typeof state.privacyVersion !== 'string' || !VERSION.test(state.privacyVersion)
-            || typeof state.termsVersion !== 'string' || !VERSION.test(state.termsVersion)) {
+        if (state.fenceEpoch !== expected.fenceEpoch || !parseKindeConsentProof(state)) {
             throw new KindeCandidateBoundaryError();
         }
         result = 'active';

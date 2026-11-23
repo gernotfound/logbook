@@ -1,7 +1,7 @@
 import { LEGAL_VERSIONS } from '../legalVersions';
 import {
     captureKindeCandidateSessionFence, KindeCandidateBoundaryError,
-    readKindeCandidateAccess, readKindeCandidateJson,
+    parseKindeConsentProof, readKindeCandidateAccess, readKindeCandidateJson,
     type KindeCandidateAccess,
 } from './kindeCandidateClient';
 
@@ -22,14 +22,9 @@ function approved(value: InitialDecision): boolean {
 function confirmation(value: unknown, uid: string, epoch: number): boolean {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
     const data = value as Record<string, unknown>;
-    if (Object.keys(data).sort().join(',') !== 'acceptedAt,fenceEpoch,privacyVersion,revision,status,termsVersion,uid'
-        || data.uid !== uid || data.fenceEpoch !== epoch || data.revision !== 1
-        || data.status !== 'active'
-        || data.privacyVersion !== LEGAL_VERSIONS.privacy
-        || data.termsVersion !== LEGAL_VERSIONS.terms
-        || typeof data.acceptedAt !== 'string') return false;
-    const timestamp = Date.parse(data.acceptedAt);
-    return Number.isFinite(timestamp) && timestamp > 0 && timestamp <= Date.now();
+    const proof = parseKindeConsentProof(data);
+    return proof !== null && data.uid === uid && data.fenceEpoch === epoch
+        && proof.privacyVersion === LEGAL_VERSIONS.privacy && proof.termsVersion === LEGAL_VERSIONS.terms;
 }
 
 /**

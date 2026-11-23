@@ -38,6 +38,7 @@ describe('Kinde checkpoint to a device-owned archive', () => {
                 case '/api/auth/session': return json({ ...principal, authenticated: true, emailVerified: true });
                 case '/v1/consent/status': return json({ uid, status: 'active', revision: 1, fenceEpoch: 1,
                     acceptedAt: '2026-11-16T00:00:00.000Z', privacyVersion: LEGAL_VERSIONS.privacy,
+                    observedAtMs: Date.parse('2026-11-16T00:00:00.000Z'),
                     termsVersion: LEGAL_VERSIONS.terms });
                 case '/v1/cloud-key/sync': return json({ format: 'thelogbook-account-data-key', version: 1,
                     uid, fenceEpoch: 1, consentRevision: 1, purpose: 'sync', key: btoa(String.fromCharCode(...accountKey)) });
@@ -85,6 +86,7 @@ describe('Kinde checkpoint to a device-owned archive', () => {
             return Response.json({
                 uid, status: 'active', revision: 1, fenceEpoch: 1,
                 acceptedAt: '2026-11-16T00:00:00.000Z',
+                observedAtMs: Date.parse('2026-11-16T00:00:00.000Z'),
                 privacyVersion: 'outdated', termsVersion: LEGAL_VERSIONS.terms,
             }, { headers: { 'Cache-Control': 'no-store' } });
         });

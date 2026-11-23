@@ -48,6 +48,7 @@ export function server(mode: 'active' | 'unregistered' | 'withdrawn' | 'unverifi
             : mode === 'withdrawn' ? json({ uid, status: 'withdrawn', revision: 1, fenceEpoch: 1 })
                 : json({ uid, status: 'active', revision: 1, fenceEpoch: 1,
                     acceptedAt: legal.acceptedAt, privacyVersion: legal.privacyVersion,
+                    observedAtMs: Date.parse(legal.acceptedAt),
                     termsVersion: legal.termsVersion });
         if (path === '/v1/cloud-key/sync') return json({
             format: 'thelogbook-account-data-key', version: 1, uid,
