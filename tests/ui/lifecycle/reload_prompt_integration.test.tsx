@@ -1,14 +1,16 @@
 import React from 'react';
-import type { WorkoutSession } from '../../../src/types';
+import type { Exercise, UserData, WorkoutSession } from '../../../src/types';
 import { beforeEach, afterEach, describe, test, expect, vi } from 'vitest';
-import { render, screen, fireEvent, act, within } from '@testing-library/react';
+import { render, screen, fireEvent, act, within, waitFor } from '@testing-library/react';
 import ReloadPrompt from '../../../src/components/UI/ReloadPrompt';
 import { useRegisterSW } from '../../../src/lib/pwaRegistration';
 import App from '../../../src/App';
-import { renderWithProviders } from '../../setup';
+import { emptyUserData, renderWithAuthenticatedTestOwner } from '../../setup';
 import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
 import { useAppStore } from '../../../src/store/useAppStore';
-import { BufferedInput } from '../../../src/components/UI/BufferedInput';
+import TrainingSession from '../../../src/components/Training/TrainingSession';
+import { captureSession } from '../../../src/lib/sync/session';
+import { initializeLocal } from '../../../src/lib/sync/localRepository';
 import * as pwaUpdateModule from '../../../src/lib/pwaUpdate';
 import { setupReloadPromptTest, teardownReloadPromptTest, mockSetNeedRefresh, mockUpdateServiceWorker } from './reloadPromptTestFixture';
 
@@ -23,8 +25,8 @@ describe('PWA reload integration, accessibility and failures', () => {
       updateServiceWorker: mockUpdateServiceWorker,
     });
 
-    const { container } = renderWithProviders(<><ReloadPrompt /><App /></>);
-    expect(container).toBeDefined();
+    renderWithAuthenticatedTestOwner(<><ReloadPrompt /><App /></>);
+    expect(await screen.findByRole('navigation', { name: 'Navigazione principale' })).toBeDefined();
 
     // Verify the root-level prompt is independent from App early-return states
     expect(screen.getByText('Nuova versione disponibile')).toBeDefined();
@@ -32,42 +34,61 @@ describe('PWA reload integration, accessibility and failures', () => {
     expect(screen.getByRole('button', { name: /Chiudi/i })).toBeDefined();
   });
 
-  test('Rule 8 & UX: Active workout session state and input responsiveness are not interrupted when ReloadPrompt appears', () => {
-    const mockActiveWorkout: WorkoutSession = {
+  test('keeps a real workout set editable while the PWA update prompt is visible', async () => {
+    const owner = captureSession().owner;
+    if (owner.startsWith('user:')) {
+      localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+    }
+    await prepareUnlockedTestArchive(owner);
+
+    const activeWorkout: WorkoutSession = {
+      id: 'pwa-editor-session',
       routineId: 'r1',
       routineName: 'Scheda A - Upper',
+      date: '2026-08-20',
       globalStartTime: Date.now(),
-      exercises: [
-        {
-          exId: 'ex1',
-          sessionNote: '',
-          sets: [{ id: 's1', kg: '80', reps: '10', done: false }]
-        }
-      ]
+      exercises: [{
+        id: 'session-ex1',
+        exId: 'ex1',
+        sessionNote: '',
+        sets: [{ id: 's1', kg: '80', reps: '10' }],
+      }],
     };
-
+    const library: Exercise[] = [{
+      id: 'ex1', name: 'Panca Piana', setsCount: 1, sets: [], trackingType: 'weight_reps',
+    }];
+    const userData: UserData = {
+      ...emptyUserData,
+      library,
+      activeWorkout,
+      routines: [{ id: 'r1', name: 'Scheda A - Upper', exercises: [{ exId: 'ex1', setsCount: 1 }] }],
+    };
+    await initializeLocal(owner, userData);
     vi.mocked(useRegisterSW).mockReturnValue({
       needRefresh: [true, mockSetNeedRefresh],
       offlineReady: [false, vi.fn()],
       updateServiceWorker: mockUpdateServiceWorker,
     });
 
-    const bufferedChange = vi.fn();
-    renderWithProviders(<><ReloadPrompt /><App /><BufferedInput value="" onChange={bufferedChange} aria-label="Serie attiva" /></>, { localWorkout: mockActiveWorkout });
-
-    // Verify workout is still preserved in store and active in memory
-    const state = useAppStore.getState();
-    expect(state.localWorkout).toEqual(mockActiveWorkout);
-    expect(state.localWorkout?.exercises[0].exId).toBe('ex1');
-
-    // Both ReloadPrompt banner and workout UI exist concurrently
+    renderWithAuthenticatedTestOwner(<><ReloadPrompt /><TrainingSession /></>, {
+      localWorkout: activeWorkout, userData,
+    });
     expect(screen.getByText('Nuova versione disponibile')).toBeDefined();
-    expect(screen.getByRole('button', { name: /Aggiorna/i })).toBeDefined();
-    const field = screen.getByRole('textbox', { name: 'Serie attiva' }) as HTMLInputElement;
-    fireEvent.change(field, { target: { value: '82,5' } });
-    expect(field.value).toBe('82,5');
-    expect(useAppStore.getState().localWorkout).toEqual(mockActiveWorkout);
+
+    const exercise = screen.getByRole('button', { name: /Panca Piana/i });
+    fireEvent.click(exercise);
+    expect(exercise.getAttribute('aria-expanded')).toBe('true');
+    const weight = screen.getByPlaceholderText('Kg') as HTMLInputElement;
+    await act(async () => {
+      fireEvent.change(weight, { target: { value: '82' } });
+      fireEvent.blur(weight);
+    });
+    await waitFor(() => expect(useAppStore.getState().localWorkout?.exercises[0].sets[0].kg).toBe('82'));
+
+    expect(weight.value).toBe('82');
+    expect(screen.getByText('Nuova versione disponibile')).toBeDefined();
     expect(mockUpdateServiceWorker).not.toHaveBeenCalled();
+    expect(pwaUpdateModule.applyPWAUpdate).not.toHaveBeenCalled();
   });
 
   test('Edge Case: shows an activation rejection without reloading or hiding the prompt', async () => {
@@ -91,6 +112,8 @@ describe('PWA reload integration, accessibility and failures', () => {
 
     expect(rejectingUpdate).toHaveBeenCalledOnce();
     expect(screen.getByText('Failed to postMessage to SW')).toBeDefined();
+    expect(screen.getByText('Nuova versione disponibile')).toBeDefined();
+    expect(mockUpdateServiceWorker).not.toHaveBeenCalled();
     consoleSpy.mockRestore();
   });
 
@@ -119,8 +142,10 @@ describe('PWA reload integration, accessibility and failures', () => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
 
-    expect(mockGetRegistration).toHaveBeenCalled();
-    // The rejected registration lookup is contained by the production handler.
+    expect(mockGetRegistration).toHaveBeenCalledOnce();
+    expect(mockSetNeedRefresh).not.toHaveBeenCalledWith(true);
+    expect(pwaUpdateModule.applyPWAUpdate).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).toBeNull();
 
     unmount();
     consoleSpy.mockRestore();
