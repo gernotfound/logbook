@@ -90,7 +90,7 @@ describe('acknowledgeThrough reconciliation', () => {
         const cloudWithMonth = UserDataSchema.parse({
             profile: { height: '170' },
             nutrition: {
-                [date]: { date, kcal: 1200, carbs: 150, pro: 80, fat: 35 },
+                [date]: { date, kcal: 0, carbs: 0, pro: 0, fat: 0, steps: 11000 },
             },
         }) as unknown as UserData;
 
@@ -100,7 +100,7 @@ describe('acknowledgeThrough reconciliation', () => {
             [monthPath, { _sync: monthMeta }],
         ]));
         const hydrated = await readLocal(owner);
-        expect(hydrated?.baseline.nutrition?.[date]?.kcal).toBe(1200);
+        expect(hydrated?.baseline.nutrition?.[date]?.steps).toBe(11000);
         expect(hydrated?.data.profile?.height).toBe('171');
         expect(hydrated?.syncMetaByDocument[monthPath]).toEqual(monthMeta);
 
@@ -113,7 +113,7 @@ describe('acknowledgeThrough reconciliation', () => {
         expect(after?.data.profile?.height).toBe('171');
         expect(after?.baseline.profile?.height).toBe('171');
         expect(after?.data.nutrition?.[date]).toMatchObject({
-            date, kcal: 1200, carbs: 150, pro: 80, fat: 35,
+            date, kcal: 0, carbs: 0, pro: 0, fat: 0, steps: 11000,
         });
         expect(after?.baseline.nutrition?.[date]).toEqual(hydrated?.baseline.nutrition?.[date]);
         expect(after?.syncMetaByDocument[monthPath]).toEqual(monthMeta);
