@@ -5,7 +5,7 @@ import { renderWithAuthenticatedTestOwner, renderWithProviders, emptyUserData } 
 import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
 import TrainingSession from '../../../src/components/Training/TrainingSession';
 import WorkoutTimer from '../../../src/components/Training/WorkoutTimer';
-import { stoppedWorkoutTimer, writeWorkoutTimerSnapshot } from '../../../src/lib/utils/timer';
+import { readWorkoutTimerSnapshot, stoppedWorkoutTimer, writeWorkoutTimerSnapshot } from '../../../src/lib/utils/timer';
 import { storageOwner } from '../../../src/lib/sync/session';
 import { useAuth } from '../../../src/hooks/useAuth';
 
@@ -40,7 +40,8 @@ describe('Workout timer and session fail-safe', () => {
     test('WorkoutTimer rest controls (Play, Pause, Reset, Stop) operate cleanly without state crashes', async () => {
       // The previous case deliberately leaves a running future snapshot. Start
       // from a known *durably committed* stopped timer, not leaked test state.
-      writeWorkoutTimerSnapshot(stoppedWorkoutTimer(), storageOwner());
+      const owner = storageOwner();
+      writeWorkoutTimerSnapshot(stoppedWorkoutTimer(), owner);
       const { container } = renderWithProviders(<><ReadyOwner /><WorkoutTimer /></>);
       await waitFor(() => expect(screen.getByTestId('authenticated-owner').textContent).toBe('test-user-id'));
 
@@ -50,6 +51,7 @@ describe('Workout timer and session fail-safe', () => {
       act(() => {
         fireEvent.click(playBtn);
       });
+      expect(readWorkoutTimerSnapshot(owner).state).toBe('running');
 
       const pauseBtn = container.querySelector('.timer-btn.pause') as HTMLButtonElement;
       expect(pauseBtn).not.toBeNull();
@@ -57,19 +59,21 @@ describe('Workout timer and session fail-safe', () => {
       act(() => {
         fireEvent.click(pauseBtn);
       });
+      expect(readWorkoutTimerSnapshot(owner)).toMatchObject({ state: 'paused', startTime: 0 });
 
       const resetBtn = container.querySelector('.timer-btn.reset') as HTMLButtonElement;
       expect(resetBtn).not.toBeNull();
       act(() => {
         fireEvent.click(resetBtn);
       });
+      expect(readWorkoutTimerSnapshot(owner)).toMatchObject({ state: 'running', accumulated: 0 });
 
       const stopBtn = container.querySelector('.timer-btn.stop') as HTMLButtonElement;
       expect(stopBtn).not.toBeNull();
       act(() => {
         fireEvent.click(stopBtn);
       });
-
+      expect(readWorkoutTimerSnapshot(owner)).toEqual(stoppedWorkoutTimer());
       expect(container.textContent).toContain('00:00');
     });
 
