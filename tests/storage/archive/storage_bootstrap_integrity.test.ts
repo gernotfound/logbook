@@ -14,7 +14,7 @@ import { isVaultUnlocked, lockAllVaults, lockVault, vaultControlKey } from '../.
 import { initializeLocal } from '../../../src/lib/sync/localRepository';
 import { UserDataSchema } from '../../../src/lib/schema';
 import { deviceVaultKeyId } from '../../../src/lib/sync/secureArchiveKeys';
-import { activateGuestSession, GUEST_SESSION_KEY, invalidateSession } from '../../../src/lib/sync/session';
+import { activateGuestSession, GUEST_SESSION_KEY, invalidateSession, isActiveGuestSession } from '../../../src/lib/sync/session';
 
 vi.mock('react-dom/client', () => ({
   createRoot: vi.fn(() => ({
@@ -254,8 +254,12 @@ describe('Storage bootstrap and owner integrity checks', () => {
     lockVault('guest');
     localStorage.setItem('logbook_is_guest', 'true');
     localStorage.removeItem(GUEST_SESSION_KEY);
+    expect(isActiveGuestSession()).toBe(false);
 
+    // The shared IDB fake is itself a vi.fn: spying after fixture setup does
+    // not erase the calls used to provision the genuine encrypted archive.
     const getSpy = vi.spyOn(idbKeyval, 'get');
+    getSpy.mockClear();
     await initApp();
 
     expect(getSpy.mock.calls.some(([key]) => key === 'logbook:v2:guest')).toBe(false);
