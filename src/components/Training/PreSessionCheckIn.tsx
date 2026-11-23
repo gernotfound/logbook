@@ -51,7 +51,9 @@ function parseReadinessDraft(parsed: unknown | null): ReadinessDraft {
     return result;
 }
 
-function blockReadinessPersistence(error: unknown): void {
+function blockReadinessPersistence(error: unknown, original?: ReturnType<typeof captureSession> | null): void {
+    // An async failure from an old Auth/consent epoch must not fence the next owner.
+    if (original && !isCurrentSession(original)) return;
     console.error('Persistenza check-in pre-sessione non disponibile:', error);
     useAppStore.setState({
         localPersistenceBlocked: true,
@@ -106,7 +108,7 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
     const painNames = useMemo(() => activePains.map(id => Logic.getMuscleName(id) || id), [activePains]);
 
     useEffect(() => {
-        if (initialRecovery.error) blockReadinessPersistence(initialRecovery.error);
+        if (initialRecovery.error) blockReadinessPersistence(initialRecovery.error, initialRecovery.session);
     }, [initialRecovery.error]);
 
     const persistDraft = useCallback(() => {
@@ -154,7 +156,7 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
                 activeSession.consentGeneration, recoveryRaw.current,
             );
         } catch (error) {
-            blockReadinessPersistence(error);
+            blockReadinessPersistence(error, session.current);
             return;
         }
         valuesRef.current = next;
@@ -180,12 +182,14 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
                 } catch (error) {
                     // The workout is already durable. A failed obsolete-draft cleanup
                     // must not turn a successful start into an unhandled rejection.
-                    console.warn('Check-in avviato, impossibile pulire la vecchia bozza:', error);
-                    useAppStore.getState().setSaveError('Allenamento avviato; impossibile rimuovere una vecchia bozza locale.');
+                    if (session.current && isCurrentSession(session.current)) {
+                        console.warn('Check-in avviato, impossibile pulire la vecchia bozza:', error);
+                        useAppStore.getState().setSaveError('Allenamento avviato; impossibile rimuovere una vecchia bozza locale.');
+                    }
                 }
             }
         } catch (error) {
-            blockReadinessPersistence(error);
+            blockReadinessPersistence(error, session.current);
         } finally {
             actionInFlight.current = false;
             setStarting(false);
@@ -204,7 +208,7 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
             }
             if (await onCancel()) clearDraft();
         } catch (error) {
-            blockReadinessPersistence(error);
+            blockReadinessPersistence(error, session.current);
         } finally {
             actionInFlight.current = false;
             setCancelling(false);
