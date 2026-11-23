@@ -30,8 +30,6 @@ export async function pauseStorageWrite(page: Page, prefix: string, valueFragmen
     frame = event.callFrames[0]?.callFrameId;
     hitBreakpoints = event.hitBreakpoints ?? [];
   });
-  let pauseCount = 0;
-  session.on('Debugger.paused', () => { pauseCount++; });
   let released = false;
   return {
     async wait() {
@@ -44,14 +42,6 @@ export async function pauseStorageWrite(page: Page, prefix: string, valueFragmen
       });
       if (exceptionDetails) throw new Error('Cannot inspect paused storage write');
       return result.value as { key: string; value: string; previous: string | null };
-    },
-    async publishAndPause() {
-      if (!frame) throw new Error('Storage writer has not reached its boundary');
-      const before = pauseCount;
-      // Execute the real native write, then stop on the wrapper's return:
-      // application callbacks and Auth handoff have not resumed yet.
-      await session.send('Debugger.stepOver');
-      await expect.poll(() => pauseCount).toBeGreaterThan(before);
     },
     async release() {
       await session.send('Debugger.removeBreakpoint', { breakpointId });

@@ -1,7 +1,7 @@
 import { expect, test } from '../fixtures';
 import { mountKindePlanning, withKindeReplicaDevices } from './kindeReplicaFixture';
 
-test('Kinde routine deletion requires confirmation, preserves an unacknowledged journal and converges after retry', async ({ browser }) => {
+test('Kinde routine deletion requires confirmation and survives reload before its journal is acknowledged', async ({ browser }) => {
     await withKindeReplicaDevices(browser, async ({
         first, second, receipts, firstCommitStatuses, allowFirstCommit,
     }) => {
@@ -42,8 +42,13 @@ test('Kinde routine deletion requires confirmation, preserves an unacknowledged 
             (await window.kindeReplicaFixture!.refresh()).data.routines?.map(routine => routine.id) ?? []);
         expect(prior).toContain('rtn-delete-e2e');
 
+        // Recovery must drain the original deletion tombstone from storage,
+        // not reconstruct a delete intent from the previous React tree.
+        await first.reload();
+        expect(receipts()).toBe(initialReceipts);
         allowFirstCommit();
-        await first.getByRole('button', { name: 'Verifica salvataggio' }).click();
+        await mountKindePlanning(first);
+        await first.getByRole('button', { name: 'Apri archivio account' }).click();
         await expect.poll(() => firstCommitStatuses, { timeout: 20_000 }).toEqual([429, 200]);
         await expect.poll(() => receipts(), { timeout: 20_000 }).toBe(initialReceipts + 1);
         await expect(library.getByText('Nessuna scheda creata.')).toBeVisible();
