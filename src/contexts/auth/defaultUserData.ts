@@ -3,7 +3,7 @@ import { getInMemoryCatalog } from '../../lib/catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../../lib/catalog/deltaResolver';
 import { createDefaultNutritionPlanning } from '../../lib/nutritionDefaults';
 
-const defaultUserData: UserData = {
+const createDefaultUserData = (): UserData => ({
     profile: {},
     library: [],
     routines: [],
@@ -19,10 +19,10 @@ const defaultUserData: UserData = {
     supplements: [],
     activePains: [],
     legalConsent: undefined
-};
+});
 
 export const getResolvedDefaultUserData = (catalog = getInMemoryCatalog()): UserData => ({
-    ...defaultUserData,
+    ...createDefaultUserData(),
     library: resolveEffectiveExercises(catalog.exercises, [], {}),
     customFoods: resolveEffectiveFoods(catalog.foods, [], {}),
     catalogOverrides: {
