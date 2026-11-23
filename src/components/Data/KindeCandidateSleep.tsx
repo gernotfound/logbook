@@ -3,7 +3,7 @@ import type { useKindeCandidateFitnessLifecycle } from '../../contexts/auth/useK
 import type { KindeSleepDraft } from '../../lib/auth/kindeCandidateSleepDraft';
 import { useLocalToday } from '../../hooks/useLocalToday';
 import { useDialogStore } from '../../store/useDialogStore';
-import { sleepDraftFromDay, type SleepDraftValues } from '../../lib/sleepForm';
+import type { SleepDraftValues } from '../../lib/sleepForm';
 import DataSleep from './DataSleep';
 import './data.css';
 
