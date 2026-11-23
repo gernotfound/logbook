@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { clear, get } from 'idb-keyval';
+import { clear } from 'idb-keyval';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../src/lib/firebase', () => {
@@ -42,8 +42,8 @@ function browser(fixture: Fixture) {
         headers.set('cookie', session.cookies);
         return routeCandidateFirstPartyApi(new Request(ORIGIN + path, { ...init, headers }), {
             APP_ORIGIN: ORIGIN,
-            KINDE_HTTP: { fetch: (request: Request) => kinde.fetch(request, fixture.env) },
-            D1_API: { fetch: (request: Request) => api.fetch(request, fixture.env) },
+            KINDE_HTTP: { fetch: (request: Request) => kinde.fetch(request, { ...fixture.env, APP_ORIGIN: ORIGIN }) },
+            D1_API: { fetch: (request: Request) => api.fetch(request, { ...fixture.env, APP_ORIGIN: ORIGIN }) },
         });
     };
     return {
