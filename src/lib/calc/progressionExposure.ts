@@ -7,12 +7,15 @@ import type {
     WorkoutSession,
 } from '../../types';
 import { getSetSegments, getSetTechnique } from '../advancedSets';
+import { parseDateInput } from '../utils/date';
 import type {
     NormalizedExposure,
     NormalizedSet,
     ProgressionBodyweightContext,
     ProgressionExerciseRef,
 } from './progression';
+
+const isCanonicalDay = (day: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(day) && parseDateInput(day) === day;
 
 function numberValue(value: unknown): number | undefined {
     const raw = typeof value === 'string' ? value.trim().replace(',', '.') : value;
@@ -56,11 +59,11 @@ export function historicalBodyweight(
     context: ProgressionBodyweightContext,
 ): number | undefined {
     if (Number.isFinite(context.explicitBodyweightKg) && (context.explicitBodyweightKg ?? 0) > 0) return context.explicitBodyweightKg;
-    if (!date || !context.nutrition) return undefined;
+    if (!isCanonicalDay(date) || !context.nutrition) return undefined;
     let latestDate = '';
     let latestWeight: number | undefined;
     for (const [day, entry] of Object.entries(context.nutrition)) {
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day > date || day <= latestDate) continue;
+        if (!isCanonicalDay(day) || day > date || day <= latestDate) continue;
         const weight = numberValue(entry?.weight);
         if (weight !== undefined && weight > 0) {
             latestDate = day;
@@ -75,14 +78,14 @@ export function createHistoricalBodyweightLookup(nutrition: ProgressionBodyweigh
     // Standalone normalisation keeps its existing lookup contract. A complete
     // report can index dated weigh-ins once rather than sort them per exercise.
     const measurements = Object.keys(nutrition ?? {})
-        .filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date))
+        .filter(isCanonicalDay)
         .sort()
         .flatMap(date => {
             const weight = numberValue(nutrition?.[date]?.weight);
             return weight !== undefined && weight > 0 ? [{ date, weight }] : [];
         });
     return (date: string) => {
-        if (!date) return undefined;
+        if (!isCanonicalDay(date)) return undefined;
         let low = 0;
         let high = measurements.length;
         while (low < high) {
