@@ -86,7 +86,13 @@ describe('acknowledgeThrough reconciliation', () => {
 
         const date = '2026-09-20';
         const monthPath = 'nutrition_months/2026-09';
-        const monthMeta = { protocolVersion: 3 as const, clock: { s01: 1 }, fields: {} };
+        const monthMeta = {
+            protocolVersion: 3 as const,
+            clock: { s01: 1 },
+            fields: {
+                '2026-09-20/steps': { actorId: 's01', seq: 1, clock: { s01: 1 } },
+            },
+        };
         const cloudWithMonth = UserDataSchema.parse({
             profile: { height: '170' },
             nutrition: {
