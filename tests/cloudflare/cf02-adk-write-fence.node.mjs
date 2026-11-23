@@ -144,8 +144,10 @@ function currentRevision(f) {
 // The scheduler uses a 30-second lease. Expiring it explicitly in this
 // synthetic fixture simulates a later tick without bypassing lease fencing.
 function expireErasureLease(f) {
-  f.sqlite.prepare("UPDATE health_erasure_jobs SET lease_until_ms=? WHERE uid='owner-a' AND status='processing'")
-    .run(Date.now() - 1);
+  const result = f.sqlite.prepare(
+    "UPDATE health_erasure_jobs SET lease_until_ms=1 WHERE uid='owner-a' AND status='processing'",
+  ).run();
+  assert.equal(result.changes, 1);
 }
 async function withFixture(action, options) {
   const f = makeFixture(options);

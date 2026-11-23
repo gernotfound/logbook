@@ -8,11 +8,13 @@ import { releaseCloudAccountDataKey } from '../../cloudflare/api/cloud-key-store
 import { runOneHealthErasureStep } from '../../cloudflare/jobs/health-erasure-worker.mjs';
 import { writeReplicaMutation } from '../../cloudflare/api/replica-maintenance.mjs';
 import { commitEncryptedBatch } from '../../cloudflare/api/d1-document-store.mjs';
+import { applyCurrentD1Schema } from './current-d1-schema.mjs';
 
-const MIGRATIONS = readdirSync(new URL('../../cloudflare/api/migrations/', import.meta.url))
-  .filter(name => /^00(?:0[1-9]|10)_[a-z0-9_]+\.sql$/.test(name)).sort();
-assert.deepEqual(MIGRATIONS.map(name => name.slice(0, 4)),
-  Array.from({ length: 10 }, (_, i) => String(i + 1).padStart(4, '0')));
+const migrationDirectory = new URL('../../cloudflare/api/migrations/', import.meta.url);
+const beforeFinalization = readdirSync(migrationDirectory)
+  .filter(name => /^000[1-9]_[a-z0-9_]+\.sql$/.test(name)).sort();
+assert.deepEqual(beforeFinalization.map(name => name.slice(0, 4)),
+  Array.from({ length: 9 }, (_, i) => String(i + 1).padStart(4, '0')));
 const KEK = Buffer.alloc(32, 57).toString('base64');
 const NOW = "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)";
 
@@ -65,14 +67,14 @@ class D1Sqlite {
     }
   }
 }
-async function fixture(run, { migrationCount = 10 } = {}) {
+async function fixture(run, { testUpgradeFrom0009 = false } = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'logbook-b02-sql-'));
   const file = join(directory, 'full-schema.sqlite');
   const sqlite = new DatabaseSync(file);
   sqlite.exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=1500');
-  for (const name of MIGRATIONS.slice(0, migrationCount)) {
-    sqlite.exec(readFileSync(new URL('../../cloudflare/api/migrations/' + name, import.meta.url), 'utf8'));
-  }
+  if (testUpgradeFrom0009) {
+    for (const name of beforeFinalization) sqlite.exec(readFileSync(new URL(name, migrationDirectory), 'utf8'));
+  } else applyCurrentD1Schema(sqlite);
   const db = new D1Sqlite(sqlite);
   const second = new DatabaseSync(file);
   second.exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=1500');
@@ -148,8 +150,11 @@ function withdraw(f, uid = 'owner-a') {
   assert.equal(subject(f, uid).status, 'withdrawn');
 }
 function expireLease(f, uid = 'owner-a') {
-  f.sqlite.prepare(`UPDATE health_erasure_jobs
-    SET lease_until_ms=? WHERE uid=? AND status='processing'`).run(Date.now() - 1, uid);
+  // Both clocks can tick at different resolutions on Windows. An already
+  // claimed synthetic lease needs a positive timestamp unambiguously expired.
+  const result = f.sqlite.prepare(`UPDATE health_erasure_jobs
+    SET lease_until_ms=1 WHERE uid=? AND status='processing'`).run(uid);
+  assert.equal(result.changes, 1);
 }
 async function awaitKeys(f, uid = 'owner-a') {
   for (let step = 0; step < 16; step++) {
@@ -192,7 +197,7 @@ function verifyComplete(f, keyDisposition, uid = 'owner-a', syncRevision = 0) {
   assert.equal(count(f, 'cloud_key_issuance', uid), keyDisposition === 'destroyed' ? 1 : 0);
 }
 
-void test('full 0001–0010: drained encrypted data, ADK destruction, durable proof and consent floor share one statement', () =>
+void test('current schema: drained encrypted data, ADK destruction, durable proof and consent floor share one statement', () =>
   fixture(async f => {
     owner(f, 'owner-a');
     await provision(f);
@@ -240,7 +245,7 @@ void test('0010 applies additively to an existing 0009 database with a withdrawn
       issuanceAt: f.sqlite.prepare("SELECT issued_at_ms FROM cloud_key_issuance WHERE uid='owner-a'").get().issued_at_ms,
     };
     f.sqlite.exec(readFileSync(
-      new URL('../../cloudflare/api/migrations/0010_atomic_health_erasure_finalization.sql', import.meta.url),
+      new URL('0010_atomic_health_erasure_finalization.sql', migrationDirectory),
       'utf8',
     ));
     assert.equal(subject(f).consent_revision, before.consentRevision);
@@ -253,7 +258,7 @@ void test('0010 applies additively to an existing 0009 database with a withdrawn
       before.issuanceAt);
     assert.equal((await finalize(f))?.key_disposition, 'destroyed');
     verifyComplete(f, 'destroyed', 'owner-a', before.syncRevision);
-  }, { migrationCount: 9 }));
+  }, { testUpgradeFrom0009: true }));
 
 void test('ADK never issued finalizes without fabricating key deletion or issuance marker', () =>
   fixture(async f => {
