@@ -1,6 +1,6 @@
 import { LEGAL_VERSIONS } from '../../src/lib/legalVersions';
 import { readFileSync } from 'node:fs';
-import { beforeAll, afterAll, beforeEach, it } from 'vitest';
+import { beforeAll, afterAll, beforeEach, expect, it } from 'vitest';
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
 import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 
