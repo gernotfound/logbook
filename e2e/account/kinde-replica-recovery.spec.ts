@@ -1,5 +1,164 @@
 import { expect, test } from '../fixtures';
 import { loadKindeReplica, mountKindePlanning, withKindeReplicaDevices } from './kindeReplicaFixture';
+import type { DomainOperation } from '../../src/lib/sync/domainOperations';
+
+test('reads and deletes only the confirmed Kinde measurement, keeping meals and sleep on the other device', async ({ browser }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
+        const date = '2026-10-17';
+        expect(await second.evaluate(date => window.kindeReplicaFixture!.submit([
+            { type: 'nutrition-day.patch', date, patch: { weight: 77.5, waist: 86, measurementTime: '07:50', sleepHours: '07:20' } },
+            { type: 'activity-steps.set', date, steps: 4200 },
+            { type: 'nutrition-meal.upsert', date, meal: {
+                id: 'measurement-test-breakfast', name: 'Avena', meal: 'breakfast', quantity: 50,
+                kcal: 240, carbs: 40, pro: 12, fat: 4,
+            } },
+        ]), date)).toMatchObject({ kind: 'cloud-acknowledged' });
+        const before = receipts();
+
+        await first.bringToFront();
+        await mountKindePlanning(first);
+        const history = first.getByRole('region', { name: 'Storico rilevazioni account' });
+        await expect(history).toHaveCount(0);
+        await first.getByRole('button', { name: 'Apri archivio account' }).click();
+        await expect(history.getByRole('heading', { name: 'Storico Dati' })).toBeVisible();
+        await expect(history.locator('.history-calendar-grid')).toHaveCSS('display', 'grid');
+        await history.getByRole('button', { name: 'Apri dettaglio del 17/10/2026' }).click();
+        const detail = history.getByRole('dialog', { name: 'Dettaglio dati' });
+        await expect(history.locator('.data-detail-layer')).toHaveCSS('position', 'fixed');
+        await expect(detail.getByText('77,5 kg', { exact: true })).toBeVisible();
+        await expect(detail.getByText('07:20', { exact: true })).toBeVisible();
+        await expect(detail.getByRole('button', { name: 'Modifica' })).toHaveCount(0);
+        await detail.getByRole('button', { name: 'Chiudi dettaglio' }).click();
+
+        const requestDelete = async () => {
+            await history.getByRole('button', { name: 'Opzioni' }).click();
+            await history.getByRole('menuitem', { name: 'Elimina misurazione' }).click();
+            return first.getByRole('alertdialog', { name: 'Conferma' });
+        };
+        await (await requestDelete()).getByRole('button', { name: 'Annulla' }).click();
+        await expect(history.getByText('Misurazione · 07:50')).toBeVisible();
+        expect(receipts()).toBe(before);
+        await (await requestDelete()).getByRole('button', { name: 'Conferma' }).click();
+        await expect.poll(() => firstCommitStatuses).toEqual([429]);
+        await expect(history).toHaveCount(0);
+        expect(receipts()).toBe(before);
+
+        allowFirstCommit();
+        await first.getByRole('button', { name: 'Verifica salvataggio' }).click();
+        await expect(history.getByText('Dati giornalieri', { exact: true })).toBeVisible();
+        await expect(history.getByText('Sonno 07:20', { exact: true })).toBeVisible();
+        expect(firstCommitStatuses).toEqual([429, 200]);
+        expect(receipts()).toBe(before + 1);
+
+        const day = await second.evaluate(async date => (await window.kindeReplicaFixture!.refresh()).data.nutrition?.[date], date);
+        expect(day).toMatchObject({ sleepHours: '07:20', steps: 4200, meals: [{ id: 'measurement-test-breakfast' }] });
+        expect(day?.weight).toBeUndefined();
+        expect(day?.waist).toBeUndefined();
+        expect(day?.measurementTime).toBeUndefined();
+    }, { planningUi: true });
+});
+
+test('recovers an encrypted Kinde routine draft after reload, then creates and edits it once', async ({ browser }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
+        const exerciseId = 'editor-e2e-exercise';
+        expect(await second.evaluate(id => window.kindeReplicaFixture!.submit({
+            type: 'exercise.upsert', exercise: { id, name: 'Panca bozza', setsCount: 3, muscles: [], sets: [] },
+        }), exerciseId)).toMatchObject({ kind: 'cloud-acknowledged' });
+        const before = receipts();
+        const title = 'Scheda recuperata';
+        const draftSlot = `logbook:v2:user:k_${'T'.repeat(43)}:sealed:draft_routine`;
+        const library = first.getByRole('region', { name: 'Schede allenamento account' });
+        const editor = library.getByRole('region', { name: 'Bozza scheda account' });
+        const open = async () => {
+            await mountKindePlanning(first);
+            await first.getByRole('button', { name: 'Apri archivio account' }).click();
+            await library.getByRole('button', { name: 'Crea o riprendi scheda' }).click();
+        };
+        await first.bringToFront();
+        await open();
+        await editor.getByRole('textbox', { name: 'Nome scheda' }).fill(title);
+        const search = editor.getByRole('combobox', { name: 'Aggiungi esercizio' });
+        await search.fill('Panca bozza');
+        await editor.getByRole('option', { name: /Panca bozza/ }).click();
+        await editor.getByRole('textbox', { name: /Serie/ }).fill('5');
+        expect(await first.evaluate(({ draftSlot, title }) => {
+            const raw = localStorage.getItem(draftSlot);
+            return raw?.startsWith('tlb-sealed:v1:') && !raw.includes(title)
+                && localStorage.getItem(draftSlot.replace(':sealed:', ':')) === null;
+        }, { draftSlot, title })).toBe(true);
+        expect(receipts()).toBe(before);
+
+        await first.reload();
+        await open();
+        await expect(editor.getByRole('textbox', { name: 'Nome scheda' })).toHaveValue(title);
+        await expect(editor.getByRole('textbox', { name: /Serie/ })).toHaveValue('5');
+        await editor.getByRole('button', { name: 'Salva', exact: true }).click();
+        await expect.poll(() => firstCommitStatuses).toEqual([429]);
+        await expect(first.getByRole('button', { name: 'Verifica salvataggio' })).toBeVisible();
+        expect(await first.evaluate(key => localStorage.getItem(key), draftSlot)).toBeNull();
+        expect(receipts()).toBe(before);
+        allowFirstCommit();
+        await first.getByRole('button', { name: 'Verifica salvataggio' }).click();
+        await expect(library.getByText(title, { exact: true })).toBeVisible();
+
+        await library.getByRole('button', { name: 'Opzioni' }).click();
+        await library.getByRole('menuitem', { name: 'Modifica' }).click();
+        await editor.getByRole('textbox', { name: 'Nome scheda' }).fill('Scheda aggiornata');
+        await editor.getByRole('button', { name: 'Chiudi' }).click();
+        await library.getByRole('button', { name: 'Crea o riprendi scheda' }).click();
+        await expect(editor.getByRole('textbox', { name: 'Nome scheda' })).toHaveValue('Scheda aggiornata');
+        await editor.getByRole('button', { name: 'Salva modifiche' }).click();
+        await expect(library.getByText('Scheda aggiornata', { exact: true })).toBeVisible();
+        expect(firstCommitStatuses).toEqual([429, 200, 200]);
+        expect(receipts()).toBe(before + 2);
+        expect(await first.evaluate(key => localStorage.getItem(key), draftSlot)).toBeNull();
+        const other = await second.evaluate(async () => (await window.kindeReplicaFixture!.refresh()).data.routines);
+        expect(other).toHaveLength(1);
+        expect(other?.[0]).toMatchObject({ name: 'Scheda aggiornata', exercises: [{ exId: exerciseId, setsCount: 5 }] });
+    }, { planningUi: true });
+});
+
+test('a Kinde routine edit cannot recreate a routine after the local archive reconciles its deletion', async ({ browser }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
+        const id = 'rtn-stale-edit-e2e';
+        expect(await second.evaluate(id => window.kindeReplicaFixture!.submit({
+            type: 'routine.upsert', routine: { id, name: 'Scheda originale', exercises: [] },
+        }), id)).toMatchObject({ kind: 'cloud-acknowledged' });
+
+        const snapshot = await first.evaluate(() => window.kindeReplicaFixture!.refresh());
+        expect(snapshot.data.routines).toContainEqual(expect.objectContaining({ id, name: 'Scheda originale' }));
+        const edit: DomainOperation = { type: 'routine.edit', id, name: 'Nome dall’editor', exercises: [] };
+        const staleEdit = { ...edit, name: 'Modifica in ritardo' };
+        allowFirstCommit();
+        expect(await first.evaluate(edit => window.kindeReplicaFixture!.submit(edit), edit))
+            .toMatchObject({ kind: 'cloud-acknowledged' });
+        expect(firstCommitStatuses).toEqual([200]);
+
+        const current = await second.evaluate(() => window.kindeReplicaFixture!.refresh());
+        expect(current.data.routines).toContainEqual(expect.objectContaining({ id, name: edit.name }));
+        expect(await second.evaluate(id => window.kindeReplicaFixture!.submit({ type: 'routine.delete', id }), id))
+            .toMatchObject({ kind: 'cloud-acknowledged' });
+
+        const afterDelete = await first.evaluate(() => window.kindeReplicaFixture!.refresh());
+        expect(afterDelete.data.routines?.map(routine => routine.id)).not.toContain(id);
+        const beforeRejectedEdit = receipts();
+        const failure = await first.evaluate(async edit => {
+            try {
+                await window.kindeReplicaFixture!.submit(edit);
+                return null;
+            } catch (error) {
+                return error instanceof Error ? error.message : String(error);
+            }
+        }, staleEdit);
+        expect(failure).toContain('Routine non trovata');
+        expect(firstCommitStatuses).toEqual([200]);
+        expect(receipts()).toBe(beforeRejectedEdit);
+
+        const observed = await first.evaluate(() => window.kindeReplicaFixture!.refresh());
+        expect(observed.data.routines?.map(routine => routine.id)).not.toContain(id);
+        expect(receipts()).toBe(beforeRejectedEdit);
+    });
+});
 
 test('reads owner-scoped Kinde routines without legacy actions or a new D1 receipt', async ({ browser }) => {
     await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses }) => {
@@ -24,7 +183,7 @@ test('reads owner-scoped Kinde routines without legacy actions or a new D1 recei
         await expect(library).toBeVisible();
         await expect(library.getByText('Scheda Kinde')).toBeVisible();
         await library.getByRole('button', { name: 'Opzioni' }).click();
-        await expect(library.getByRole('menuitem', { name: 'Modifica' })).toHaveCount(0);
+        await expect(library.getByRole('menuitem', { name: 'Modifica' })).toBeVisible();
         await expect(library.getByRole('menuitem', { name: 'Duplica' })).toBeVisible();
         await expect(library.getByRole('menuitem', { name: 'Elimina' })).toBeVisible();
         await library.getByRole('button', { name: 'Opzioni' }).click();
@@ -406,6 +565,68 @@ test('manages supplements and dated intakes through the Kinde archive', async ({
     }, { planningUi: true });
 });
 
+test('edits and removes a Kinde archive food without removing its logged meal', async ({ browser }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
+        const name = 'Riso archivio';
+        expect(await second.evaluate(name => window.kindeReplicaFixture!.submit({
+            type: 'food.upsert', food: { id: 0, name, baseQty: 100, unit: 'g', kcal: 350, carbs: 75, pro: 7, fat: 1 },
+        }), name)).toMatchObject({ kind: 'cloud-acknowledged' });
+        await first.bringToFront();
+        await mountKindePlanning(first);
+        const diary = first.getByRole('region', { name: 'Diario pasti' });
+        await expect(diary).toHaveCount(0);
+        await first.getByRole('button', { name: 'Apri archivio account' }).click();
+        await diary.getByRole('tab', { name: 'Alimenti' }).click();
+        const archive = diary.getByRole('tabpanel', { name: 'Alimenti' });
+        const row = archive.getByRole('article', { name, exact: true });
+        const menu = (action: string) => first.getByRole('menuitem', { name: action, exact: true });
+        await archive.getByRole('textbox', { name: 'Cerca alimenti per nome o marca' }).fill(name);
+        await row.getByRole('button', { name: 'Opzioni' }).click();
+        await menu('Modifica').click();
+        await archive.getByLabel('Kcal', { exact: true }).fill('360');
+        await archive.getByRole('button', { name: 'Salva modifiche' }).click();
+        const pending = first.getByText('Conferma cloud in attesa', { exact: false });
+        await expect(pending).toBeVisible();
+        await expect(diary).toHaveCount(0);
+        expect(receipts()).toBe(1);
+        expect(firstCommitStatuses).toEqual([429]);
+
+        allowFirstCommit();
+        await first.getByRole('button', { name: 'Verifica salvataggio' }).click();
+        await expect(row.getByText('360 kcal')).toBeVisible();
+        await expect(archive.getByRole('textbox', { name: 'Cerca alimenti per nome o marca' })).toHaveValue(name);
+        const readData = () => second.evaluate(async () => (await window.kindeReplicaFixture!.refresh()).data);
+        expect((await readData()).customFoods).toMatchObject([{ id: '0', name, kcal: 360 }]);
+        expect(receipts()).toBe(2);
+
+        await row.getByRole('button', { name: 'Opzioni' }).click();
+        await menu('Duplica').click();
+        await expect(archive.getByRole('article', { name: name + ' - 1', exact: true })).toBeVisible();
+        await row.getByRole('button', { name: 'Aggiungi ' + name + ' a Pranzo' }).click();
+        await expect(archive).toBeVisible();
+        expect(receipts()).toBe(4);
+
+        await row.getByRole('button', { name: 'Opzioni' }).click();
+        await menu('Elimina').click();
+        const dialog = first.getByRole('alertdialog', { name: 'Conferma' });
+        await expect(dialog).not.toContainText(name);
+        await dialog.getByRole('button', { name: 'Annulla' }).click();
+        await expect(row).toBeVisible();
+        expect(receipts()).toBe(4);
+        await row.getByRole('button', { name: 'Opzioni' }).click();
+        await menu('Elimina').click();
+        await dialog.getByRole('button', { name: 'Conferma' }).click();
+        await expect(archive).toBeVisible();
+        await expect(row).toHaveCount(0);
+        const data = await readData();
+        expect(data.customFoods).toMatchObject([{ name: name + ' - 1' }]);
+        const meals = Object.values(data.nutrition ?? {}).flatMap(day => day.meals ?? []);
+        expect(meals).toMatchObject([{ name, foodId: '0', kcal: 360, meal: 'Pranzo' }]);
+        expect(receipts()).toBe(5);
+        expect(firstCommitStatuses).toEqual([429, 200, 200, 200, 200]);
+    }, { planningUi: true });
+});
+
 test('recovers a Kinde edit made offline after a competing browser save', async ({ browser }) => {
     await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
         allowFirstCommit();
@@ -529,3 +750,130 @@ for (const concurrentWrites of [1, 2]) {
         });
     });
 }
+
+test('finds and duplicates a personal Kinde exercise without modifying routines or the source', async ({ browser }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
+        const exercise = {
+            id: 'ex-custom-candidate', name: 'Rematore personale', notes: 'Presa neutra',
+            setsCount: 4, muscles: ['lats_left'], sets: [],
+        };
+        expect(await second.evaluate(exercise => window.kindeReplicaFixture!.submit([
+            { type: 'exercise.upsert', exercise },
+            { type: 'routine.upsert', routine: { id: 'exercise-test-routine', name: 'Trazione',
+                exercises: [{ exId: exercise.id, setsCount: 4 }] } },
+        ]), exercise)).toMatchObject({ kind: 'cloud-acknowledged' });
+        const before = receipts();
+
+        await first.bringToFront();
+        await mountKindePlanning(first);
+        const archive = first.getByRole('region', { name: 'Esercizi personali account' });
+        await expect(archive).toHaveCount(0);
+        await first.getByRole('button', { name: 'Apri archivio account' }).click();
+        const search = archive.getByRole('searchbox', { name: 'Cerca esercizio' });
+        await search.fill('non presente');
+        await expect(archive.getByText('Nessun esercizio trovato.')).toBeVisible();
+        await search.fill('rematore neutra');
+        await archive.getByRole('button', { name: 'Apri dettaglio di Rematore personale', exact: true }).click();
+        const detail = archive.getByRole('region', { name: 'Dettaglio esercizio' });
+        await expect(detail.getByText('Presa neutra')).toBeVisible();
+        await expect(detail.getByText('1 scheda', { exact: true })).toBeVisible();
+        await expect(detail.getByRole('button', { name: 'Modifica' })).toBeVisible();
+        await expect(detail.getByRole('button', { name: 'Elimina' })).toBeVisible();
+        expect(receipts()).toBe(before);
+
+        await detail.getByRole('button', { name: 'Duplica' }).click();
+        await expect.poll(() => firstCommitStatuses).toEqual([429]);
+        await expect(archive).toHaveCount(0);
+        expect(receipts()).toBe(before);
+        allowFirstCommit();
+        await first.getByRole('button', { name: 'Verifica salvataggio' }).click();
+        await expect(archive.getByRole('button', { name: 'Apri dettaglio di Rematore personale - 1' })).toBeVisible();
+        expect(firstCommitStatuses).toEqual([429, 200]);
+        expect(receipts()).toBe(before + 1);
+
+        const { data } = await second.evaluate(() => window.kindeReplicaFixture!.refresh());
+        expect(data.library).toHaveLength(2);
+        expect(data.library).toContainEqual(expect.objectContaining(exercise));
+        const duplicate = data.library?.find(item => item.name === 'Rematore personale - 1');
+        expect(duplicate).toMatchObject({ notes: exercise.notes, muscles: exercise.muscles, setsCount: 4 });
+        expect(duplicate?.id).not.toBe(exercise.id);
+        expect(data.routines?.find(routine => routine.id === 'exercise-test-routine')?.exercises)
+            .toEqual([{ exId: exercise.id, setsCount: 4 }]);
+    }, { planningUi: true });
+});
+
+test('recovers a Kinde exercise draft and replicates its creation, edit and confirmed deletion', async ({ browser }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
+        const archive = first.getByRole('region', { name: 'Esercizi personali account' });
+        const draft = archive.getByRole('region', { name: 'Bozza esercizio account' });
+        const start = receipts();
+        const sealedSlot = `logbook:v2:user:k_${'T'.repeat(43)}:sealed:draft_exercise`;
+        const openArchive = () => first.getByRole('button', { name: 'Apri archivio account' }).click();
+        const openDraft = () => archive.getByRole('button', { name: 'Crea o riprendi esercizio' }).click();
+
+        await first.bringToFront();
+        await mountKindePlanning(first);
+        await openArchive();
+        await openDraft();
+        await draft.getByRole('textbox', { name: 'Nome esercizio' }).fill('Panca dal dispositivo');
+        await draft.getByRole('textbox', { name: 'Note di setup' }).fill('Presa stretta');
+        await draft.getByRole('spinbutton', { name: 'Peso attrezzo, espresso in kg' }).fill('12.5');
+        await draft.getByRole('searchbox', { name: 'Seleziona muscoli dall’elenco' }).fill('petto');
+        await draft.getByRole('button', { name: 'Petto', exact: true }).click();
+        expect(await first.evaluate(key => {
+            const raw = localStorage.getItem(key);
+            return raw?.startsWith('tlb-sealed:v1:') && !raw.includes('Panca dal dispositivo')
+                && localStorage.getItem(key.replace(':sealed:', ':')) === null;
+        }, sealedSlot)).toBe(true);
+        expect(receipts()).toBe(start);
+
+        await first.reload();
+        await mountKindePlanning(first);
+        await openArchive();
+        await openDraft();
+        await expect(draft.getByRole('textbox', { name: 'Nome esercizio' })).toHaveValue('Panca dal dispositivo');
+        await expect(draft.getByRole('textbox', { name: 'Note di setup' })).toHaveValue('Presa stretta');
+        await expect(draft.getByRole('spinbutton', { name: 'Peso attrezzo, espresso in kg' })).toHaveValue('12.5');
+        await expect(draft.getByRole('button', { name: 'Rimuovi Petto dai muscoli primari' })).toBeVisible();
+        await draft.getByRole('button', { name: 'Salva', exact: true }).click();
+        await expect.poll(() => firstCommitStatuses).toEqual([429]);
+        await expect(first.getByRole('button', { name: 'Verifica salvataggio' })).toBeVisible();
+        expect(await first.evaluate(key => localStorage.getItem(key), sealedSlot)).toBeNull();
+        expect(receipts()).toBe(start);
+
+        allowFirstCommit();
+        await first.getByRole('button', { name: 'Verifica salvataggio' }).click();
+        await archive.getByRole('button', { name: 'Apri dettaglio di Panca dal dispositivo' }).click();
+        await archive.getByRole('button', { name: 'Modifica', exact: true }).click();
+        await draft.getByRole('textbox', { name: 'Nome esercizio' }).fill('Panca modificata');
+        await draft.getByRole('button', { name: 'Salva', exact: true }).click();
+        await expect(archive.getByRole('button', { name: 'Apri dettaglio di Panca modificata' })).toBeVisible();
+        expect(receipts()).toBe(start + 2);
+        const updated = await second.evaluate(async () => (await window.kindeReplicaFixture!.refresh()).data.library?.[0]);
+        expect(updated).toMatchObject({ name: 'Panca modificata', notes: 'Presa stretta', equipmentWeight: 12.5, muscles: ['chest'] });
+
+        expect(await second.evaluate(id => window.kindeReplicaFixture!.submit({
+            type: 'routine.create', routine: { id: 'exercise-linked-routine', name: 'Scheda collegata', exercises: [{ exId: id, setsCount: 4 }] },
+        }), updated!.id)).toMatchObject({ kind: 'cloud-acknowledged' });
+        await first.getByRole('button', { name: 'Torna alla gestione account' }).click();
+        await openArchive();
+        await archive.getByRole('button', { name: 'Apri dettaglio di Panca modificata' }).click();
+        const detail = archive.getByRole('region', { name: 'Dettaglio esercizio' });
+        await expect(detail.getByText('1 scheda', { exact: true })).toBeVisible();
+        const confirm = async () => {
+            await detail.getByRole('button', { name: 'Elimina' }).click();
+            const dialog = first.getByRole('alertdialog', { name: 'Conferma' });
+            await expect(dialog).toContainText('dalla scheda che lo usa');
+            return dialog;
+        };
+        await (await confirm()).getByRole('button', { name: 'Annulla' }).click();
+        expect(receipts()).toBe(start + 3);
+        await (await confirm()).getByRole('button', { name: 'Conferma' }).click();
+        await expect(archive.getByText('Nessun esercizio disponibile.')).toBeVisible();
+        expect(firstCommitStatuses).toEqual([429, 200, 200, 200]);
+        expect(receipts()).toBe(start + 4);
+        const result = await second.evaluate(async () => (await window.kindeReplicaFixture!.refresh()).data);
+        expect(result.library ?? []).toEqual([]);
+        expect(result.routines).toEqual([{ id: 'exercise-linked-routine', name: 'Scheda collegata', exercises: [] }]);
+    }, { planningUi: true });
+});

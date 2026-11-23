@@ -1,4 +1,6 @@
+import equal from 'fast-deep-equal';
 import type {
+    Exercise,
     NutritionDay,
     TrainingCycle,
     UserData,
@@ -8,7 +10,10 @@ import { UserDataSchema } from '../../schema';
 import { CardioSessionSchema } from '../../schemas/schema_nutrition';
 import { TrainingCycleWriteSchema } from '../../schemas/schema_training';
 import { hasValidCycleWriteFrequencies, isBoundedCycleCount, MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from '../../calc/cycleLimits';
+import { exerciseRoutineReferences } from '../../exerciseRoutineReferences';
 import { calculateLoggedMealTotals } from '../../nutrition/calculateLoggedMealTotals';
+import { captureMeasurement, MEASUREMENT_CLEAR_PATCH } from '../../nutrition/measurementHistory';
+import { hasMeasurementData } from '../../nutrition/measurementPresence';
 import { getLocalDateString } from '../../utils/date';
 import type { DomainOperation, DomainOperationBatch } from './contracts';
 import {
@@ -22,6 +27,8 @@ import {
     upsertById,
     assertNeverDomainOperation,
 } from './validation';
+
+const EXERCISE_EDITOR_FIELDS = ['name', 'notes', 'muscles', 'secondaryMuscles', 'trackingType', 'isBodyweight', 'equipmentWeight'] as const;
 
 function assertNewCycleRoutineFrequencies(routines: ReadonlyArray<{ frequencyPerWeek?: unknown }>, sessionsPerWeek: unknown): void {
     if (!hasValidCycleWriteFrequencies(routines, sessionsPerWeek)) {
@@ -98,6 +105,15 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
             const nutrition = { ...(data.nutrition ?? {}) };
             delete nutrition[date];
             data.nutrition = nutrition;
+            break;
+        }
+        case 'measurement.delete': {
+            const date = requireDate(operation.date);
+            const day = data.nutrition?.[date];
+            if (!day || !hasMeasurementData(day) || !equal(captureMeasurement(day), operation.expected)) {
+                throw new Error('Misurazione cambiata dopo la conferma.');
+            }
+            data.nutrition = { ...data.nutrition, [date]: applyPatch(day, MEASUREMENT_CLEAR_PATCH) };
             break;
         }
         case 'activity-steps.set': {
@@ -231,10 +247,23 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
         case 'supplement.reorder':
             data.supplements = reorderByIds(data.supplements, operation.ids, item => requireId(item.id, 'Integratore'), 'Integratori');
             break;
-        case 'routine.upsert': {
+        case 'routine.upsert':
+        case 'routine.create': {
             const routine = { ...operation.routine, id: requireId(operation.routine.id, 'Routine') };
             assertUnique(routine.exercises ?? [], item => requireId(item.exId, 'Esercizio routine'), 'Esercizi routine');
+            const creating = operation.type === 'routine.create';
+            if (creating && data.routines?.some(item => item.id === routine.id)) throw new Error('Scheda già esistente');
             data.routines = upsertById(data.routines, routine, item => requireId(item.id, 'Routine'), 'Routine');
+            if (creating) data.routines.sort((a, b) => a.name.localeCompare(b.name));
+            break;
+        }
+        case 'routine.edit': {
+            // Resolve the routine inside the commit, against the current archive.
+            const { index, value } = findRoutine(data, operation.id);
+            const { name, exercises } = operation;
+            assertUnique(exercises, item => requireId(item.exId, 'Esercizio routine'), 'Esercizi routine');
+            data.routines = [...(data.routines ?? [])];
+            data.routines[index] = { ...value, name, exercises };
             break;
         }
         case 'routine.delete':
@@ -366,8 +395,30 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
                 .sort((a, b) => a.name.localeCompare(b.name, 'it'));
             break;
         }
+        case 'exercise.edit': {
+            const id = requireId(operation.id, 'Esercizio');
+            const existing = data.library?.find(item => item.id === id);
+            if (!existing || existing.isDefault) throw new Error('Esercizio personale non più disponibile.');
+            const patch: Partial<Exercise> = {};
+            for (const field of EXERCISE_EDITOR_FIELDS) {
+                if (Object.hasOwn(operation.fields, field)) Reflect.set(patch, field, operation.fields[field]);
+            }
+            const exercise = applyPatch(existing, patch);
+            data.library = upsertById(data.library, exercise, item => requireId(item.id, 'Esercizio'), 'Archivio esercizi')
+                .sort((a, b) => a.name.localeCompare(b.name, 'it'));
+            break;
+        }
         case 'exercise.delete': {
             const id = requireId(operation.id, 'Esercizio');
+            if (operation.expectedRoutineIds !== undefined) {
+                const existing = data.library?.find(item => item.id === id);
+                const currentIds = exerciseRoutineReferences(data.routines ?? [], id);
+                const confirmedIds = [...operation.expectedRoutineIds].sort();
+                if (!existing || existing.isDefault || currentIds.length !== confirmedIds.length
+                    || currentIds.some((routineId, index) => routineId !== confirmedIds[index])) {
+                    throw new Error('Esercizio o schede collegate cambiati dopo la conferma.');
+                }
+            }
             data.library = deleteById(data.library, id, item => requireId(item.id, 'Esercizio'), 'Archivio esercizi');
             data.routines = (data.routines ?? []).map(routine => ({
                 ...routine,
@@ -375,8 +426,13 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
             }));
             break;
         }
-        case 'food.upsert': {
-            requireId(operation.food.id, 'Alimento');
+        case 'food.upsert':
+        case 'food.edit': {
+            const id = requireId(operation.food.id, 'Alimento');
+            if (operation.type === 'food.edit'
+                && !data.customFoods?.some(item => requireId(item.id, 'Alimento') === id)) {
+                throw new Error('Alimento non più presente nell’archivio.');
+            }
             const food = { ...operation.food, id: operation.food.id };
             data.customFoods = upsertById(data.customFoods, food, item => requireId(item.id, 'Alimento'), 'Archivio alimenti');
             break;

@@ -175,6 +175,13 @@ un commit il diario è nascosto. Dopo un salvataggio locale la bozza inviata
 viene ritirata e le altre quantità già digitate restano nello stesso
 archivio fino alla sua chiusura o invalidazione.
 
+La scheda Alimenti usa l'archivio personale dello stesso snapshot e invia
+gli intenti attraverso il writer Kinde. Creazione e duplicazione generano
+un ID nuovo. Una modifica mantiene l'ID originale e fallisce se la voce
+è stata rimossa. L'aggiunta rapida registra una copia nel diario di oggi.
+La conferma per rimuovere una voce riverifica la sessione originaria e
+lascia intatti i pasti che contengono una copia.
+
 ### CF-03/04 — Recheck del journal Kinde dopo esito ambiguo (21/11/2026)
 
 Se `useKindeCandidateFitnessLifecycle.submit()` riceve

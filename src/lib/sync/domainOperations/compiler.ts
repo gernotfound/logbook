@@ -57,6 +57,8 @@ function collectScope(before: UserData, after: UserData, operations: readonly Do
             case 'supplement.delete':
             case 'supplement.reorder': root('supplements'); break;
             case 'routine.upsert':
+            case 'routine.create':
+            case 'routine.edit':
             case 'routine.delete':
             case 'routine.reorder':
             case 'routine-exercise.upsert':
@@ -71,9 +73,11 @@ function collectScope(before: UserData, after: UserData, operations: readonly Do
             case 'active-cycle.set': root('activeCycleId'); break;
             case 'active-workout.set': root('activeWorkout'); break;
             case 'active-pains.set': root('activePains'); break;
-            case 'exercise.upsert': root('library', 'catalogOverrides'); break;
+            case 'exercise.upsert':
+            case 'exercise.edit': root('library', 'catalogOverrides'); break;
             case 'exercise.delete': root('library', 'catalogOverrides', 'routines'); break;
             case 'food.upsert':
+            case 'food.edit':
             case 'food.delete': root('customFoods', 'catalogOverrides'); break;
             case 'catalog.exercise.patch':
             case 'catalog.food.patch':
@@ -82,6 +86,7 @@ function collectScope(before: UserData, after: UserData, operations: readonly Do
             case 'legal-consent.set': root('legalConsent'); break;
             case 'nutrition-day.patch':
             case 'nutrition-day.delete':
+            case 'measurement.delete':
             case 'activity-steps.set':
             case 'activity-steps.clear':
             case 'cardio-session.upsert':

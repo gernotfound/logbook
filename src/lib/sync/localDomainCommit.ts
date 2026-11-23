@@ -24,7 +24,7 @@ import {
 import { sequenceOperationsForBoundedTransactions } from './syncBatching';
 import { validateLocalEnvelope, type LocalEnvelope } from './localEnvelopeValidation';
 
-type LocalWriteGuard = (current: LocalEnvelope | undefined) => boolean;
+export type LocalWriteGuard = (current: LocalEnvelope | undefined) => boolean;
 
 export class WorkoutIntentConflictError extends Error {
     readonly code = 'workout-intent-conflict';

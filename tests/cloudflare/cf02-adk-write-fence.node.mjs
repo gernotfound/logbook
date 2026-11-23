@@ -53,7 +53,7 @@ function apply(sqlite, start = 0, end = MIGRATIONS.length) {
     sqlite.exec(readFileSync(new URL('../../cloudflare/api/migrations/' + name, import.meta.url), 'utf8'));
   }
 }
-function makeFixture({ legacy = false } = {}) {
+function makeFixture({ legacy = false, initialConsentAt } = {}) {
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec('PRAGMA foreign_keys=ON');
   apply(sqlite, 0, legacy ? 8 : MIGRATIONS.length);
@@ -73,14 +73,14 @@ function makeFixture({ legacy = false } = {}) {
       }), { status: 200 });
     } },
   };
-  function owner(uid) {
-    const issued = Date.now() - 5000;
+  function owner(uid, acceptedAt) {
+    const issued = (acceptedAt ?? Date.now()) - 5000;
     sqlite.prepare("INSERT INTO auth_principals VALUES (?, 'active', ?, 1)").run(uid, issued);
     sqlite.prepare("INSERT INTO sync_subjects(uid,status,consent_revision,fence_epoch) VALUES (?, 'active', 1, 1)").run(uid);
     sqlite.prepare('INSERT INTO sync_state(uid,revision) VALUES (?,0)').run(uid);
     sqlite.prepare(`INSERT INTO health_consent_acceptances
       (uid,consent_revision,privacy_version,terms_version,accepted_at_ms,over_18_confirmed)
-      VALUES (?,1,'1.3.9','1.2.5',?,1)`).run(uid, issued);
+      VALUES (?,1,'1.3.9','1.2.5',?,1)`).run(uid, acceptedAt ?? issued);
     sqlite.prepare(`INSERT INTO auth_sessions
       (token_hash,uid,auth_epoch,csrf_hash,issued_at_ms,idle_expires_at_ms,absolute_expires_at_ms)
       VALUES (?,?,1,?,?,?,?)`).run(uid === 'owner-a' ? SESSION_HASH : 'b'.repeat(64),
@@ -91,7 +91,7 @@ function makeFixture({ legacy = false } = {}) {
     ledger.prepare(`UPDATE recovery_owner_fences
       SET status='active',consent_revision=1,change_seq=2 WHERE uid=?`).run(uid);
   }
-  owner('owner-a');
+  owner('owner-a', initialConsentAt);
   return { sqlite, ledger, db, env, owner, close: () => { ledger.close(); sqlite.close(); } };
 }
 function count(f, table, uid = 'owner-a') {
@@ -151,6 +151,49 @@ async function withFixture(action, options) {
   const f = makeFixture(options);
   try { await action(f); } finally { f.close(); }
 }
+
+void test('the key issuance and writable replica fences accept the exact consent millisecond after SQL upgrade', () => {
+  // At this instant the historical floating Julian conversion returns one
+  // millisecond early even though consent and the DB clock agree.
+  const fixed = '2026-11-23 01:22:30.000';
+  const epoch = Date.parse('2026-11-23T01:22:30.000Z');
+  const f = makeFixture({ legacy: true, initialConsentAt: epoch });
+  try {
+    const clockMigration = MIGRATIONS.findIndex(name => name.endsWith('_integer_cloud_key_clock.sql'));
+    assert.equal(clockMigration, 10);
+    apply(f.sqlite, 8, clockMigration);
+    function freezeClock(name, type, at = fixed) {
+      const definition = f.sqlite.prepare('SELECT sql FROM sqlite_schema WHERE name = ?').get(name).sql;
+      f.sqlite.exec(`DROP ${type} ${name}; ${definition.replaceAll("'now'", `'${at}'`)};`);
+    }
+    freezeClock('cloud_key_first_issuance', 'TRIGGER');
+    freezeClock('sync_writable_cloud_key', 'VIEW');
+    const insert = f.sqlite.prepare(`INSERT INTO cloud_account_keys
+      (uid,consent_revision,format,version,key_version,iv,ciphertext,tag,issued_at_ms)
+      VALUES (?,1,'thelogbook-wrapped-account-key',1,1,?,?,?,?)`);
+    const insertKey = uid => insert.run(uid, 'A'.repeat(16), 'B'.repeat(44), 'C'.repeat(24), epoch);
+    assert.throws(() => insertKey('owner-a'), /cloud-key-provision-fenced/);
+    assert.equal(count(f, 'cloud_key_issuance'), 0);
+
+    apply(f.sqlite, clockMigration, clockMigration + 1);
+    freezeClock('cloud_key_first_issuance', 'TRIGGER');
+    freezeClock('sync_writable_cloud_key', 'VIEW');
+    assert.equal(insertKey('owner-a').changes, 1);
+    assert.equal(count(f, 'cloud_key_issuance'), 1);
+    assert.equal(count(f, 'sync_writable_cloud_key'), 1);
+    // Evaluate the same stored key a millisecond before consent. The clock
+    // fix must never grant a write merely because key issuance exists.
+    apply(f.sqlite, clockMigration, clockMigration + 1);
+    freezeClock('sync_writable_cloud_key', 'VIEW', '2026-11-23 01:22:29.999');
+    assert.equal(count(f, 'cloud_key_issuance'), 1);
+    assert.equal(count(f, 'sync_writable_cloud_key'), 0);
+    freezeClock('cloud_key_first_issuance', 'TRIGGER');
+    f.owner('owner-future', epoch + 1);
+    assert.throws(() => insertKey('owner-future'), /cloud-key-provision-fenced/);
+    assert.equal(count(f, 'cloud_key_issuance', 'owner-future'), 0);
+    assert.equal(count(f, 'sync_writable_cloud_key', 'owner-future'), 0);
+  } finally { f.close(); }
+});
 
 function beforeKeyPrecondition(f, action) {
   const original = f.db.withSession.bind(f.db);

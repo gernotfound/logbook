@@ -43,15 +43,13 @@ describe('routine editor domain intents shared by guest and Kinde', () => {
         const ops = buildRoutineSaveOperations({
             name: '  Alpha  ', exercises, routines: current, createId: 'new-id',
         });
-        expect(ops).toEqual([
-            { type: 'routine.upsert', routine: {
+        expect(ops).toEqual({ type: 'routine.create', routine: {
                 id: 'new-id', name: 'Alpha',
                 exercises: [{ ...exercises[0], setsCount: 3 }],
-            } },
-            { type: 'routine.reorder', ids: ['new-id', 'b', 'z'] },
-        ]);
-        const reduced = applyDomainOperations(initial(current), ops);
-        expect(reduced.routines?.map(item => item.id)).toEqual(['new-id', 'b', 'z']);
+        } });
+        const reduced = applyDomainOperations(initial([...current, routine('c', 'Carla')]), ops);
+        expect(reduced.routines?.map(item => item.id)).toEqual(['new-id', 'b', 'c', 'z']);
+        expect(() => applyDomainOperations(reduced, ops)).toThrow('Scheda già esistente');
         expect(reduced.routines?.[0].exercises[0].setsCount).toBe(3);
         expect({ current, exercises }).toEqual(before);
     });
@@ -62,13 +60,25 @@ describe('routine editor domain intents shared by guest and Kinde', () => {
             name: '  Modificata ', exercises: [{ exId: 'squat', setsCount: '5' }],
             routines: current, editingRoutineId: 'old',
         });
-        expect(ops).toEqual({ type: 'routine.upsert', routine: {
+        expect(ops).toEqual({ type: 'routine.edit',
             id: 'old', name: 'Modificata', exercises: [{ exId: 'squat', setsCount: 5 }],
-        } });
-        const reduced = applyDomainOperations(initial(current), ops);
+        });
+        const withNewMetadata = { ...current[0], newMetadata: { label: 'da conservare' } };
+        const reduced = applyDomainOperations(initial([withNewMetadata, current[1]]), ops);
         expect(reduced.routines?.map(item => item.id)).toEqual(['old', 'other']);
+        expect(reduced.routines?.[0]).toMatchObject({ name: 'Modificata', newMetadata: withNewMetadata.newMetadata });
         expect(reduced.routines?.[1]).toEqual(current[1]);
         expect(current[0].name).toBe('Original');
+    });
+
+    it('rejects an intent prepared before deletion when the archive has since removed that routine', () => {
+        const current = [routine('existing', 'Scheda'), routine('other', 'Altra')];
+        const edit = buildRoutineSaveOperations({
+            name: 'Modificata', exercises: [], routines: current, editingRoutineId: 'existing',
+        });
+        const afterDelete = applyDomainOperations(initial(current), { type: 'routine.delete', id: 'existing' });
+        expect(() => applyDomainOperations(afterDelete, edit)).toThrow('Routine non trovata');
+        expect(afterDelete.routines).toEqual([current[1]]);
     });
 
     it('refuses a stale edit, invalid new ID or duplicate ID without a fallback snapshot save', () => {

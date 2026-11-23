@@ -24,6 +24,9 @@ interface RoutineEditorProps {
     onUpdateExerciseMetadata: (exerciseIndex: number, field: 'technicalStandard' | keyof ProgressionContract, value: string) => void;
     onSave: () => void;
     onCancel: () => void;
+    onClose?: () => void;
+    includeExerciseNameInRemovalConfirmation?: boolean;
+    preview?: boolean;
     isSaving?: boolean;
 }
 
@@ -46,6 +49,9 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
     onUpdateExerciseMetadata,
     onSave,
     onCancel,
+    onClose,
+    includeExerciseNameInRemovalConfirmation,
+    preview = false,
     isSaving
 }) => {
     const exerciseSearchId = React.useId();
@@ -56,15 +62,15 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
     return (
         <div>
             <div className="routine-editor-head">
-                <h2 className="routine-editor-title">{editingRoutineId ? <><Pencil size={20} aria-hidden="true" /> Modifica scheda</> : <><Plus size={20} aria-hidden="true" /> Crea scheda</>}</h2>
-                <button
+                <h2 className="routine-editor-title">{preview ? 'Anteprima bozza' : editingRoutineId ? <><Pencil size={20} aria-hidden="true" /> Modifica scheda</> : <><Plus size={20} aria-hidden="true" /> Crea scheda</>}</h2>
+                {!preview && <button
                     type="button"
                     className="btn routine-editor-close"
-                    onClick={onCancel}
+                    onClick={onClose ?? onCancel}
                     disabled={isSaving}
                 >
                     Chiudi
-                </button>
+                </button>}
             </div>
 
             <div className="routine-editor-field">
@@ -80,7 +86,7 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
                 />
             </div>
 
-            <div className="routine-editor-field">
+            {!preview && <div className="routine-editor-field">
                 <label htmlFor={exerciseSearchId}>Aggiungi esercizio</label>
                 <div className="routine-editor-search">
                     <ExerciseSearchDropdown
@@ -90,7 +96,7 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
                         placeholder="Cerca esercizi da aggiungere"
                     />
                 </div>
-            </div>
+            </div>}
 
             <div className="routine-editor-section-head">
                 <h3>Esercizi nella scheda</h3>
@@ -120,6 +126,7 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
                                 index={index}
                                 totalExercises={routineExercises.length}
                                 libDef={libraryItem}
+                                includeExerciseNameInRemovalConfirmation={includeExerciseNameInRemovalConfirmation}
                                 onMove={onMoveExercise}
                                 onRemove={onRemoveExercise}
                                 onUpdateSetsCount={onUpdateSetsCount}
@@ -133,7 +140,7 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
                 )}
             </div>
 
-            <div className="routine-editor-actions">
+            {!preview && <div className="routine-editor-actions">
                 <button
                     type="button"
                     className="btn btn-secondary"
@@ -150,7 +157,7 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
                 >
                     {isSaving ? 'Salvataggio...' : (editingRoutineId ? <><Save size={16} aria-hidden="true" /> Salva modifiche</> : 'Salva')}
                 </button>
-            </div>
+            </div>}
         </div>
     );
 };

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { verifyLocalMigrationTarget, verifyMigrationLedger,
   verifyRemoteIsolatedD1, MIGRATIONS } from '../../scripts/verify-cloudflare-isolated-d1-schema.mjs';
+import { D1_NOW_MS } from '../../cloudflare/sql/d1-time.mjs';
 
 const ACCOUNT = '0123456789abcdef0123456789abcdef';
 const ID = '9aa51833-8adc-495f-bdfc-93b5542e8023';
@@ -11,9 +12,10 @@ const names = readdirSync(new URL('../../cloudflare/api/migrations/', import.met
   .filter(n => n.endsWith('.sql')).sort();
 const ledger = (count = 8) => MIGRATIONS.slice(0, count).map((name, i) => ({ id: i + 1, name }));
 const schema = [
+  { name: 'cloud_key_first_issuance', type: 'trigger', sql: `accepted_at_ms <= ${D1_NOW_MS}` },
   { name: 'health_erasure_finalization_fence', type: 'trigger' },
   { name: 'health_erasure_finalizations', type: 'table' },
-  { name: 'sync_writable_cloud_key', type: 'view' },
+  { name: 'sync_writable_cloud_key', type: 'view', sql: `accepted_at_ms <= ${D1_NOW_MS}` },
 ];
 
 function response(result, status = 200) {
@@ -35,13 +37,13 @@ function syntheticProvider({
     }
     if (parsed.pathname.endsWith('/query')) {
       const sql = JSON.parse(options.body).sql;
-      const columns = [...sql.matchAll(/\(SELECT COUNT\(\*\) FROM ([a-z][a-z0-9_]*)\) AS ([a-z][a-z0-9_]*)/g)]
+      const censusColumns = [...sql.matchAll(/\(SELECT COUNT\(\*\) FROM ([a-z][a-z0-9_]*)\) AS ([a-z][a-z0-9_]*)/g)]
         .map(([, table, alias]) => [alias, tableRows[table] ?? 0]);
       if (!sql.includes('FROM d1_migrations') && !sql.includes('FROM sqlite_master')
-        && columns.length === 0) throw new Error('Unexpected synthetic D1 query');
+        && censusColumns.length === 0) throw new Error('Unexpected synthetic D1 query');
       const rows = sql.includes('FROM d1_migrations') ? ledger(migrationCount)
         : sql.includes('FROM sqlite_master') ? objects
-        : [Object.fromEntries(columns)];
+        : [Object.fromEntries(censusColumns)];
       return response([{ success: true, results: rows }]);
     }
     return response({ uuid: ID, name: 'thelogbook-cf02-eu-isolated-20261113',
@@ -88,50 +90,51 @@ void test('only approved isolated D1 with exactly reviewed SQL files is eligible
   assert.throws(() => verifyLocalMigrationTarget({ ...config, d1_databases: [
     { ...config.d1_databases[0], database_id: 'unexpected' },
   ] }, names));
-  assert.throws(() => verifyLocalMigrationTarget(config, [...names, '0011_unknown.sql']));
+  assert.throws(() => verifyLocalMigrationTarget(config, [...names, '0012_unknown.sql']));
 });
 
-void test('prefix ledger: 0008 initial, 0009 interrupted, 0010 complete, no gaps or drift', () => {
+void test('the known contiguous migration prefixes may resume; completion requires 0011', () => {
   assert.equal(verifyMigrationLedger(ledger(8), 'before'), 8);
   assert.equal(verifyMigrationLedger(ledger(9), 'before'), 9);
   assert.equal(verifyMigrationLedger(ledger(10), 'before'), 10);
-  assert.equal(verifyMigrationLedger(ledger(10), 'after'), 10);
+  assert.equal(verifyMigrationLedger(ledger(11), 'after'), 11);
   for (const entries of [
     ledger(7), [...ledger(8), { id: 10, name: MIGRATIONS[8] }],
     [...ledger(8), { id: 9, name: '0009_other.sql' }],
     [...ledger(10), { id: 11, name: '0011_unknown.sql' }],
     ledger(8).map((row, i) => i === 0 ? { ...row, id: 0 } : row),
   ]) assert.throws(() => verifyMigrationLedger(entries, 'before'));
-  assert.throws(() => verifyMigrationLedger(ledger(9), 'after'));
+  assert.throws(() => verifyMigrationLedger(ledger(10), 'after'));
 });
 
 void test('checks account, EU D1, Time Travel, ledger, empty principals and schema readback', async () => {
   const before = syntheticProvider();
   assert.deepEqual(await verifyRemoteIsolatedD1({
     phase: 'before', account: ACCOUNT, token: 'test', request: before.request,
-  }), { phase: 'before', applied: 8, expected: 10, jurisdiction: 'eu',
+  }), { phase: 'before', applied: 8, expected: 11, jurisdiction: 'eu',
     timeTravelBookmarkVerified: true });
   assertReadOnlyRequests(before.calls);
 
-  const after = syntheticProvider({ migrationCount: 10 });
+  const after = syntheticProvider({ migrationCount: 11 });
   assert.equal((await verifyRemoteIsolatedD1({
     phase: 'after', account: ACCOUNT, token: 'test', request: after.request,
-  })).applied, 10);
+  })).applied, 11);
   assert.ok(after.calls.some(c => c.sql?.includes('sqlite_master')));
   assertReadOnlyRequests(after.calls);
 });
 
 void test('fails closed on provider, migration and isolation drift without writes', async () => {
   for (const options of [
-    { migrationCount: 7 }, { migrationCount: 9 },
+    { migrationCount: 7 }, { migrationCount: 10 },
     { tableRows: { auth_principals: 1 } },
     { tableRows: { auth_sessions: 1 } },
     { tableRows: { cloud_account_keys: 1 } },
     { tableRows: { health_erasure_jobs: 1 } },
-    { jurisdiction: 'us' }, { replication: 'auto' },
-    { objects: [] }, { failedStatus: 403 },
+    { jurisdiction: 'us' },
+    { replication: 'auto' }, { objects: [] }, { failedStatus: 403 },
+    { objects: [{ ...schema[0], sql: 'accepted_at_ms <= julianday(\'now\')' }, ...schema.slice(1)] },
   ]) {
-    const provider = syntheticProvider(options);
+    const provider = syntheticProvider({ migrationCount: 11, ...options });
     await assert.rejects(verifyRemoteIsolatedD1({
       phase: 'after', account: ACCOUNT, token: 'test', request: provider.request,
     }));
@@ -139,30 +142,34 @@ void test('fails closed on provider, migration and isolation drift without write
   }
 });
 
-void test('preflight rejects data in every SQL-declared application table', async () => {
-  // Source SQL, not the verifier's inventory, is the independent table oracle.
-  for (const migrationCount of [8, 9, 10]) {
-    const phase = migrationCount === 10 ? 'after' : 'before';
-    const provider = syntheticProvider({ migrationCount });
-    await verifyRemoteIsolatedD1({ phase, account: ACCOUNT, token: 'test', request: provider.request });
-    const sql = provider.calls.filter(call => call.sql?.includes('SELECT COUNT(*) FROM'));
-    assert.equal(sql.length, 1, 'one aggregate census query required');
-    const columns = [...sql[0].sql.matchAll(/\(SELECT COUNT\(\*\) FROM ([a-z][a-z0-9_]*)\) AS ([a-z][a-z0-9_]*)/g)];
+void test('census covers every table declared in the actually applied migration prefix (0008-0011)', async () => {
+  // Source SQL, rather than a second hard-coded census list, is the oracle.
+  // In particular, 0010 finalization proof must not be skipped while 0011 is pending.
+  for (const migrationCount of [8, 9, 10, 11]) {
+    const phase = migrationCount === 11 ? 'after' : 'before';
+    const empty = syntheticProvider({ migrationCount });
+    await verifyRemoteIsolatedD1({
+      phase, account: ACCOUNT, token: 'synthetic', request: empty.request,
+    });
+    const census = empty.calls.filter(call => call.sql?.includes('SELECT COUNT(*) FROM'));
+    assert.equal(census.length, 1, 'expected one read-only table census');
+    const columns = [...census[0].sql.matchAll(/\(SELECT COUNT\(\*\) FROM ([a-z][a-z0-9_]*)\) AS ([a-z][a-z0-9_]*)/g)];
     const covered = columns.map(([, table, alias]) => {
-      assert.equal(table, alias);
+      assert.equal(alias, table, 'census alias must identify its table');
       return table;
     });
     assert.equal(covered.length, new Set(covered).size, 'duplicate table census');
     const expected = MIGRATIONS.slice(0, migrationCount).flatMap(name => {
       const source = readFileSync(new URL('../../cloudflare/api/migrations/' + name, import.meta.url), 'utf8');
-      return [...source.matchAll(/CREATE TABLE\s+([a-z][a-z0-9_]*)\b/gi)].map(match => match[1]);
+      return [...source.matchAll(/CREATE TABLE\s+([a-z][a-z0-9_]*)\b/gi)].map(([, table]) => table);
     });
-    assert.deepEqual([...covered].sort(), [...expected].sort());
-    assertReadOnlyRequests(provider.calls);
+    assert.deepEqual([...covered].sort(), [...expected].sort(),
+      'census drifted from actual SQL migrations');
+    assertReadOnlyRequests(empty.calls);
     for (const table of expected) {
       const populated = syntheticProvider({ migrationCount, tableRows: { [table]: 1 } });
       await assert.rejects(verifyRemoteIsolatedD1({
-        phase, account: ACCOUNT, token: 'test', request: populated.request,
+        phase, account: ACCOUNT, token: 'synthetic', request: populated.request,
       }), new RegExp('non-empty isolated D1 ' + table));
       assertReadOnlyRequests(populated.calls);
     }

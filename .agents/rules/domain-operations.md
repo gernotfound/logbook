@@ -110,6 +110,11 @@ Per nutrition/history, la DomainOperation individua esplicitamente data/ID e qui
 
 `meals`, `supplementsIntake` e `cardioSessions` restano collezioni mensili identificate da ID stabile; edit concorrenti su entità diverse non devono collassare l'intero array.
 
+`measurement.delete` confronta al commit i soli campi della misura
+mostrata alla conferma, inclusi ora e provenienza BF. Rifiuta una misura
+mancante o modificata e conserva pasti, totali, sonno, passi, cardio e
+integratori dello stesso giorno. I tombstone riguardano soltanto la misura.
+
 `nutrition-meal.edit` applica soltanto quantità e gruppo richiesti al pasto
 presente nel dato corrente. Il pasto deve esistere quando il reducer esegue
 il commit. Un editor obsoleto non crea un pasto eliminato e non riscrive
@@ -120,6 +125,26 @@ pasto usa `nutrition-meal.upsert` con un nuovo ID.
 ancora in libreria al commit. La rimozione della voce lascia intatte le
 assunzioni già registrate. Un editor obsoleto non può ricreare la voce o
 registrare una nuova assunzione per quell'ID.
+
+`food.edit` richiede un alimento già presente nell'archivio personale al
+momento del commit, anche con un ID numerico valido come zero. Crea e
+duplica tramite `food.upsert` con un nuovo ID. La rimozione della voce
+non cambia le copie nutrizionali già registrate nei pasti.
+
+`routine.edit` applica nome ed esercizi alla scheda presente al momento del
+commit, conservando gli altri campi e la posizione nell'elenco. Se una
+cancellazione è già recepita nell'archivio locale, un intento di modifica
+preparato prima della cancellazione fallisce senza ricreare la scheda.
+
+`routine.create` richiede un ID assente al commit e ordina le schede per
+nome a partire dai dati correnti della transazione. Due creazioni che
+partono da copie diverse dell'elenco non sostituiscono l'elenco intero.
+
+`exercise.edit` conserva identità e dati estranei al form, richiede un
+esercizio personale presente e applica solo i campi dichiarati dall'editor.
+La cancellazione dal candidato Kinde porta gli ID delle schede viste alla
+conferma. Una differenza al commit blocca la cancellazione e i relativi
+tombstone, così l'utente può confermare sullo stato aggiornato.
 
 ## Patch
 

@@ -106,7 +106,7 @@ describe('Viewport CSS and source conformance', () => {
                 'src/components/Training/planning/TrainingPlanning.tsx',
                 'src/components/Training/TrainingSessionSetup.tsx',
                 'src/components/Nutrition/NutritionMealsForm.tsx',
-                'src/components/Nutrition/NutritionFoodArchive.tsx',
+                'src/components/Nutrition/NutritionFoodArchiveForm.tsx',
                 'src/components/Data/DataMeasurements.tsx',
                 'src/components/Data/DataSleep.tsx',
                 'src/components/Data/DataBiometry.tsx',

@@ -35,8 +35,8 @@ describe('Data CSS module boundaries', () => {
     expect(css).toMatch(/@media\s*\(min-width:\s*32rem\)/);
     expect(css).toMatch(/#view-data \.data-form-grid\s*[,{\n]/);
     expect(css).toMatch(/#view-data \.activity-stat-grid\s*\{/);
-    expect(css).toMatch(/#view-data \.history-header\s*\{/);
-    expect(css).toMatch(/#view-data \.history-record-name\s*\{[^}]*font-size:\s*var\(--font-size-control\)/);
+    expect(css).toMatch(/:is\(#view-data, \.kinde-measurement-history\) \.history-header\s*\{/);
+    expect(css).toMatch(/:is\(#view-data, \.kinde-measurement-history\) \.history-record-name\s*\{[^}]*font-size:\s*var\(--font-size-control\)/);
     expect(css).toMatch(/@media\s*\(max-width:\s*22\.5rem\)/);
     expect(css).toMatch(/@media\s*\(max-width:\s*20rem\)/);
     expect(css).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)/);

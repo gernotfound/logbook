@@ -18,12 +18,13 @@ const uid = 'k_' + 'T'.repeat(43);
 const expected = { uid, fenceEpoch: 1, healthConsentRevision: 1 };
 const modulePath = '/kinde-replica-fixture.mjs';
 const planningModulePath = '/kinde-planning-fixture.mjs';
+const planningStylePath = '/kinde-planning-fixture.css';
 
 declare global {
     interface Window { kindeReplicaFixture?: KindeCandidateFitnessRealm }
 }
 
-async function buildClient(planningUi: boolean): Promise<string> {
+async function buildClient(planningUi: boolean) {
     const entry = planningUi
         ? new URL('./kindePlanningBrowserEntry.ts', import.meta.url)
         : new URL('../../src/lib/auth/kindeCandidateFitnessRealm.ts', import.meta.url);
@@ -47,7 +48,12 @@ async function buildClient(planningUi: boolean): Promise<string> {
     const chunks = files.filter(file => file.type === 'chunk');
     const [file] = chunks;
     if (chunks.length !== 1 || !file) throw new Error('Expected one isolated Kinde browser bundle');
-    return file.code;
+    const css = files
+        .flatMap(file => file.type === 'asset' && file.fileName.endsWith('.css')
+            ? [typeof file.source === 'string' ? file.source : Buffer.from(file.source).toString('utf8')]
+            : [])
+        .join('\n');
+    return { code: file.code, css };
 }
 
 export async function loadKindeReplica(page: Page) {
@@ -139,11 +145,15 @@ export async function withKindeReplicaDevices<T>(
                         Location: '/', 'Cache-Control': 'no-store',
                     }).end();
                 } else if (url.pathname === '/') {
-                    outgoing.writeHead(200, { 'Content-Type': 'text/html' }).end('<!doctype html><title>Kinde replica fixture</title>');
+                    const styles = planningClient?.css ? `<link rel="stylesheet" href="${planningStylePath}">` : '';
+                    outgoing.writeHead(200, { 'Content-Type': 'text/html' })
+                        .end(`<!doctype html><title>Kinde replica fixture</title>${styles}`);
                 } else if (url.pathname === modulePath) {
-                    outgoing.writeHead(200, { 'Content-Type': 'text/javascript' }).end(client);
+                    outgoing.writeHead(200, { 'Content-Type': 'text/javascript' }).end(client.code);
                 } else if (url.pathname === planningModulePath && planningClient !== null) {
-                    outgoing.writeHead(200, { 'Content-Type': 'text/javascript' }).end(planningClient);
+                    outgoing.writeHead(200, { 'Content-Type': 'text/javascript' }).end(planningClient.code);
+                } else if (url.pathname === planningStylePath && planningClient?.css) {
+                    outgoing.writeHead(200, { 'Content-Type': 'text/css' }).end(planningClient.css);
                 } else { outgoing.writeHead(404).end(); }
                 return;
             }

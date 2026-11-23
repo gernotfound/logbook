@@ -2,11 +2,13 @@ import { useState, type ReactNode } from 'react';
 import type { useKindeAccountSession } from '../../contexts/auth/useKindeAccountSession';
 import { useKindeCandidateFitnessLifecycle } from '../../contexts/auth/useKindeCandidateFitnessLifecycle';
 import { KindeCandidateBiometry } from '../Data/KindeCandidateBiometry';
+import { KindeCandidateMeasurementHistory } from '../Data/KindeCandidateMeasurementHistory';
 import { KindeCandidateNutritionMeals } from '../Nutrition/KindeCandidateNutritionMeals';
 import { KindeCandidateNutritionPlanning } from '../Nutrition/KindeCandidateNutritionPlanning';
 import { KindeCandidateJournalStatus } from './KindeCandidateJournalStatus';
 import { KindeCandidateTrainingHistory } from '../Training/KindeCandidateTrainingHistory';
 import { KindeCandidateRoutines } from '../Training/KindeCandidateRoutines';
+import { KindeCandidateExercises } from '../Training/KindeCandidateExercises';
 
 type Session = ReturnType<typeof useKindeAccountSession>;
 
@@ -45,10 +47,12 @@ export function KindeCandidateFitnessPanel({ session, management }: { session: S
                     <KindeCandidateJournalStatus state={realm.state} />
                     {phase !== 'unavailable' && <>
                         <KindeCandidateBiometry realm={realm} />
+                        {phase === 'ready' && <KindeCandidateMeasurementHistory realm={realm} />}
                         {phase === 'ready' && <KindeCandidateNutritionPlanning realm={realm} />}
                         <KindeCandidateNutritionMeals realm={realm} />
                         {phase === 'ready' && <KindeCandidateTrainingHistory realm={realm} />}
                         {phase === 'ready' && <KindeCandidateRoutines realm={realm} />}
+                        {phase === 'ready' && <KindeCandidateExercises realm={realm} />}
                     </>}
                 </>
             )}
