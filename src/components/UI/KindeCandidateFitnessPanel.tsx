@@ -5,6 +5,7 @@ import { KindeCandidateBiometry } from '../Data/KindeCandidateBiometry';
 import { KindeCandidateMeasurementHistory } from '../Data/KindeCandidateMeasurementHistory';
 import { KindeCandidateMeasurements } from '../Data/KindeCandidateMeasurements';
 import { KindeCandidateSleep } from '../Data/KindeCandidateSleep';
+import { KindeCandidateSteps } from '../Data/KindeCandidateSteps';
 import { KindeCandidateNutritionMeals } from '../Nutrition/KindeCandidateNutritionMeals';
 import { KindeCandidateNutritionPlanning } from '../Nutrition/KindeCandidateNutritionPlanning';
 import { KindeCandidateJournalStatus } from './KindeCandidateJournalStatus';
@@ -53,6 +54,7 @@ export function KindeCandidateFitnessPanel({ session, management }: { session: S
                         {phase === 'ready' && <KindeCandidateMeasurements realm={realm} />}
                         {phase === 'ready' && <KindeCandidateMeasurementHistory realm={realm} />}
                         {phase === 'ready' && <KindeCandidateSleep realm={realm} />}
+                        <KindeCandidateSteps realm={realm} />
                         {phase === 'ready' && <KindeCandidateNutritionPlanning realm={realm} />}
                         <KindeCandidateNutritionMeals realm={realm} />
                         {phase === 'ready' && <KindeCandidateTrainingHistory realm={realm} />}

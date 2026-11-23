@@ -116,10 +116,10 @@ export function inspectBufferedRecoveryEvidence(owner: string): BufferedRecovery
         scanned.push({ name, draftName, value: parsed.value,
             consentRevision: parsed.revision ?? null, provenance, raw });
     }
-    assertStableWriterEvidence(owner, names, revision, scanned, () => ownerWriterNames(owner), {
+    assertStableWriterEvidence(names, revision, scanned, () => ownerWriterNames(owner), {
         inventory: 'Copie o consenso cambiati durante la verifica. Riprova.',
         value: 'Copia modificata durante la verifica. Riprova.',
-    });
+    }, name => readDeviceValueStrict(name, owner), () => readDeviceConsentRevision(owner));
     return scanned.map(({ raw: _raw, ...entry }) => entry)
         .sort((a, b) => a.draftName.localeCompare(b.draftName) || a.name.localeCompare(b.name));
 }
@@ -144,10 +144,10 @@ export function readBufferedWriterEvidence(owner: string, draftName: string): Bu
             if (matches.length > 64) throw new Error('Troppe bozze concorrenti: esportazione di recupero necessaria.');
         }
     }
-    assertStableWriterEvidence(owner, names, revision, scanned, () => ownerWriterNames(owner), {
+    assertStableWriterEvidence(names, revision, scanned, () => ownerWriterNames(owner), {
         inventory: 'Copie bufferizzate o consenso cambiati durante la lettura.',
         value: 'Copia bufferizzata modificata durante la verifica.',
-    });
+    }, name => readDeviceValueStrict(name, owner), () => readDeviceConsentRevision(owner));
     return matches;
 }
 

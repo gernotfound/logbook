@@ -9,6 +9,7 @@ import type {
 import { UserDataSchema } from '../../schema';
 import { CardioSessionSchema } from '../../schemas/schema_nutrition';
 import { TrainingCycleWriteSchema } from '../../schemas/schema_training';
+import { captureActivitySteps } from '../../activity';
 import { hasValidCycleWriteFrequencies, isBoundedCycleCount, MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from '../../calc/cycleLimits';
 import { exerciseRoutineReferences } from '../../exerciseRoutineReferences';
 import { calculateLoggedMealTotals } from '../../nutrition/calculateLoggedMealTotals';
@@ -137,6 +138,9 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
         case 'activity-steps.clear': {
             const date = requireDate(operation.date);
             const day = data.nutrition?.[date];
+            if (operation.expected && !equal(captureActivitySteps(day), operation.expected)) {
+                throw new Error('I passi sono cambiati dopo la conferma.');
+            }
             if (!day) break;
             const next = { ...day };
             delete next.steps;

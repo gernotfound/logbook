@@ -11,7 +11,8 @@ const names = new Set(['w1', 'w2']);
 const scanned = [{ name: 'w1', raw: 'first' }, { name: 'w2', raw: 'second' }];
 const messages = { inventory: 'inventory changed', value: 'value changed' };
 const check = (readNames: () => Set<string> = () => new Set(names)) =>
-    assertStableWriterEvidence(owner, names, 3, scanned, readNames, messages);
+    assertStableWriterEvidence(names, 3, scanned, readNames, messages,
+        name => readDeviceValueStrict(name, owner), () => readDeviceConsentRevision(owner));
 
 describe('shared independent-writer evidence consistency', () => {
     beforeEach(() => {

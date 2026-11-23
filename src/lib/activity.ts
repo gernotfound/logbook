@@ -1,5 +1,15 @@
-import type { CardioIntensity, CardioModality, CardioStructure } from '../types';
+import type { CardioIntensity, CardioModality, CardioStructure, NutritionDay } from '../types';
 import { getLocalDateString, parseDateInput } from './utils/date';
+
+export type ActivitySteps = Pick<NutritionDay, 'steps' | 'stepsSource' | 'stepsCapturedAt'>;
+
+export function captureActivitySteps(day?: NutritionDay): ActivitySteps {
+    return {
+        steps: day?.steps,
+        stepsSource: day?.stepsSource,
+        stepsCapturedAt: day?.stepsCapturedAt,
+    };
+}
 
 export const CARDIO_MODALITIES: ReadonlyArray<{ value: CardioModality; label: string }> = [
     { value: 'walk', label: 'Camminata' },
