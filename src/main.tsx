@@ -148,6 +148,12 @@ export const initApp = async () => {
       }
     }
 
+    if (status === 'invalid') {
+      // An archive that failed schema validation is not an empty guest session.
+      renderStorageUnavailable(rootElement);
+      return;
+    }
+
     if (isGuest && status === 'missing') {
       // A previous saved guest archive cannot be treated as a fresh start.
       // Preserve the surviving vault and marker for explicit recovery.
@@ -168,7 +174,11 @@ export const initApp = async () => {
       await new Promise(resolve => setTimeout(resolve, 0));
       
       const initialData = parseInitialUserData(cached);
-      if (initialData) {
+      if (!initialData) {
+        renderStorageUnavailable(rootElement);
+        return;
+      }
+      {
         if (!useAppStore.getState().userData) {
           useAppStore.setState({ userData: initialData, dataOwner: bootstrapOwner });
         }
@@ -180,6 +190,11 @@ export const initApp = async () => {
     }
   } catch (e) {
     console.warn("Errore generale durante bootstrap storage:", e);
+    // A guest archive may still exist: never mount an unhydrated guest after a bootstrap failure.
+    if (bootstrapOwner) {
+      renderStorageUnavailable(rootElement);
+      return;
+    }
   }
 
   if (rootElement) {
