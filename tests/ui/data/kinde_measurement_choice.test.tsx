@@ -3,7 +3,8 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import DataMeasurements from '../../../src/components/Data/DataMeasurements';
 
-function props(choice: boolean, onChoice: (choice: boolean) => void, onSave: ReturnType<typeof vi.fn>) {
+function props(choice: boolean, onChoice: (choice: boolean) => void,
+    onSave: (event?: { preventDefault(): void }, calculateBf?: boolean) => Promise<unknown>) {
     const noop = vi.fn();
     return {
         profile: { gender: 'M' as const, height: 177 },
