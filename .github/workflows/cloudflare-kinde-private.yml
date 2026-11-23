@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/cloudflare-kinde-private.yml
       - 'cloudflare/auth/**'
+      - 'cloudflare/sql/**'
       - cloudflare/api/logout-worker.mjs
       - scripts/verify-cloudflare-kinde-private-provider.mjs
       - 'cloudflare/http/**'
