@@ -25,6 +25,9 @@ export function ActivityCardioSection({ activity }: { activity: ActivityCardioPr
         setMutationPending(true);
         try {
             await operation();
+        } catch (error) {
+            // An unexpected rejection must not leave an unhandled Promise or a stuck editor.
+            console.error('Operazione cardio non completata:', error);
         } finally {
             mutationInFlight.current = false;
             setMutationPending(false);
