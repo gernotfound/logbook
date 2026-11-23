@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
+import { isDeepStrictEqual } from 'node:util';
 import { applyCurrentD1RecoverySchema } from './current-d1-schema.mjs';
 import worker from '../../cloudflare/api/worker.mjs';
 import { releaseCloudAccountDataKey } from '../../cloudflare/api/cloud-key-store.mjs';
@@ -196,6 +197,61 @@ void test('the key issuance and writable replica fences accept the exact consent
     assert.equal(count(f, 'sync_writable_cloud_key', 'owner-future'), 0);
   } finally { f.close(); }
 });
+
+void test('0011 preserves a populated 0010 database and the exact existing ADK and commit receipt', () =>
+  withFixture(async f => {
+    const clockMigration = MIGRATIONS.findIndex(name => name === '0011_integer_cloud_key_clock.sql');
+    assert.equal(clockMigration, 10);
+    apply(f.sqlite, 8, clockMigration);
+    f.owner('owner-b');
+    f.sqlite.prepare('UPDATE auth_sessions SET revoked_at_ms=? WHERE uid=?').run(Date.now(), 'owner-b');
+
+    const originalKey = await provision(f);
+    try {
+      const enrolled = await http(f, 'replica/claim', claim());
+      assert.equal(enrolled.status, 200);
+      const input = commit(enrolled.body.replica);
+      const saved = await http(f, 'commit', input);
+      assert.equal(saved.status, 200);
+      assert.equal(currentRevision(f), 2);
+
+      const tables = [
+        'auth_principals', 'auth_sessions', 'health_consent_acceptances', 'sync_subjects',
+        'sync_state', 'sync_documents', 'sync_replicas', 'sync_replica_mutations', 'sync_receipts',
+        'cloud_key_issuance', 'cloud_account_keys',
+      ];
+      const snapshot = () => Object.fromEntries(tables.map(table =>
+        [table, f.sqlite.prepare(`SELECT * FROM ${table} ORDER BY uid`).all()]));
+      const before = snapshot();
+      for (const table of tables) assert.ok(before[table].length > 0, table + ' fixture must be populated');
+      const verifyRowsUnchanged = () => {
+        const observed = snapshot();
+        for (const table of tables) {
+          assert.ok(isDeepStrictEqual(observed[table], before[table]), table + ' rows changed');
+        }
+      };
+
+      f.sqlite.exec('BEGIN IMMEDIATE');
+      try {
+        apply(f.sqlite, clockMigration, clockMigration + 1);
+        verifyRowsUnchanged();
+        assert.deepEqual(f.sqlite.prepare('PRAGMA foreign_key_check').all(), []);
+        f.sqlite.exec('COMMIT');
+      } catch (error) {
+        f.sqlite.exec('ROLLBACK');
+        throw error;
+      }
+
+      const reopenedKey = await provision(f);
+      try {
+        assert.ok(isDeepStrictEqual(reopenedKey, originalKey), 'the existing ADK must be unchanged');
+      } finally { reopenedKey.fill(0); }
+      const replay = await http(f, 'commit', input);
+      assert.equal(replay.status, 200);
+      assert.equal(replay.body.replayed, true);
+      verifyRowsUnchanged();
+    } finally { originalKey.fill(0); }
+  }, { legacy: true }));
 
 function beforeKeyPrecondition(f, action) {
   const original = f.db.withSession.bind(f.db);
