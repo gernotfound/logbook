@@ -98,6 +98,9 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
     // Recovered and synchronously acknowledged responses are already durable.
     const dirtyRef = useRef(false);
     const [starting, setStarting] = useState(false);
+    const [cancelling, setCancelling] = useState(false);
+    // Start and deletion target the same prepared workout, even before React rerenders.
+    const actionInFlight = useRef(false);
     const sessionDate = date || Logic.getLocalDateString();
     const sleep = formatSleep(nutrition?.[sessionDate]?.sleepHours);
     const painNames = useMemo(() => activePains.map(id => Logic.getMuscleName(id) || id), [activePains]);
@@ -140,6 +143,7 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
     }, [persistDraft]);
 
     const setMetric = (key: ReadinessKey, value: number) => {
+        if (actionInFlight.current) return;
         const current = valuesRef.current;
         const next = { ...current, [key]: current[key] === value ? undefined : value };
         try {
@@ -159,7 +163,8 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
     };
 
     const start = async (includeReadiness: boolean) => {
-        if (starting) return;
+        if (actionInFlight.current) return;
+        actionInFlight.current = true;
         setStarting(true);
         try {
             const activeSession = session.current;
@@ -182,12 +187,15 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
         } catch (error) {
             blockReadinessPersistence(error);
         } finally {
+            actionInFlight.current = false;
             setStarting(false);
         }
     };
 
     const cancel = async () => {
-        if (starting) return;
+        if (actionInFlight.current) return;
+        actionInFlight.current = true;
+        setCancelling(true);
         try {
             const activeSession = session.current;
             if (!activeSession || !isCurrentSession(activeSession)) throw new Error('Sessione cambiata prima di eliminare il workout.');
@@ -197,6 +205,9 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
             if (await onCancel()) clearDraft();
         } catch (error) {
             blockReadinessPersistence(error);
+        } finally {
+            actionInFlight.current = false;
+            setCancelling(false);
         }
     };
 
@@ -225,6 +236,7 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
                                     className="readiness-value"
                                     aria-pressed={values[metric.key] === value}
                                     aria-label={`${metric.label}: ${value} su 5`}
+                                    disabled={starting || cancelling}
                                     onClick={() => setMetric(metric.key, value)}
                                 >
                                     {value}
@@ -238,10 +250,10 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
 
             <div className="pre-session-actions">
                 <div className="pre-session-primary-actions">
-                    <button type="button" className="btn btn-primary" disabled={starting} onClick={() => void start(true)}>{starting ? 'Avvio…' : 'Inizia allenamento'}</button>
-                    <button type="button" className="btn btn-danger" disabled={starting} onClick={() => void cancel()}>Annulla allenamento</button>
+                    <button type="button" className="btn btn-primary" disabled={starting || cancelling} onClick={() => void start(true)}>{starting ? 'Avvio…' : 'Inizia allenamento'}</button>
+                    <button type="button" className="btn btn-danger" disabled={starting || cancelling} onClick={() => void cancel()}>{cancelling ? 'Annullamento…' : 'Annulla allenamento'}</button>
                 </div>
-                <button type="button" className="btn btn-secondary" disabled={starting} onClick={() => void start(false)}>Salta check-in e inizia</button>
+                <button type="button" className="btn btn-secondary" disabled={starting || cancelling} onClick={() => void start(false)}>Salta check-in e inizia</button>
             </div>
         </section>
     );
