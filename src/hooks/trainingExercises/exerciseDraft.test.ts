@@ -7,6 +7,7 @@ import {
   clearExerciseDraft,
   persistExerciseDraft,
   readExerciseDraft,
+  readExerciseDraftImage,
   type ExerciseDraft,
 } from './exerciseDraft';
 
@@ -116,6 +117,35 @@ describe('exercise draft owner isolation', () => {
     expect(readDeviceValueStrict('draft_exercise', owner)).toBe(JSON.stringify(draft));
     clearExerciseDraft(owner);
     expect(readExerciseDraft(owner)).toBeNull();
+  });
+
+  it('prevents a stale guest editor from overwriting or clearing a newer sealed draft', async () => {
+    const owner = 'guest';
+    const generation = 'test-guest-concurrent-exercise-editors';
+    localStorage.setItem('logbook_is_guest', 'true');
+    localStorage.setItem(GUEST_SESSION_KEY, generation);
+    activateGuestSession(generation);
+    await prepareUnlockedTestArchive(owner);
+
+    const staleImage = readExerciseDraftImage(owner);
+    expect(staleImage).toEqual({ draft: null, raw: null });
+    const newer = { ...draft, name: 'Versione nuova' };
+    const freshRaw = persistExerciseDraft(newer, owner, undefined, staleImage.raw);
+    const key = protectedDeviceKey('draft_exercise', owner);
+    const ciphertext = localStorage.getItem(key);
+
+    expect(freshRaw).not.toBeNull();
+    expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+    expect(() => persistExerciseDraft({ ...draft, name: 'Versione vecchia' }, owner,
+      undefined, staleImage.raw)).toThrow('modificata da un’altra scheda');
+    expect(() => clearExerciseDraft(owner, undefined, staleImage.raw))
+      .toThrow('modificata da un’altra scheda');
+    expect(readExerciseDraft(owner)?.name).toBe('Versione nuova');
+    expect(localStorage.getItem(key)).toBe(ciphertext);
+
+    // An unchanged write must preserve the evidence observed by another editor.
+    expect(persistExerciseDraft(newer, owner, undefined, freshRaw)).toBe(freshRaw);
+    expect(localStorage.getItem(key)).toBe(ciphertext);
   });
 
   it('stamps sealed exercise drafts and fences prior authenticated generations', async () => {
