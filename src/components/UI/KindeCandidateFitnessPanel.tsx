@@ -3,6 +3,8 @@ import type { useKindeAccountSession } from '../../contexts/auth/useKindeAccount
 import { useKindeCandidateFitnessLifecycle } from '../../contexts/auth/useKindeCandidateFitnessLifecycle';
 import { KindeCandidateBiometry } from '../Data/KindeCandidateBiometry';
 import { KindeCandidateMeasurementHistory } from '../Data/KindeCandidateMeasurementHistory';
+import { KindeCandidateMeasurements } from '../Data/KindeCandidateMeasurements';
+import { KindeCandidateSleep } from '../Data/KindeCandidateSleep';
 import { KindeCandidateNutritionMeals } from '../Nutrition/KindeCandidateNutritionMeals';
 import { KindeCandidateNutritionPlanning } from '../Nutrition/KindeCandidateNutritionPlanning';
 import { KindeCandidateJournalStatus } from './KindeCandidateJournalStatus';
@@ -47,7 +49,9 @@ export function KindeCandidateFitnessPanel({ session, management }: { session: S
                     <KindeCandidateJournalStatus state={realm.state} />
                     {phase !== 'unavailable' && <>
                         <KindeCandidateBiometry realm={realm} />
+                        {phase === 'ready' && <KindeCandidateMeasurements realm={realm} />}
                         {phase === 'ready' && <KindeCandidateMeasurementHistory realm={realm} />}
+                        {phase === 'ready' && <KindeCandidateSleep realm={realm} />}
                         {phase === 'ready' && <KindeCandidateNutritionPlanning realm={realm} />}
                         <KindeCandidateNutritionMeals realm={realm} />
                         {phase === 'ready' && <KindeCandidateTrainingHistory realm={realm} />}

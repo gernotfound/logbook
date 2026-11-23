@@ -14,6 +14,8 @@ interface DataMeasurementsProps {
     editingDate?: string | null;
     hasExistingData?: boolean;
     bfProvenance?: BodyFatProvenance;
+    calculateBfChoice?: boolean;
+    onCalculateBfChoiceChange?: (enabled: boolean) => void;
     measureTime: string;
     setMeasureTime: (val: string) => void;
     weight: string;
@@ -86,6 +88,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
     editingDate,
     hasExistingData,
     bfProvenance,
+    calculateBfChoice, onCalculateBfChoiceChange,
     measureTime, setMeasureTime,
     weight, setWeight,
     waist, setWaist,
@@ -108,7 +111,9 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
     const selectionKey = `${activeDateStr}:${bfProvenance?.method ?? 'none'}`;
     const savedCalculation = bfProvenance?.method === 'us_navy';
     const [selection, setSelection] = useState(() => ({ key: selectionKey, enabled: savedCalculation }));
-    const calculateBf = selection.key === selectionKey ? selection.enabled : savedCalculation;
+    const calculateBf = onCalculateBfChoiceChange
+        ? (calculateBfChoice ?? savedCalculation)
+        : selection.key === selectionKey ? selection.enabled : savedCalculation;
 
     const isFemale = profile?.gender === 'F';
     const profileHeight = parseMeasurementNumber(profile?.height);
@@ -217,7 +222,10 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                     <div className="data-method-switch">
                         <label className={'data-method-option' + (calculateBf ? ' selected' : '')}>
                             <input type="checkbox" checked={calculateBf}
-                                onChange={event => setSelection({ key: selectionKey, enabled: event.target.checked })} />
+                                onChange={event => {
+                                    if (onCalculateBfChoiceChange) onCalculateBfChoiceChange(event.target.checked);
+                                    else setSelection({ key: selectionKey, enabled: event.target.checked });
+                                }} />
                             <span className="data-method-dot" aria-hidden="true" />
                             <span>
                                 <strong>Calcola la massa grassa</strong>
