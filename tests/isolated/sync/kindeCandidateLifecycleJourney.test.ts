@@ -111,7 +111,7 @@ describe('CF-05 synthetic Kinde consent, ciphertext, second device and portable 
             ).get(uid);
             expect(session?.idle_expires_at_ms).toEqual(expect.any(Number));
             await expect(readKindeCandidateAccess(first)).resolves.toMatchObject({
-                kind: 'consent-confirmed', sessionExpiresAtMs: session?.idle_expires_at_ms,
+                kind: 'consent-confirmed', sessionDeadline: { expiresAtMs: session?.idle_expires_at_ms },
             });
             const legal = consent.legalConsent;
             const firstReady = await prepareKindeCandidateOwner({

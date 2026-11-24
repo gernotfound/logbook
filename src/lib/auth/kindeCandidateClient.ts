@@ -1,5 +1,6 @@
 import { LEGAL_VERSIONS } from '../legalVersions';
 import type { LegalConsent } from '../../types';
+import { isKindeSessionDeadlineCurrent, type KindeSessionDeadline } from './kindeCandidateSessionDeadline';
 import {
     CloudReplicaTransportError, createCloudflareReplicaTransport,
     type CloudReplicaControlSnapshot,
@@ -27,7 +28,7 @@ export type KindeCandidateAccess =
     | { kind: 'signed-out' }
     | { kind: 'consent-required'; principal: CandidatePrincipal }
     | { kind: 'legal-update-required'; principal: CandidatePrincipal }
-    | { kind: 'consent-confirmed'; principal: CandidatePrincipal; legalConsent: LegalConsent; sessionExpiresAtMs?: number }
+    | { kind: 'consent-confirmed'; principal: CandidatePrincipal; legalConsent: LegalConsent; sessionDeadline?: KindeSessionDeadline }
     | { kind: 'consent-suspended'; principal: CandidatePrincipal; status: 'withdrawn' | 'deleting' | 'deleted' };
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -236,6 +237,8 @@ export async function readKindeCandidateAccess({
     if (first.unauthorized) return { kind: 'signed-out' };
     if (fence.csrfToken === null) throw new KindeCandidateBoundaryError();
     const owner = principal(first.body);
+    const requestWallMs = Date.now();
+    const requestMonotonicMs = performance.now();
     const consent = await post('/v1/consent/status', send, fence.stillCurrent, fence.csrfToken);
     if (consent.unauthorized) throw new KindeCandidateBoundaryError(401);
     const last = await post('/api/auth/session', send, fence.stillCurrent);
@@ -247,13 +250,16 @@ export async function readKindeCandidateAccess({
     }
     const status = consentState(consent.body, verified);
     assertCurrent(fence.stillCurrent);
-    if (status.kind === 'consent-confirmed') {
+    if (status.kind === 'consent-confirmed' && record(consent.body) && revision(consent.body.observedAtMs, 1)) {
         const expires = consent.headers.get(SESSION_EXPIRY_HEADER);
-        const deadline = expires !== null && /^[1-9]\d{0,15}$/.test(expires) ? Number(expires) : 0;
+        const expiresAtMs = expires !== null && /^[1-9]\d{0,15}$/.test(expires) ? Number(expires) : 0;
+        const sessionDeadline = {
+            observedAtMs: consent.body.observedAtMs, expiresAtMs, requestWallMs, requestMonotonicMs,
+        };
         // A missing bound still permits the existing online checks. It
         // provides no evidence on which a local offline grant can be based.
-        if (Number.isSafeInteger(deadline) && deadline > Date.now()) {
-            return { ...status, sessionExpiresAtMs: deadline };
+        if (isKindeSessionDeadlineCurrent(sessionDeadline)) {
+            return { ...status, sessionDeadline };
         }
     }
     return status;

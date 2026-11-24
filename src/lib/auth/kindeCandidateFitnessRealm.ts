@@ -2,6 +2,7 @@ import { captureKindeCandidateSessionFence, KindeCandidateBoundaryError, type Ki
 import { withKindeCandidateLocalReadiness } from './kindeCandidateLocalReadiness';
 import { submitKindeCandidateDomainIntent } from './kindeCandidateDomainIntent';
 import { createKindeCandidateOfflineJournal } from './kindeCandidateOfflineJournal';
+import { isKindeSessionDeadlineCurrent, type KindeSessionDeadline } from './kindeCandidateSessionDeadline';
 import { openKindeCandidateRoutineDraft, type KindeRoutineDraft } from './kindeCandidateRoutineDraft';
 import { openKindeCandidateExerciseDraft, type KindeExerciseDraft } from './kindeCandidateExerciseDraft';
 import { openKindeCandidateMeasurementDraft, type KindeMeasurementDraft } from './kindeCandidateMeasurementDraft';
@@ -37,23 +38,6 @@ type MutationOutcome = Awaited<ReturnType<typeof submitKindeCandidateDomainInten
 type DraftHandle = KindeRoutineDraft | KindeExerciseDraft | KindeMeasurementDraft
     | KindeSleepDraft | KindeStepsDraft | KindeCardioDraft | KindeCycleDraft;
 type DraftSave = { outcome: MutationOutcome; draftCleared: boolean };
-
-type SessionPermit = Readonly<{
-    verifiedAtMs: number;
-    verifiedAtMonotonicMs: number;
-    expiresAtMs: number;
-}>;
-
-function sessionPermitCurrent(permit: SessionPermit | null): boolean {
-    if (!permit) return false;
-    const wallNow = Date.now();
-    const elapsed = performance.now() - permit.verifiedAtMonotonicMs;
-    // A wall-clock rollback cannot extend the session, and elapsed time
-    // must advance monotonically even if the device clock changes.
-    return wallNow >= permit.verifiedAtMs && wallNow < permit.expiresAtMs
-        && Number.isFinite(elapsed) && elapsed >= 0
-        && elapsed < permit.expiresAtMs - permit.verifiedAtMs;
-}
 
 export type KindeCandidateFitnessRealm = {
     isCurrent: () => boolean;
@@ -104,7 +88,7 @@ export async function openKindeCandidateFitnessRealm({
     let cardioDraft: KindeCatalogDraftController<KindeCardioDraft> | null = null;
     let cycleDraft: KindeCatalogDraftController<KindeCycleDraft> | null = null;
     let needsReconciliation = false;
-    let sessionPermit: SessionPermit | null = null;
+    let sessionPermit: KindeSessionDeadline | null = null;
     const offline = () => navigator.onLine === false;
     const current = () => {
         try {
@@ -116,7 +100,7 @@ export async function openKindeCandidateFitnessRealm({
     const requireCurrent = () => {
         if (!current()) throw new KindeCandidateBoundaryError();
     };
-    const permitted = () => current() && sessionPermitCurrent(sessionPermit);
+    const permitted = () => current() && sessionPermit !== null && isKindeSessionDeadlineCurrent(sessionPermit);
     const requirePermit = () => {
         if (!permitted()) throw new KindeCandidateBoundaryError();
     };
@@ -151,21 +135,16 @@ export async function openKindeCandidateFitnessRealm({
             if (!ready.isCurrent() || !local || local.owner !== owner
                 || local.consentRevision !== principal.healthConsentRevision
                 || !local.data.legalConsent) throw new KindeCandidateBoundaryError();
-            const verifiedAtMs = Date.now();
-            const verifiedAtMonotonicMs = performance.now();
-            const expiresAtMs = ready.access.sessionExpiresAtMs;
-            if (!Number.isSafeInteger(expiresAtMs) || expiresAtMs === undefined
-                || expiresAtMs <= verifiedAtMs || !Number.isFinite(verifiedAtMonotonicMs)) {
-                throw new KindeCandidateBoundaryError();
-            }
+            const permit = ready.access.sessionDeadline;
+            if (!permit || !isKindeSessionDeadlineCurrent(permit)) throw new KindeCandidateBoundaryError();
             return {
                 snapshot: { owner, principal: { ...principal }, data: structuredClone(local.data) },
                 journal: createKindeCandidateOfflineJournal(ready.access, local, permitted),
-                permit: { verifiedAtMs, verifiedAtMonotonicMs, expiresAtMs },
+                permit,
             };
         });
         requireCurrent();
-        if (!sessionPermitCurrent(permit)) throw new KindeCandidateBoundaryError();
+        if (!isKindeSessionDeadlineCurrent(permit)) throw new KindeCandidateBoundaryError();
         sessionPermit = permit;
         offlineJournal = journal;
         needsReconciliation = false;

@@ -111,10 +111,13 @@ non certificano il comportamento fitness su provider Production.
 
 Il realm fitness candidato richiede, oltre al consenso trusted, la scadenza
 applicativa verificata `X-Logbook-Session-Expires-At-Ms` letta dal Worker.
-Senza questa prova non espone un nuovo snapshot. Il suo permesso resta legato
-alla sessione, al vault e al consenso e scade al primo limite fra tempo UTC
-osservato e tempo monotono trascorso: un orologio riportato indietro non
-estende letture o mutazioni, neppure durante un commit asincrono. Un nuovo
+Senza questa prova non espone un nuovo snapshot. L'osservazione D1
+`observedAtMs` e la scadenza della stessa lettura primaria delimitano
+il tempo residuo. Prima della richiesta di consenso il browser campiona
+orologio locale e monotono. Sottrae il maggiore dei due tempi trascorsi,
+compreso il readback finale, e rifiuta arretramenti rispetto al campione.
+Il permesso resta legato a sessione, vault e consenso ed è verificato
+anche dentro il commit. Un nuovo
 `refresh()` online può acquisire una prova successiva, ma non ripubblica
 plaintext senza completare nuovamente i controlli trusted. Il lifecycle React
 chiude la vista candidata quando il permesso scade senza eventi di focus,
@@ -244,9 +247,10 @@ verificata con CSRF e consenso attivo alle versioni legali correnti.
 Un realm già aperto online può usare questo limite per salvare nel
 journal cifrato quando il browser segnala assenza di rete. Il permesso
 vive nel documento, è vincolato a sessione, consenso, vault e replica,
-e scade al primo limite fra sessione e replica. Si controlla anche il
-tempo monotono del documento per impedire che un arretramento dell'orologio
-estenda il permesso. La vista e il testimone di modifica condividono questo
+e scade al primo limite fra sessione e replica. Il journal riusa
+l'osservazione D1 e gli stessi campioni temporali del realm,
+con la scadenza della replica come ulteriore limite. La vista e il
+testimone di modifica condividono questo
 controllo offline. React lo verifica al passaggio offline e durante il
 controllo periodico, chiudendo la vista se il permesso non vale più.
 La transazione IndexedDB verifica di nuovo envelope,
