@@ -104,7 +104,7 @@ describe('Viewport CSS and source conformance', () => {
                 'src/components/Settings/ExportSettingsTab.tsx',
                 'src/components/Settings/StorageDiagnostics.tsx',
                 'src/components/Training/planning/TrainingPlanning.tsx',
-                'src/components/Training/TrainingSessionSetup.tsx',
+                'src/components/Training/TrainingSessionSetupView.tsx',
                 'src/components/Nutrition/NutritionMealsForm.tsx',
                 'src/components/Nutrition/NutritionFoodArchiveForm.tsx',
                 'src/components/Data/DataMeasurements.tsx',

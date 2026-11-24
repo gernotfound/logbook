@@ -99,7 +99,7 @@ describe('scala tipografica canonica', () => {
   });
 
   it('mantiene nomi principali di righe e card sul token control', () => {
-    const setup = fs.readFileSync(path.join(ROOT, 'src/components/Training/TrainingSessionSetup.tsx'), 'utf8');
+    const setup = fs.readFileSync(path.join(ROOT, 'src/components/Training/TrainingSessionSetupView.tsx'), 'utf8');
     const cycleRoutines = fs.readFileSync(path.join(ROOT, 'src/components/Training/planning/CycleRoutinesList.tsx'), 'utf8');
     const planningCss = fs.readFileSync(path.join(ROOT, 'src/components/Training/planning/planning-redesign.css'), 'utf8');
     const supplements = fs.readFileSync(path.join(ROOT, 'src/components/Nutrition/SupplementCard.tsx'), 'utf8');
