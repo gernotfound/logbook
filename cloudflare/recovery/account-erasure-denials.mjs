@@ -1,4 +1,4 @@
-import { IndependentFenceUnavailableError } from './independent-owner-fence.mjs';
+import { IndependentFenceUnavailableError, requireIndependentOwnerFence } from './independent-owner-fence.mjs';
 
 const UID = /^k_[A-Za-z0-9_-]{43}$/;
 const HASH = /^[a-f0-9]{64}$/;
@@ -83,4 +83,59 @@ export async function armIndependentAccountErasureDenial(recoveryDb, intent) {
  */
 export async function requireIndependentAccountErasureDenial(recoveryDb, intent) {
   return verifyStoredDenial(recoveryDb, intent.uid, await digestForIntent(intent));
+}
+
+/**
+ * A first consent can commit in the application D1 before its independent
+ * pending floor is promoted. Account denial already blocks access, but the
+ * health runner also needs the exact withdrawn generation. Never promote to
+ * active to repair this gap. The accepted account request, original consent
+ * and queued health job are the authority for this one-way transition.
+ * @param {{ withSession: (policy: 'first-primary') => any }} appDb
+ * @param {Parameters<typeof armIndependentAccountErasureDenial>[0]} recoveryDb
+ * @param {Parameters<typeof digestForIntent>[0]} intent
+ */
+export async function reconcileAccountErasureHealthFence(appDb, recoveryDb, intent) {
+  if (!appDb || !recoveryDb || appDb === recoveryDb) throw new IndependentFenceUnavailableError();
+  const { uid, authEpoch, receiptHash, authenticatedAtMs, confirmedAtMs } = intent;
+  const digest = await digestForIntent(intent);
+  try {
+    const subject = await appDb.withSession('first-primary').prepare(`
+      SELECT s.uid, s.fence_epoch
+      FROM kinde_account_erasure_requests r
+      JOIN kinde_account_erasure_intents i ON i.uid = r.uid
+      JOIN auth_principals p ON p.uid = r.uid
+      JOIN sync_subjects s ON s.uid = r.uid
+      JOIN health_consent_acceptances c ON c.uid = s.uid
+      JOIN health_erasure_jobs j ON j.uid = s.uid AND j.consent_revision = s.consent_revision
+      WHERE r.uid = ? AND i.auth_epoch = ? AND r.receipt_hash = ?
+        AND i.reauthenticated_at_ms = ? AND i.confirmed_at_ms = ?
+        AND p.status = 'disabled' AND p.auth_epoch = r.prior_auth_epoch + 1
+        AND s.status = 'withdrawn' AND s.consent_revision = 1 AND s.erased_before_revision = 0
+        AND c.consent_revision = 1 AND c.over_18_confirmed = 1
+        AND j.fence_epoch = s.fence_epoch AND j.status IN ('pending', 'processing')
+    `).bind(uid, authEpoch, receiptHash, authenticatedAtMs, confirmedAtMs).first();
+    if (subject?.uid !== uid || !Number.isSafeInteger(subject.fence_epoch) || subject.fence_epoch < 1) {
+      throw new IndependentFenceUnavailableError();
+    }
+    try {
+      await recoveryDb.withSession('first-primary').prepare(`
+        UPDATE recovery_owner_fences SET status = 'blocked', consent_revision = 1,
+          change_seq = change_seq + 1
+        WHERE uid = ? AND status = 'pending' AND consent_revision = 0
+          AND fence_epoch = ? AND erased_before_revision = 0
+          AND EXISTS (SELECT 1 FROM recovery_account_erasure_denials WHERE uid = ? AND intent_digest = ?)
+          AND EXISTS (SELECT 1 FROM recovery_control WHERE singleton = 1 AND mode = 'open')
+      `).bind(uid, subject.fence_epoch, uid, digest).run();
+    } catch {
+      // A lost reply may have committed the monotone denial transition.
+    }
+    await requireIndependentOwnerFence(recoveryDb, {
+      uid, status: 'withdrawn', consentRevision: 1, fenceEpoch: subject.fence_epoch,
+      erasedBeforeRevision: 0,
+    }, 'erasure');
+    await verifyStoredDenial(recoveryDb, uid, digest);
+  } catch {
+    throw new IndependentFenceUnavailableError();
+  }
 }

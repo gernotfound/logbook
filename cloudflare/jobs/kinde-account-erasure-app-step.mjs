@@ -1,4 +1,6 @@
-import { requireIndependentAccountErasureDenial } from '../recovery/account-erasure-denials.mjs';
+import {
+  reconcileAccountErasureHealthFence, requireIndependentAccountErasureDenial,
+} from '../recovery/account-erasure-denials.mjs';
 import {
   recordVerifiedTerminalErasure, requireIndependentOwnerFence,
 } from '../recovery/independent-owner-fence.mjs';
@@ -86,6 +88,10 @@ export async function verifyKindeAccountErasureAppComplete(appDb, recoveryDb, in
   if (observed.status !== null) {
     if (observed.status !== 'withdrawn' || !Number.isSafeInteger(observed.consent_revision)
       || observed.consent_revision < 2 || observed.erased_before_revision !== observed.consent_revision) {
+      if (observed.status === 'withdrawn' && observed.consent_revision === 1
+        && observed.erased_before_revision === 0) {
+        await reconcileAccountErasureHealthFence(appDb, recoveryDb, intent);
+      }
       return { outcome: 'health-pending' };
     }
     const floor = await recordVerifiedTerminalErasure(appDb, recoveryDb, intent.uid, {
