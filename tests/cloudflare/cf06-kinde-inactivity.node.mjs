@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import { recordKindeForegroundActivity } from '../../cloudflare/auth/kinde-foreground-activity.mjs';
+import { isKindeInactivityCandidateCurrent, readKindeInactivityCandidates } from '../../cloudflare/jobs/kinde-inactivity-candidates.mjs';
 import {
   ACTIVITY_WRITE_INTERVAL_MS, earliestKindeInactivityErasureAt,
 } from '../../cloudflare/jobs/kinde-inactivity-time.mjs';
@@ -33,11 +34,14 @@ function fixture(t, rejectAfterWrite = false) {
     .run(HASH, UID, 'd'.repeat(64), VISIT - 1000, VISIT + IDLE_TTL, VISIT + IDLE_TTL);
   const db = { withSession(mode) {
     assert.equal(mode, 'first-primary');
-    return { prepare(sql) { return { bind(...args) { return { async first() {
-      const row = sqlite.prepare(sql).get(...args) ?? null;
-      if (rejectAfterWrite && sql.includes('INSERT INTO kinde_account_activity')) throw new Error('synthetic ACK lost');
-      return row;
-    } }; } }; } };
+    return { prepare(sql) { return { bind(...args) { return {
+      async first() {
+        const row = sqlite.prepare(sql).get(...args) ?? null;
+        if (rejectAfterWrite && sql.includes('INSERT INTO kinde_account_activity')) throw new Error('synthetic ACK lost');
+        return row;
+      },
+      async all() { return { success: true, results: sqlite.prepare(sql).all(...args) }; },
+    }; } }; } };
   } };
   return { sqlite, db, advance(ms) { observedAt += ms; } };
 }
@@ -92,4 +96,66 @@ void test('twelve calendar months preserve throttled observations across UTC lea
   for (const missing of [null, NaN, 0, -1, 0.5, Number.MAX_SAFE_INTEGER]) {
     assert.equal(earliestKindeInactivityErasureAt(missing), null);
   }
+});
+
+void test('the dry run finds only observed owners at their exact due time and only when enabled', async (t) => {
+  const { db, sqlite, advance } = fixture(t);
+  await recordKindeForegroundActivity(db, claims);
+  const dueAt = earliestKindeInactivityErasureAt(VISIT);
+  advance(dueAt - VISIT - 1);
+  assert.deepEqual(await readKindeInactivityCandidates(db), []);
+  sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=2");
+  assert.deepEqual(await readKindeInactivityCandidates(db), []);
+  advance(1);
+  const valid = await readKindeInactivityCandidates(db);
+  assert.deepEqual(valid, [{
+    uid: UID, authEpoch: 1, generation: 2, lastRecordedAtMs: VISIT, eligibleAtMs: dueAt,
+  }]);
+  assert.equal(await isKindeInactivityCandidateCurrent(db, valid[0]), true);
+  assert.equal(await isKindeInactivityCandidateCurrent(db, { ...valid[0], eligibleAtMs: dueAt - 1 }), false);
+  assert.throws(() => sqlite.exec("INSERT OR REPLACE INTO kinde_inactivity_control VALUES (1,'enabled',1)"),
+    /kinde-inactivity-control-immutable/);
+});
+
+void test('a fresh online observation or a pause invalidates an already selected inactivity candidate', async (t) => {
+  const { db, sqlite, advance } = fixture(t);
+  await recordKindeForegroundActivity(db, claims);
+  const dueAt = earliestKindeInactivityErasureAt(VISIT);
+  advance(dueAt - VISIT);
+  sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=2");
+  const [first] = await readKindeInactivityCandidates(db);
+  sqlite.exec("UPDATE kinde_inactivity_control SET mode='paused', generation=3");
+  assert.equal(await isKindeInactivityCandidateCurrent(db, first), false);
+  sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=4");
+  assert.equal(await isKindeInactivityCandidateCurrent(db, first), false);
+  const [second] = await readKindeInactivityCandidates(db);
+  const newHash = 'f'.repeat(64);
+  sqlite.prepare('INSERT INTO auth_sessions VALUES (?, ?, 1, ?, ?, ?, ?, NULL)')
+    .run(newHash, UID, 'd'.repeat(64), dueAt, dueAt + IDLE_TTL, dueAt + IDLE_TTL);
+  assert.deepEqual(await recordKindeForegroundActivity(db, { ...claims, sessionHash: newHash }), { outcome: 'recorded' });
+  assert.equal(await isKindeInactivityCandidateCurrent(db, second), false);
+  assert.deepEqual(await readKindeInactivityCandidates(db), []);
+  assert.equal(sqlite.prepare('SELECT status FROM auth_principals WHERE uid=?').get(UID).status, 'active');
+});
+
+void test('a due page reads at most sixteen recorded owners without changing their activity state', async (t) => {
+  const { db, sqlite, advance } = fixture(t);
+  const principal = sqlite.prepare("INSERT INTO auth_principals VALUES (?, 'active', ?, 1)");
+  const session = sqlite.prepare('INSERT INTO auth_sessions VALUES (?, ?, 1, ?, ?, ?, ?, NULL)');
+  const uids = [];
+  for (let i = 0; i < 20; i += 1) {
+    const suffix = i.toString(16);
+    const uid = 'k_' + suffix.padStart(43, '0');
+    const sessionHash = suffix.padStart(64, '0');
+    principal.run(uid, VISIT - 1000);
+    session.run(sessionHash, uid, 'd'.repeat(64), VISIT - 1000, VISIT + IDLE_TTL, VISIT + IDLE_TTL);
+    assert.deepEqual(await recordKindeForegroundActivity(db, { ...claims, uid, sessionHash }), { outcome: 'recorded' });
+    uids.push(uid);
+  }
+  advance(earliestKindeInactivityErasureAt(VISIT) - VISIT);
+  sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=2");
+  const page = await readKindeInactivityCandidates(db);
+  assert.deepEqual(page.map(item => item.uid), uids.slice(0, 16));
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_activity').get().n, 20);
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM auth_principals WHERE status != 'active'").get().n, 0);
 });

@@ -24,3 +24,25 @@ WHEN NEW.uid != OLD.uid OR NEW.first_observed_at_ms != OLD.first_observed_at_ms
     (CAST(strftime('%s','now') AS INTEGER) * 1000 + CAST(substr(strftime('%f','now'),4,3) AS INTEGER))
   OR NOT EXISTS (SELECT 1 FROM auth_principals WHERE uid = OLD.uid AND status = 'active')
 BEGIN SELECT RAISE(ABORT, 'kinde-activity-fenced'); END;
+
+CREATE TABLE kinde_inactivity_control (
+  singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+  mode TEXT NOT NULL CHECK (mode IN ('paused', 'enabled')),
+  generation INTEGER NOT NULL CHECK (generation >= 1)
+) STRICT;
+
+INSERT INTO kinde_inactivity_control VALUES (1, 'paused', 1);
+
+CREATE TRIGGER kinde_inactivity_control_no_replace
+BEFORE INSERT ON kinde_inactivity_control
+WHEN EXISTS (SELECT 1 FROM kinde_inactivity_control)
+BEGIN SELECT RAISE(ABORT, 'kinde-inactivity-control-immutable'); END;
+
+CREATE TRIGGER kinde_inactivity_control_no_delete
+BEFORE DELETE ON kinde_inactivity_control
+BEGIN SELECT RAISE(ABORT, 'kinde-inactivity-control-immutable'); END;
+
+CREATE TRIGGER kinde_inactivity_control_generation
+BEFORE UPDATE ON kinde_inactivity_control
+WHEN NEW.singleton != OLD.singleton OR NEW.generation != OLD.generation + 1
+BEGIN SELECT RAISE(ABORT, 'kinde-inactivity-control-regression'); END;
