@@ -19,12 +19,13 @@ export const MIGRATIONS = Object.freeze(`
 0009_require_cloud_key_for_replica_writes.sql
 0010_atomic_health_erasure_finalization.sql
 0011_integer_cloud_key_clock.sql
+0012_kinde_account_erasure.sql
 `.trim().split('\n'));
 const DATABASE = 'thelogbook-cf02-eu-isolated-20261113';
 const DATABASE_ID = '9aa51833-8adc-495f-bdfc-93b5542e8023';
 const BASE = 'https://api.cloudflare.com/client/v4';
-const CLOCK_MIGRATION = '0011_integer_cloud_key_clock.sql';
-const CLOCK_MIGRATION_SHA256 = 'fe5e73f36b0387a816bdc535b6ca9eaf475fc9320a6e22e7cc3a939a6d421809';
+const ACCOUNT_ERASURE_MIGRATION = '0012_kinde_account_erasure.sql';
+const ACCOUNT_ERASURE_MIGRATION_SHA256 = '868f9d1ce014d991b4dcd3e2c20651cec4c16b8b18b505dc193a14d8ceceb20a';
 const MIGRATION_DIR = new URL('../cloudflare/api/migrations/', import.meta.url);
 const EXISTING_TEST_TABLES = Object.freeze({
   subjects: 'sync_subjects',
@@ -34,12 +35,19 @@ const EXISTING_TEST_TABLES = Object.freeze({
   receipts: 'sync_receipts',
   replica_mutations: 'sync_replica_mutations',
 });
+const ACCOUNT_ERASURE_TABLES = Object.freeze({
+  erasure_targets: 'kinde_erasure_targets',
+  deletion_attempts: 'kinde_deletion_oauth_attempts',
+  account_intents: 'kinde_account_erasure_intents',
+  account_requests: 'kinde_account_erasure_requests',
+  provider_progress: 'kinde_account_erasure_provider_progress',
+  account_completions: 'kinde_account_erasure_completions',
+});
 
 export function verifyExistingTestUpgradeSql(sql) {
-  // This exception is only for replacing two schema definitions. Any edit
-  // to the SQL or additional pending migration requires another review.
+  // Pin the additive schema before applying it to any test database.
   assert.equal(createHash('sha256').update(sql.replaceAll('\r\n', '\n')).digest('hex'),
-    CLOCK_MIGRATION_SHA256, 'unreviewed SQL for populated test D1');
+    ACCOUNT_ERASURE_MIGRATION_SHA256, 'unreviewed SQL for test D1');
 }
 
 export function verifyLocalMigrationTarget(config, names) {
@@ -91,7 +99,7 @@ function unpackQuery(body) {
 export async function verifyRemoteIsolatedD1({
   phase,
   account,
-  existingTestDb0011 = false,
+  existingTestDb0012 = false,
   priorInventory,
   request = fetch,
   token,
@@ -105,10 +113,8 @@ export async function verifyRemoteIsolatedD1({
   const names = readdirSync(MIGRATION_DIR)
     .filter(name => name.endsWith('.sql')).sort();
   verifyLocalMigrationTarget(config, names);
-  if (existingTestDb0011) {
-    assert.equal(names.length, 11, 'populated test D1 mode permits only 0011');
-    verifyExistingTestUpgradeSql(readFileSync(new URL(CLOCK_MIGRATION, MIGRATION_DIR), 'utf8'));
-  }
+  verifyExistingTestUpgradeSql(readFileSync(new URL(ACCOUNT_ERASURE_MIGRATION, MIGRATION_DIR), 'utf8'));
+  if (existingTestDb0012) assert.equal(names.length, 12, 'populated test D1 mode permits only 0012');
 
   const root = BASE + '/accounts/' + account + '/d1/database/' + DATABASE_ID;
   async function call(path, sql) {
@@ -141,8 +147,8 @@ export async function verifyRemoteIsolatedD1({
   const ledger = unpackQuery(await call('/query',
     'SELECT id, name FROM d1_migrations ORDER BY id'));
   const applied = verifyMigrationLedger(ledger, phase);
-  if (existingTestDb0011 && phase === 'before') {
-    assert.equal(applied, 10, 'populated test D1 must be at 0010');
+  if (existingTestDb0012 && phase === 'before') {
+    assert.ok(applied === 11 || applied === 12, 'populated test D1 requires 0011 or already-applied 0012');
   }
 
   // Read only aggregates. The application DB already holds identity sessions
@@ -152,17 +158,19 @@ export async function verifyRemoteIsolatedD1({
     sessions: 'auth_sessions',
     keys: 'cloud_account_keys',
     erasure_jobs: 'health_erasure_jobs',
-    ...(existingTestDb0011 ? { consents: 'health_consent_acceptances', ...EXISTING_TEST_TABLES } : {}),
+    ...(existingTestDb0012 ? { consents: 'health_consent_acceptances', ...EXISTING_TEST_TABLES } : {}),
+    ...(applied === 12 ? ACCOUNT_ERASURE_TABLES : {}),
   };
   const countSql = Object.entries(tables).map(([key, table]) => `(SELECT COUNT(*) FROM ${table}) AS ${key}`).join(', ');
   const counts = unpackQuery(await call('/query', 'SELECT ' + countSql));
   assert.equal(counts.length, 1, 'invalid isolation count response');
-  const emptyTables = existingTestDb0011 ? ['keys', 'erasure_jobs', 'consents'] : ['principals', 'sessions', 'keys', 'erasure_jobs'];
+  const emptyTables = existingTestDb0012 ? ['keys', 'erasure_jobs', 'consents'] : ['principals', 'sessions', 'keys', 'erasure_jobs'];
+  if (applied === 12) emptyTables.push(...Object.keys(ACCOUNT_ERASURE_TABLES));
   for (const key of emptyTables) {
     assert.equal(counts[0]?.[key], 0, 'non-empty isolated D1 ' + key);
   }
   let inventory;
-  if (existingTestDb0011) {
+  if (existingTestDb0012) {
     inventory = Object.fromEntries(['principals', 'sessions', ...Object.keys(EXISTING_TEST_TABLES)]
       .map(key => [key, counts[0]?.[key]]));
     assert.ok(Object.values(inventory).every(count => Number.isSafeInteger(count) && count >= 0),
@@ -177,12 +185,25 @@ export async function verifyRemoteIsolatedD1({
       "'cloud_key_first_issuance',",
       "'sync_writable_cloud_key',",
       "'health_erasure_finalizations',",
-      "'health_erasure_finalization_fence') ORDER BY name",
+      "'health_erasure_finalization_fence',",
+      "'kinde_account_erasure_completion_fence',",
+      "'kinde_account_erasure_freeze',",
+      ...Object.values(ACCOUNT_ERASURE_TABLES).map(name => "'" + name + "',"),
+      "'auth_sessions_owner_token') ORDER BY name",
     ].join(' ')));
     assert.deepEqual(schema.map(row => [row.name, row.type]), [
+      ['auth_sessions_owner_token', 'index'],
       ['cloud_key_first_issuance', 'trigger'],
       ['health_erasure_finalization_fence', 'trigger'],
       ['health_erasure_finalizations', 'table'],
+      ['kinde_account_erasure_completion_fence', 'trigger'],
+      ['kinde_account_erasure_completions', 'table'],
+      ['kinde_account_erasure_freeze', 'trigger'],
+      ['kinde_account_erasure_intents', 'table'],
+      ['kinde_account_erasure_provider_progress', 'table'],
+      ['kinde_account_erasure_requests', 'table'],
+      ['kinde_deletion_oauth_attempts', 'table'],
+      ['kinde_erasure_targets', 'table'],
       ['sync_writable_cloud_key', 'view'],
     ], 'final D1 schema objects missing');
     for (const row of schema.filter(({ name }) => name === 'cloud_key_first_issuance' || name === 'sync_writable_cloud_key')) {
@@ -199,16 +220,16 @@ export async function verifyRemoteIsolatedD1({
 async function verifyFromCli() {
   const [, , phase, flag = 'false', inventoryPath] = process.argv;
   assert.ok(flag === 'true' || flag === 'false', 'invalid populated test DB mode');
-  const existingTestDb0011 = flag === 'true';
-  if (existingTestDb0011) assert.ok(inventoryPath, 'missing private run inventory path');
-  const priorInventory = existingTestDb0011 && phase === 'after'
+  const existingTestDb0012 = flag === 'true';
+  if (existingTestDb0012) assert.ok(inventoryPath, 'missing private run inventory path');
+  const priorInventory = existingTestDb0012 && phase === 'after'
     ? JSON.parse(readFileSync(inventoryPath, 'utf8')) : undefined;
   const { inventory, ...result } = await verifyRemoteIsolatedD1({
-    phase, existingTestDb0011, priorInventory,
+    phase, existingTestDb0012, priorInventory,
     account: process.env.CLOUDFLARE_ACCOUNT_ID,
     token: process.env.CLOUDFLARE_API_TOKEN,
   });
-  if (existingTestDb0011 && phase === 'before') {
+  if (existingTestDb0012 && phase === 'before') {
     writeFileSync(inventoryPath, JSON.stringify(inventory), { flag: 'wx', mode: 0o600 });
   }
   return result;

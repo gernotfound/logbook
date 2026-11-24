@@ -1,25 +1,28 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
-## CF-05 — Applicare 0011 alla D1 di collaudo già usata per l'identità
+## CF-06 — Verificare lo schema candidato di cancellazione account
 
-Il workflow manuale `cloudflare-d1-isolated-migrations.yml` verifica il
-`main` remoto e la riuscita del suo gate prima di qualsiasi scrittura.
-L'opzione `upgrade_existing_test_db_0011` è riservata alla D1 applicativa
-isolata EU già usata per il collaudo Kinde. Richiede ledger a 0010,
-bookmark Time Travel disponibile, repliche disabilitate, identità di test
-presenti e zero consensi salute, chiavi o job di cancellazione. Il codice
-verifica l'impronta della sola migrazione 0011, che sostituisce le due
-definizioni SQL del clock senza scrivere righe applicative.
-
-Dopo Wrangler, il verificatore rilegge il ledger fino a 0011, i trigger e
-la view e confronta i conteggi di identità, sessioni e replica sintetica
-con il preflight.
-Un cambiamento concorrente nei conteggi o una risposta incerta richiede
-una rilettura indipendente dello schema e del ledger prima di qualunque
-nuovo tentativo. Il reset di lancio rimane un'operazione distinta del
-proprietario. Il percorso predefinito continua a richiedere un database
-vuoto. Questa verifica di schema precede il collaudo di consenso, ADK e
-replica sul provider.
+- Il workflow applicativo manuale `cloudflare-d1-isolated-migrations.yml`
+  verifica il `main` remoto, il gate del relativo SHA e l'impronta della
+  migrazione additiva `0012`. Per la D1 EU già usata per collaudare
+  l'identità Kinde, `upgrade_existing_test_db_0012` richiede ledger a
+  `0011`, oppure `0012` già applicata e tabelle nuove ancora vuote.
+  Richiede bookmark Time Travel, repliche disabilitate, identità di
+  collaudo presenti e zero consensi, ADK e job sanitari. Il percorso
+  predefinito richiede una D1 vuota.
+- Il controllo dopo Wrangler verifica schema e ledger, tabelle nuove
+  vuote e inventario invariato di identità, sessioni e replica sintetica.
+  Se i conteggi cambiano o l'esito è incerto, il workflow si ferma e il
+  ledger va riletto prima di ritentare.
+- Il workflow di migrazione per il registro recovery verifica
+  separatamente `0005`, il suo bookmark e il vincolo
+  `sealed` con generazione 1 e zero owner, cutoff e blocchi account.
+- I passaggi di schema precedono la prova runtime. La riautenticazione
+  dedicata, la cancellazione del profilo, il runner e la ricevuta finale
+  sono candidati verificati con dati sintetici. Il collaudo live richiede
+  un'identità sintetica, autorizzazione del registro indipendente e
+  permessi Kinde dedicati. Il reset di lancio rimane di competenza del
+  proprietario.
 
 ## CF-05 — Recupero ciphertext per export diritti dopo revoca (candidato v2.546.0, 19/11/2026)
 
