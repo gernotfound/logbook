@@ -3,6 +3,62 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { appOrigin, apiAudience, createKindeOAuthFixture as fixture } from './kinde-oauth-flow-fixture.mjs';
 
+void test('deletion OAuth forces new authentication and yields one owner-bound proof without a new app session', async (t) => {
+  const f = await fixture();
+  t.after(() => f.close());
+  const login = await f.start();
+  const issued = await f.oauth.complete(f.db, f.callback(login));
+  assert.equal(issued.status, 303);
+  const cookie = issued.headers.getSetCookie()[0].split(';')[0];
+  const sessionHash = createHash('sha256').update(cookie.split('=')[1]).digest('hex');
+  const { uid } = f.sqlite.prepare('SELECT uid FROM auth_principals').get();
+  const claims = {
+    authenticated: true, csrfVerified: true, rateGatePassed: true, uid, fenceEpoch: 1, sessionHash,
+  };
+  const deletionStart = new Request(appOrigin + '/api/auth/kinde/deletion/start', {
+    method: 'POST', headers: { origin: appOrigin, 'sec-fetch-site': 'same-origin', cookie },
+  });
+  assert.equal((await f.deletion.start(f.db, deletionStart, { ...claims, csrfVerified: false })).status, 403);
+  assert.equal((await f.deletion.start(f.db, deletionStart, { ...claims, sessionHash: 'f'.repeat(64) })).status, 403);
+  const first = await f.deletion.start(f.db, deletionStart, claims);
+  assert.equal(first.status, 303);
+  const auth = new URL(first.headers.get('Location'));
+  const [deletionCookie] = first.headers.getSetCookie();
+  assert.match(deletionCookie, /^__Host-logbook_delete_oauth=/);
+  assert.equal(auth.searchParams.get('max_age'), '0');
+  assert.equal(auth.searchParams.get('redirect_uri'), appOrigin + '/api/auth/kinde/deletion/callback');
+  const saved = f.sqlite.prepare('SELECT * FROM kinde_deletion_oauth_attempts').get();
+  assert.equal(auth.searchParams.get('code_challenge'),
+    createHash('sha256').update(saved.code_verifier).digest('base64url'));
+  assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts').get().n, 0);
+  const wrongBrowser = f.deletionCallback(auth, 'wrong-browser', cookie, true);
+  assert.equal(await f.deletion.complete(f.db, wrongBrowser), null);
+  assert.equal(f.calls(), 1);
+
+  const cookies = cookie + '; ' + deletionCookie.split(';')[0];
+  const oldSso = f.deletionCallback(auth, 'stale-sso', cookies, false);
+  assert.equal(await f.deletion.complete(f.db, oldSso), null);
+  assert.equal(f.calls(), 2);
+  assert.equal(await f.deletion.complete(f.db, oldSso), null);
+  assert.equal(f.calls(), 2);
+
+  const second = await f.deletion.start(f.db, deletionStart, claims);
+  assert.equal(second.status, 303);
+  const secondCookies = cookie + '; ' + second.headers.getSetCookie()[0].split(';')[0];
+  // Make room for the synthetic user's reauthentication without sleeping.
+  f.sqlite.exec('UPDATE kinde_deletion_oauth_attempts SET issued_at_ms = issued_at_ms - 5000, expires_at_ms = expires_at_ms - 5000');
+  const reauthenticated = f.deletionCallback(new URL(second.headers.get('Location')), 'fresh-reauth', secondCookies, true);
+  const candidates = await Promise.all([
+    f.deletion.complete(f.db, reauthenticated), f.deletion.complete(f.db, reauthenticated),
+  ]);
+  assert.equal(candidates.filter(Boolean).length, 1);
+  const proof = candidates.find(Boolean);
+  assert.ok(Number.isSafeInteger(proof.authenticatedAtMs));
+  assert.deepEqual(proof, { uid, authEpoch: 1, authenticatedAtMs: proof.authenticatedAtMs, sessionHash });
+  assert.equal(f.calls(), 3);
+  assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 1);
+});
+
 void test('Kinde server flow stores hashed state/browser and verifies SHA-256 PKCE challenge', async () => {
   const f = await fixture();
   try {

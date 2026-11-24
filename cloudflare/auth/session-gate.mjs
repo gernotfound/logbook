@@ -3,7 +3,7 @@
 // This Worker has no public route and cannot mint an identity on request.
 import { D1_NOW_MS } from '../sql/d1-time.mjs';
 
-const SESSION_COOKIE = '__Host-logbook_session';
+export const SESSION_COOKIE = '__Host-logbook_session';
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const HASH = /^[a-f0-9]{64}$/;
 const READ_ROUTES = new Set([

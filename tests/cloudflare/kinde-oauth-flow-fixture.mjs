@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { applyCurrentD1Schema } from './current-d1-schema.mjs';
-import { createKindeOAuthFlow } from '../../cloudflare/auth/kinde-oauth-flow.mjs';
+import { createKindeDeletionOAuthFlow, createKindeOAuthFlow } from '../../cloudflare/auth/kinde-oauth-flow.mjs';
 
 const issuer = 'https://synthetic-kinde.example';
 export const appOrigin = 'https://candidate.example.invalid';
@@ -16,17 +16,15 @@ export async function createKindeOAuthFixture() {
   applyCurrentD1Schema(sqlite);
   const db = {
     prepare(sql) {
-      return {
-        bind(...params) {
-          return {
-            async run() {
-              const out = sqlite.prepare(sql).run(...params);
-              return { success: true, meta: { changes: out.changes } };
-            },
-            async first() { return sqlite.prepare(sql).get(...params) ?? null; },
-          };
+      const bind = (...params) => ({
+        async run() {
+          const out = sqlite.prepare(sql).run(...params);
+          return { success: true, meta: { changes: out.changes } };
         },
-      };
+        async first() { return sqlite.prepare(sql).get(...params) ?? null; },
+        bind,
+      });
+      return bind();
     },
     withSession(mode) {
       assert.equal(mode, 'first-primary');
@@ -56,10 +54,10 @@ export async function createKindeOAuthFixture() {
     assert.equal(body.get('grant_type'), 'authorization_code');
     assert.equal(body.get('client_id'), clientId);
     assert.equal(body.get('client_secret'), 'synthetic-server-secret-not-real');
-    assert.equal(body.get('redirect_uri'), appOrigin + '/api/auth/kinde/callback');
     assert.match(body.get('code_verifier'), /^[A-Za-z0-9_-]{43}$/);
     const code = body.get('code');
-    const nonce = nonceByCode.get(code);
+    const { nonce, redirectUri, recent } = nonceByCode.get(code);
+    assert.equal(body.get('redirect_uri'), redirectUri);
     const now = Math.floor(Date.now() / 1000);
     issuedTokens += 1;
     if (transportFails) throw new Error('synthetic token fetch failure');
@@ -82,7 +80,7 @@ export async function createKindeOAuthFixture() {
       const at_hash = createHash('sha256').update(accessToken).digest().subarray(0, 16).toString('base64url');
       const idToken = await new SignJWT({
         azp: clientId, sub: 'kp_verified_test_12345',
-        nonce, auth_time: now - 60,
+        nonce, auth_time: now - (recent ? 1 : 60),
         email: 'test@example.invalid', email_verified: true, at_hash,
       }).setProtectedHeader({ alg: 'RS256', kid: 'synthetic' })
         .setIssuer(issuer).setAudience(idAudience).setIssuedAt(now - 1).setExpirationTime(now + 300)
@@ -95,13 +93,15 @@ export async function createKindeOAuthFixture() {
     issuer, clientId, clientSecret: 'synthetic-server-secret-not-real',
     apiAudience, appOrigin,
   };
-  const oauth = createKindeOAuthFlow(config, {
+  const dependencies = {
     rateLimit: async request => {
       assert.ok(request instanceof Request);
       return rateAllowed;
     },
     fetchImpl, keySet,
-  });
+  };
+  const oauth = createKindeOAuthFlow(config, dependencies);
+  const deletion = createKindeDeletionOAuthFlow(config, dependencies);
   function startRequest(cookie = '') {
     return new Request(appOrigin + '/api/auth/kinde/start', {
       method: 'POST', headers: { origin: appOrigin, 'sec-fetch-site': 'same-origin', cookie },
@@ -127,13 +127,20 @@ export async function createKindeOAuthFixture() {
     return { auth, cookie: boundCookie, state: auth.searchParams.get('state'), nonce: auth.searchParams.get('nonce') };
   }
   function callback(attempt, code = 'good-code', cookie = attempt.cookie, scope = 'openid email profile') {
-    nonceByCode.set(code, attempt.nonce);
+    const redirectUri = appOrigin + '/api/auth/kinde/callback';
+    nonceByCode.set(code, { nonce: attempt.nonce, redirectUri });
     const query = new URLSearchParams({ code, state: attempt.state });
     if (scope !== null) query.set('scope', scope);
-    return new Request(appOrigin + '/api/auth/kinde/callback?' + query, { headers: { cookie } });
+    return new Request(redirectUri + '?' + query, { headers: { cookie } });
+  }
+  function deletionCallback(auth, code, cookie, recent) {
+    const redirectUri = appOrigin + '/api/auth/kinde/deletion/callback';
+    nonceByCode.set(code, { nonce: auth.searchParams.get('nonce'), redirectUri, recent });
+    const query = new URLSearchParams({ code, state: auth.searchParams.get('state') });
+    return new Request(redirectUri + '?' + query, { headers: { cookie } });
   }
   return {
-    sqlite, db, oauth, startRequest, start, callback, config,
+    sqlite, db, oauth, deletion, startRequest, start, callback, deletionCallback, config,
     setRate: value => { rateAllowed = value; },
     setStatus: value => { tokenStatus = value; },
     setTransportFailure: value => { transportFails = value; },
