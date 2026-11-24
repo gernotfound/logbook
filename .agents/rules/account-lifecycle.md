@@ -1,5 +1,13 @@
 # Ciclo account, Auth e guest — TheLogBook
 
+> **Checkpoint 24/11:** gli incrementi datati qui sotto descrivono anche stadi storici. La [mappa corrente](../../docs/operations/cloudflare-current-state.md) distingue le funzioni candidate già integrate da quelle mancanti. Il pubblico resta identity-only.
+
+### CF-06 — Cancellazione account e inattività candidate
+
+La cancellazione account è distinta dalla sola revoca salute. Riferimento Kinde da identità OIDC verificata, cifrato con chiave dedicata e vincolato all'owner; mai collegamento per email. La riautenticazione dedicata usa state/PKCE/nonce monouso, sessione/owner originari e prova temporale firmata effettiva: se discovery non attesta il supporto richiesto, negare, senza emissione di sessione normale. L'intento durevole precede il deny indipendente; la richiesta accettata blocca accesso e accoda erasure sanitaria se necessaria. La prova di pulizia applicativa, ADK e floor indipendente precede l'eliminazione Kinde, sotto lease D1 corrente. ACK ambiguo o sola assenza non provano completamento. Pulire anche il marker attività del solo owner.
+
+L'attività online candidata usa `recordKindeForegroundActivity` dopo Auth Gate, CSRF/rate gate e sessione primaria corrente; timestamp SQL, nessuna falsa attività offline/background. Aggregazione conservativa 10 minuti. `readKindeInactivityCandidates` è dry-run bounded (16), non accoda/disabilita. Scadenza 12 mesi calendari UTC con margine; owner senza marker esclusi. La 0013 inizializza il controllo paused; ogni cambio generazione invalida selezioni precedenti. Il futuro enqueue deve ricontrollare atomicamente UID, epoch, marker, scadenza e generazione: la sola rilettura prima di un await non basta. Nessun cron o nuova rotta live, né autorizzazione a cancellare account reali. Rif. [CF-06 #1060](https://github.com/gernotfound/logbook/issues/1060).
+
 ### CF-03 — Orologio D1 per sessione e consenso
 
 Le scritture D1 dei timestamp di identità, sessione, logout e consenso
@@ -21,10 +29,7 @@ mentre la duplicazione Kinde usa lo stesso compilatore attraverso
 `realm.submit()`. Il reducer Domain Operations resta l'autorità sulla
 validità finale dello stato, sulle identità e sull'ordinamento.
 
-La disponibilità del compilatore **non** abilita il form Kinde:
-apertura, mutazioni bufferizzate e recupero di `draft_routine` richiedono
-un adapter owner/epoch/consenso cifrato indipendente dal guest e prove
-di errore, ripresa, multitab, logout e PWA update. Non inferire una bozza
+Il form Kinde candidato dispone ora dell'adapter cifrato dedicato (#1366); apertura, mutazioni bufferizzate e recupero di `draft_routine` restano vincolati a owner/epoch/consenso, senza fallback guest. Il form non è montato nel pubblico; multitab, logout e PWA update su provider/dispositivi richiedono prove ulteriori. Non inferire una bozza
 salvata da una `DomainOperation` non ancora committata.
 
 ### CF-03/04 — Duplicazione ed eliminazione delle schede Kinde (22/11/2026)
@@ -42,10 +47,7 @@ consenso, owner o permit cambiano, il submit è respinto; un journal pending
 non viene dichiarato cloud ACK e il pulsante di recheck non reinvia
 l'intento. Non si cancellano automaticamente dati device in caso di errore.
 
-La creazione e modifica di schede dall'editor restano disabilitate:
-`draft_routine` usa ancora il writer device e i marker di consenso del
-legacy, incompatibili col perimetro Kinde finché non esiste un adapter
-di bozza cifrata owner/consenso/fence/recovery dedicato e provato.
+La creazione e modifica di schede dall'editor candidato usano l'adapter di bozza cifrata Kinde integrato in #1366, non il writer guest/legacy; il contratto resta owner/consenso/fence/recovery.
 Il frontend pubblico resta `identityOnly`. Test sintetici e CodeQL non
 costituiscono un collaudo account/D1 Production.
 
@@ -57,13 +59,12 @@ soltanto con snapshot `ready` del realm owner-scoped, separata da
 `RoutineCard` rende le azioni di menu solo quando il chiamante
 fornisce i rispettivi handler: il wrapper guest conserva modifica,
 duplica ed elimina; il candidato Kinde offre duplicazione ed eliminazione
-attraverso il realm, ma non la creazione o modifica mediante editor.
+attraverso il realm; creazione e modifica sono state aggiunte nel candidato con #1366.
 Ricerca, espansione,
 riepilogo serie e mappa muscolare usano soltanto la libreria dello
 stesso owner Kinde e sono smontati alla perdita del permesso.
 
-Le bozze delle schede, `draft_routine`, il controllo dei testimoni
-fra schede e l'editor non sono ancora migrati. Il writer delle azioni
+Le bozze delle schede e l'editor sono disponibili nel candidato isolato (#1366), con controlli dedicati e senza confondere i testimoni guest. Il writer delle azioni
 immediate è soltanto `realm.submit()` con journal cifrato: un'azione
 account non può usare l'owner o il recupero del guest.
 I test React contrappongono dati guest con gli stessi
@@ -90,9 +91,7 @@ Una conferma tardiva dopo revoca/logout o una risposta di errore
 di una sessione precedente non possono autorizzare una nuova
 cancellazione né mostrare un alert obsoleto.
 
-Restano disabilitate la creazione/modifica dello storico e la modifica
-di allenamenti attivi, dipendenti da un writer e da bozze device Kinde
-ancora da realizzare. `WorkoutReportModal` e il suo writer guest
+Seduta attiva ed editor dello storico sono ora disponibili nel candidato (#1400–#1402), con bozze cifrate separate e CAS sul dato osservato. La chiusura della seduta crea lo storico; l'editor modifica solo la seduta esistente, senza ricrearla se cancellata. Non sono montati nel pubblico. `WorkoutReportModal` e il suo writer guest
 rimangono separati. Alla perdita di sessione, epoch, consenso o
 chiusura dell'archivio la vista e i report vengono smontati.
 Le regressioni UI controllano owner guest estraneo, operazione esatta,

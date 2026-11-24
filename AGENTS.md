@@ -49,7 +49,7 @@ I sottofile **non sono caricati automaticamente** in tutti gli ambienti: aprirli
 | Provider, IAM, quote, segreti e dismissioni | [Servizi esterni](.agents/rules/external-services.md) | Firebase, CI, registro operativo |
 | UI, temi, accessibilità, brand e icone | [Design system](.agents/rules/design-system.md) | Bozze/storage per editor e reload |
 
-L'[indice `docs/`](docs/README.md) distingue guide stabili, registri, specifiche, proposte, template e storico. Non leggere automaticamente tutto `docs/` e non trasformare una proposta o checklist storica in un requisito corrente.
+L'[indice `docs/`](docs/README.md) distingue guide stabili, registri, specifiche, proposte, template e storico. Per riprendere la migrazione usare il [quadro operativo Cloudflare](docs/operations/cloudflare-current-state.md) e le issue collegate, verificando sempre HEAD, ledger e provider. Non ripetere implementazioni candidate già integrate né confondere checkpoint storici con requisiti correnti. Non leggere automaticamente tutto `docs/` e non trasformare una proposta o checklist storica in un requisito corrente.
 
 ## Perimetro supportato e fresh start
 

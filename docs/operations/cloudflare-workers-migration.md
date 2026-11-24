@@ -1,17 +1,20 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+> **24/11/2026:** consultare prima il [quadro operativo corrente](cloudflare-current-state.md), che sostituisce gli snapshot storici come fonte di stato. Ledger remoto applicativo 0011 e recovery 0004; codice 0013 e 0005. Non confondere build/deploy con applicazione schema. La selezione inattività #1405 è dry-run; non esiste ancora enqueue atomico collegato né attivazione cron.
+
 ## CF-06 — Verificare lo schema candidato di cancellazione account
 
 - Il workflow applicativo manuale `cloudflare-d1-isolated-migrations.yml`
   verifica il `main` remoto, il gate del relativo SHA e l'impronta della
-  migrazione additiva `0012`. Per la D1 EU già usata per collaudare
-  l'identità Kinde, `upgrade_existing_test_db_0012` richiede ledger a
-  `0011`, oppure `0012` già applicata e tabelle nuove ancora vuote.
+  migrazioni additive `0012` e `0013`. Per la D1 EU già usata per collaudare
+  l'identità Kinde, `upgrade_existing_test_db_0013` richiede ledger a
+  `0011`, `0012` o `0013` già applicata e tabelle nuove ancora vuote.
   Richiede bookmark Time Travel, repliche disabilitate, identità di
   collaudo presenti e zero consensi, ADK e job sanitari. Il percorso
   predefinito richiede una D1 vuota.
 - Il controllo dopo Wrangler verifica schema e ledger, tabelle nuove
-  vuote e inventario invariato di identità, sessioni e replica sintetica.
+  vuote, controllo inattività paused/generation 1 e inventario invariato
+  di identità, sessioni e replica sintetica.
   Se i conteggi cambiano o l'esito è incerto, il workflow si ferma e il
   ledger va riletto prima di ritentare.
 - Il workflow di migrazione per il registro recovery verifica

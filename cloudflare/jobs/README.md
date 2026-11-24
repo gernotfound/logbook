@@ -1,5 +1,7 @@
 # CF-06 — candidato Worker di cancellazione sanitaria
 
+> CF-06 #1404/#1405: moduli candidati account deletion e inattività integrati, ma non montati/schedulati. Migrazioni 0012/0013 applicative e 0005 recovery ancora separate dalla distribuzione del codice. Il runner account deve provare cleanup owner-scoped (incluso marker attività), floor indipendente e Kinde-last con ACK/readback esatti. Vedere [runbook](../../docs/operations/cloudflare-workers-migration.md).
+
 **Stato:** configurazione candidata **non distribuita e non schedulata**.
 Questo manifesto prepara il Worker `health-erasure-worker.mjs` ai test di
 compilazione isolata, ma **non** lo attiva su Cloudflare né concede il GO per
@@ -17,8 +19,10 @@ cron, account deletion o inattività.
   `paused` non è una prova di cancellazione o di avanzamento dei job.
   Rimuovere l'abilitazione ferma le **nuove invocazioni**, non interrompe
   un tick già avviato; i job e i lease restano persistiti per il recupero.
-  Questo è un arresto del **processore**, non ancora il kill-switch
-  indipendente dell'accodamento per inattività/account deletion. La futura
+  Questo è un arresto del **processore**, distinto dal controllo candidato
+  dell'inattività introdotto in 0013 (paused per default, generazione).
+  La selezione dry-run non accoda; manca ancora il collegamento atomico
+  dell'enqueue al controllo e al marker attività corrente. La futura
   abilitazione richiede revisione e autorizzazione specifica, senza
   modificare implicitamente il manifesto isolato. I test sintetici che
   chiamano `runOneHealthErasureStep` non eludono questo gate di runtime.
