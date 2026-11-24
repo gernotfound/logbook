@@ -171,6 +171,24 @@ blocca il commit della bozza senza perderne i valori.
 
 **MUST (annullamento in UI):** la vista Misurazioni può uscire dalla modifica e navigare allo Storico solo quando `draft.clear()` conferma la pulizia della copia device; un errore o un esito `false` conservano il form e la bozza persistente, senza segnalare falsamente l'annullamento.
 
+### CF-04 — Seduta nel percorso Kinde candidato
+
+`draft:active-workout` conserva la copia device di check-in, seduta e
+valutazione finale sotto Web Lock, legata a owner, vault, consenso e sessione.
+Il form rende visibile un input dopo la scrittura cifrata. Il registro
+update/reload verifica gli stessi bytes osservati. Le conferme asincrone
+rivalidano sessione e identità della seduta, dell'esercizio o della serie.
+
+L'avvio e la sincronizzazione usano il journal dopo un confronto dello
+stato condiviso nell'update IndexedDB. Il tentativo marcato si riapre
+per nuovi edit soltanto se la copia esatta è presente nell'archivio
+verificato. La copia device resta separata e un cambiamento del cloud
+non la sostituisce. Una chiusura conserva lo storico o la prova di
+eliminazione nel commit locale prima della pulizia della bozza.
+Un esito ambiguo preserva la copia e impedisce un secondo invio.
+Il backup esplicito include il record grezzo come prova e il restore
+generico non lo reinstalla come bozza portabile.
+
 ## Editor storico e chiusura del workout
 
 - L'editor dello storico usa `history-editor-context` owner-scoped per conservare la sessione device-local sospesa: modifica e annullamento dello storico non eliminano `activeWorkout` né resettano il timer attivo. Il contesto è scritto prima di pubblicare l'editor; al termine la sessione sospesa viene ripristinata prima del cleanup della chiave. Le chiavi owner-scoped vengono eliminate dal purge tramite il prefisso completo `logbook:v2:${owner}:`.

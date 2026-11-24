@@ -72,7 +72,7 @@ export type DomainOperation =
     | { type: 'workout.complete'; workout: WorkoutSession; expectedActiveWorkoutId: string; activePains: string[] }
     | { type: 'active-pains.set'; pains: string[] }
     | { type: 'exercise.upsert'; exercise: Exercise }
-    | { type: 'exercise.edit'; id: string; fields: ExerciseEditableFields }
+    | { type: 'exercise.edit'; id: string; fields: Partial<ExerciseEditableFields> }
     | { type: 'exercise.delete'; id: string; expectedRoutineIds?: readonly string[] }
     | { type: 'food.upsert'; food: Food & { id: string | number } }
     | { type: 'food.edit'; food: Food & { id: string | number } }

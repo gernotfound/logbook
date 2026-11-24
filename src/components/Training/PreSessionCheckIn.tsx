@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { Logic } from '../../lib/logic';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
@@ -113,8 +113,6 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
     // Start and deletion target the same prepared workout, even before React rerenders.
     const actionInFlight = useRef(false);
     const sessionDate = date || Logic.getLocalDateString();
-    const sleep = formatSleep(nutrition?.[sessionDate]?.sleepHours);
-    const painNames = useMemo(() => activePains.map(id => Logic.getMuscleName(id) || id), [activePains]);
 
     useEffect(() => {
         if (initialRecovery.error) blockReadinessPersistence(initialRecovery.error, initialRecovery.session);
@@ -224,6 +222,26 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
         }
     };
 
+    return <WorkoutReadinessForm routineName={routineName} sleepHours={nutrition?.[sessionDate]?.sleepHours}
+        activePains={activePains} values={values} starting={starting} cancelling={cancelling}
+        setMetric={setMetric} start={start} cancel={cancel} />;
+}
+
+export function WorkoutReadinessForm({
+    routineName, sleepHours, activePains, values, starting, cancelling, setMetric, start, cancel,
+}: {
+    routineName?: string;
+    sleepHours?: number | string;
+    activePains: string[];
+    values: ReadinessDraft;
+    starting: boolean;
+    cancelling: boolean;
+    setMetric: (key: ReadinessKey, value: number) => void;
+    start: (withReadiness: boolean) => Promise<void>;
+    cancel: () => Promise<void>;
+}) {
+    const sleep = formatSleep(sleepHours);
+    const painNames = activePains.map(id => Logic.getMuscleName(id) || id);
     return (
         <section className="pre-session-checkin" aria-labelledby="pre-session-title">
             <div className="pre-session-heading">

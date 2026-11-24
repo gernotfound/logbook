@@ -85,4 +85,9 @@ export const isCurrentSession = (session: SessionSnapshot): boolean => {
         return false;
     }
 };
+export function captureCurrentSessionCheck(): () => boolean {
+    const session = captureSession();
+    return () => isCurrentSession(session);
+}
+
 export const invalidateSession = () => { epoch += 1; };

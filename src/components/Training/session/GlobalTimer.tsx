@@ -3,7 +3,9 @@ import { Logic } from '../../../lib/logic';
 import { resumeWorkoutClock, sampleWorkoutClock } from '../../../lib/workoutClockGuard';
 import { useAppStore } from '../../../store/useAppStore';
 
-export const GlobalTimer = ({ workoutId, startTime, isActive = true }: { workoutId: string; startTime?: number; isActive?: boolean }) => {
+export const GlobalTimer = ({ workoutId, startTime, isActive = true, onClockAnomaly }: {
+    workoutId: string; startTime?: number; isActive?: boolean; onClockAnomaly?: () => void;
+}) => {
     const [display, setDisplay] = useState('00:00:00');
     const [clockAnomaly, setClockAnomaly] = useState(false);
 
@@ -15,7 +17,8 @@ export const GlobalTimer = ({ workoutId, startTime, isActive = true }: { workout
             if (anomalyReported) return;
             anomalyReported = true;
             setClockAnomaly(true);
-            useAppStore.getState().setSaveError(
+            if (onClockAnomaly) onClockAnomaly();
+            else useAppStore.getState().setSaveError(
                 'L’orologio del dispositivo è cambiato durante l’allenamento. Correggi data/ora e riapri TheLogBook prima di terminare la sessione.',
             );
         };
@@ -57,7 +60,7 @@ export const GlobalTimer = ({ workoutId, startTime, isActive = true }: { workout
             stopRepaint();
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, [workoutId, startTime, isActive]);
+    }, [workoutId, startTime, isActive, onClockAnomaly]);
 
     return (
         <div className="workout-total-duration">

@@ -10,7 +10,7 @@ export type KindeCatalogDraftController<Handle> = {
     prepare: (data: UserData) => {
         operation: DomainOperation;
         beforeCommit: LocalWriteGuard;
-        clearAfterCommit: () => void;
+        clearAfterCommit?: () => void;
     };
 };
 
@@ -18,7 +18,8 @@ export async function openKindeCatalogDraft<T extends { submitted: boolean }>({
     owner, key, revision, permitted, parse, initialize,
 }: {
     owner: string;
-    key: 'draft_routine' | 'draft_exercise' | 'draft_measurement' | 'draft_sleep' | 'draft_training_cycle';
+    key: 'draft_routine' | 'draft_exercise' | 'draft_measurement' | 'draft_sleep'
+        | 'draft_training_cycle' | 'draft:active-workout';
     revision: number;
     permitted: () => boolean;
     parse: (value: unknown) => T;
@@ -59,14 +60,15 @@ export async function openKindeCatalogDraft<T extends { submitted: boolean }>({
                 return value;
             },
             persist,
-            prepareCommit: (submitted: T, operation: DomainOperation, verify?: (envelope: LocalEnvelope) => void) => ({
+            prepareCommit: (submitted: T, operation: DomainOperation, verify?: (envelope: LocalEnvelope) => void,
+                attempt?: Partial<T>) => ({
                 operation,
                 beforeCommit: (envelope: LocalEnvelope | undefined) => {
                     if (current() !== submitted || envelope?.consentRevision !== revision || envelope.owner !== owner) return false;
                     verify?.(envelope);
                     // The exact attempt survives a crash or an ambiguous outcome
                     // without permitting the same user intent to be sent twice.
-                    persist({ ...submitted, submitted: true });
+                    persist({ ...submitted, ...attempt, submitted: true });
                     return true;
                 },
                 clearAfterCommit: discard,

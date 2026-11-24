@@ -8,7 +8,7 @@
 | --- | --- | --- | --- |
 | PWA React e Static Assets | Guest locale, storage cifrato, app fitness legacy | Frontend Worker su `thelogbook.me`; `GuestOnlyAuthProvider` ancora montato | Installazione, aggiornamento, recovery e Safari/iOS su dispositivi reali |
 | Identità Kinde | Gateway OAuth/sessione, observer React condiviso, login/logout | Il pubblico usa `KindeAccountSessionProvider` e `KindeAccountEntry identityOnly`. Il proprietario ha osservato accesso Google, logout applicativo e rientro esplicito il 21/11 ([CF-03](https://github.com/gernotfound/logbook/issues/1057)) | Verifica/reset email, policy provider, account linking, sessioni, browser e UX complete |
-| Fitness account Kinde **isolato** | `KindeCandidateFitnessPanel`, realm con owner/fence, profilo biometrico, pianificazione macro, diario/storico pasti, integratori, storico allenamenti consultabile ed eliminabile, schede ed esercizi personali con recupero della bozza cifrata ([CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057)) | Disponibile come percorso candidato `candidateMode='fitness'`, non montato nel pubblico `identityOnly`; editor separati dal writer Firebase | Sessione attiva, editing storico, cicli, catalogo globale, lifecycle account completo e prove su account/dispositivi reali |
+| Fitness account Kinde **isolato** | `KindeCandidateFitnessPanel`, realm con owner/fence, profilo biometrico, pianificazione macro, diario/storico pasti, integratori, seduta attiva, editor dei cicli, storico allenamenti consultabile ed eliminabile, schede ed esercizi personali con recupero della bozza cifrata ([CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057)) | Disponibile come percorso candidato `candidateMode='fitness'`, non montato nel pubblico `identityOnly`; editor separati dal writer Firebase | Editing storico, avvio dalla rotazione del ciclo, timer accessori, catalogo globale, lifecycle account completo e prove su account/dispositivi reali |
 | Replica Workers/D1 | Worker API/Auth Gate, schema SQL, journal cifrato e ricevute D1; percorso candidato con commit prima della rete | Worker API privato e frontend **senza** binding `D1_API`; prove isolate sintetiche del realm | Roundtrip reale multi-device, lost ACK, concorrenza, offline, quote e fail-safe |
 | Consenso, cifratura e diritti | Consenso iniziale, ADK/vault, export/restore, revoca e rights-only candidati | `CLOUD_ACCOUNT_KEK_V1` presente come `secret_text` nel Worker API privato; nessun grant fitness nel provider pubblico | Recuperabilità indipendente della KEK, consenso/revoca/restore/erasure reali, privacy e protezione anti-resurrection |
 | Erasure e inattività | Registro D1, finalizzatore, runner e [manifest CF-06 candidato](../../cloudflare/jobs/README.md) | GET Cloudflare del 22/11: elenco Cron Trigger vuoto per tutti e quattro i Worker TheLogBook; runner non schedulato | Esecuzione isolata, terminazione atomica, eliminazione Kinde per ultima, inattività 12 mesi |
@@ -20,6 +20,16 @@ modifica possono riprendere la bozza cifrata del dispositivo. Duplicazione
 ed eliminazione usano lo stesso journal verificato. La conferma di
 eliminazione comprende le schede collegate e rifiuta una modifica a tali
 riferimenti avvenuta prima del commit.
+
+L'allenamento candidato riusa il check-in, l'editor delle serie, il timer
+di durata e la revisione finale. Può avviare una seduta libera o da scheda,
+riprendere la bozza cifrata sul dispositivo, sincronizzare lo stato
+condiviso e chiudere la seduta nello storico o eliminarla. La bozza conserva
+check-in, serie e valutazione finale. La riconciliazione del cloud non
+sostituisce la copia device. Il commit confronta lo stato condiviso
+osservato e i dati rilevanti per la chiusura. In caso di conflitto conserva
+la copia device e blocca una nuova scrittura da quella bozza. Il percorso
+di rilascio pubblico resta solo identità.
 
 Lo storico candidato delle rilevazioni mostra misure e sonno dallo snapshot
 Kinde. Si può eliminare una misurazione dopo conferma. Il journal verifica

@@ -13,6 +13,7 @@ import { KindeCandidateTrainingHistory } from '../Training/KindeCandidateTrainin
 import { KindeCandidateTrainingCycles } from '../Training/KindeCandidateTrainingCycles';
 import { KindeCandidateRoutines } from '../Training/KindeCandidateRoutines';
 import { KindeCandidateExercises } from '../Training/KindeCandidateExercises';
+import { KindeCandidateWorkout } from '../Training/KindeCandidateWorkout';
 
 type Session = ReturnType<typeof useKindeAccountSession>;
 
@@ -57,6 +58,7 @@ export function KindeCandidateFitnessPanel({ session, management }: { session: S
                         <KindeCandidateActivity realm={realm} />
                         {phase === 'ready' && <KindeCandidateNutritionPlanning realm={realm} />}
                         <KindeCandidateNutritionMeals realm={realm} />
+                        <KindeCandidateWorkout realm={realm} />
                         {phase === 'ready' && <KindeCandidateTrainingHistory realm={realm} />}
                         {phase === 'ready' && <KindeCandidateTrainingCycles realm={realm} />}
                         {phase === 'ready' && <KindeCandidateRoutines realm={realm} />}
