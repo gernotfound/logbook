@@ -109,6 +109,10 @@ void test('deployment changes only Kinde Worker after exact-main verification an
     'Both preflight and post-deploy readbacks must attest all five Kinde secrets',
   );
   assert.doesNotMatch(yml, /command: deploy --config cloudflare\/(?:api\/wrangler|auth\/wrangler\.isolated|wrangler\.jsonc)/);
+  const preflight = yml.indexOf('name: Read back complete private OAuth bindings before deployment');
+  const lease = yml.indexOf('name: Confirm exact-main lease immediately before provider write');
+  const deploy = yml.indexOf('name: Deploy only the unrouted Kinde HTTP Worker');
+  assert.ok(preflight > 0 && preflight < lease && lease < deploy);
   assert.doesNotMatch(yml, /route:|routes:|workers_dev: true|preview_urls: true|secret put/);
 });
 

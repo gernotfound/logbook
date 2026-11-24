@@ -60,7 +60,8 @@ function matches(path, pattern) {
 }
 
 export function versionOnly(before, after, isLock = false) {
-  if (!before || !after || typeof before !== 'object' || typeof after !== 'object') return false;
+  if (!before || !after || typeof before !== 'object' || typeof after !== 'object'
+    || Array.isArray(before) || Array.isArray(after)) return false;
   const oldValue = structuredClone(before);
   const newValue = structuredClone(after);
   delete oldValue.version;
@@ -95,7 +96,7 @@ export function planFromGit(workflowPath, baseSha, cwd = process.cwd()) {
   // Never compare to an assumed base: the caller must establish that the
   // previous release was successful before a version-only change can skip.
   execFileSync('git', ['merge-base', '--is-ancestor', baseSha, 'HEAD'], { cwd, stdio: 'ignore' });
-  const changed = execFileSync('git', ['diff', '--name-only', '-z', baseSha, 'HEAD', '--'], { cwd, encoding: 'utf8' })
+  const changed = execFileSync('git', ['diff', '--name-only', '--no-renames', '-z', baseSha, 'HEAD', '--'], { cwd, encoding: 'utf8' })
     .split('\0').filter(Boolean);
   return mustDeployPrivateWorker({
     changed, paths,
@@ -182,7 +183,7 @@ export async function planVerifiedPrivateRelease({
   // prove successful completion of this same post-verification workflow.
   try {
     if (!shaPattern.test(baseSha ?? '') || !previousReleaseProven({ repository, sha: baseSha, workflowPath, api })) return true;
-    return plan(workflowPath, baseSha);
+    return plan(workflowPath, baseSha) !== false;
   } catch (error) {
     console.error('Cannot prove prior private release; deployment required.', error.message);
     return true;

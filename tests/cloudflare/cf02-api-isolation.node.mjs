@@ -1,4 +1,3 @@
-import { privateDeploymentPaths, mustDeployPrivateWorker, planFromGit, planVerifiedPrivateRelease } from '../../scripts/cloudflare-private-deploy-plan.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -6,6 +5,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { validateIsolatedWorkers, validateIsolatedKindeCandidate } from '../../scripts/check-cloudflare-api-isolation.mjs';
+import { privateDeploymentPaths, mustDeployPrivateWorker, planFromGit, planVerifiedPrivateRelease } from '../../scripts/cloudflare-private-deploy-plan.mjs';
 
 const api = JSON.parse(readFileSync('cloudflare/api/wrangler.isolated.jsonc', 'utf8'));
 const gate = JSON.parse(readFileSync('cloudflare/auth/wrangler.isolated.jsonc', 'utf8'));
@@ -168,6 +168,7 @@ void test('version-only releases skip private redeploy, but dependency or import
 
 void test('multi-commit push planning includes earlier Worker changes and fails closed without a verified base', () => {
   const dir = mkdtempSync(join(tmpdir(), 'logbook-private-push-'));
+  const shallow = mkdtempSync(join(tmpdir(), 'logbook-private-shallow-'));
   const workflow = '.github/workflows/cloudflare-api-isolated.yml';
   const git = (...args) => execFileSync('git', args, {
     cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
@@ -182,7 +183,6 @@ void test('multi-commit push planning includes earlier Worker changes and fails 
     git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-m', label);
   };
   try {
-    mkdirSync(join(dir, '.github/workflows'), { recursive: true });
     mkdirSync(join(dir, 'cloudflare/api'), { recursive: true });
     write('package.json', JSON.stringify(pack));
     write('package-lock.json', JSON.stringify(lock));
@@ -204,7 +204,23 @@ void test('multi-commit push planning includes earlier Worker changes and fails 
     assert.equal(planFromGit(workflow, before, dir), true, 'the full range includes an earlier Worker change');
     assert.throws(() => planFromGit(workflow, 'invalid-sha', dir), /invalid deployment base/);
     assert.throws(() => planFromGit(workflow, '0'.repeat(40), dir), /invalid deployment base/);
+    // Exercise the same two-commit shallow history used by deployment.
+    execFileSync('git', ['clone', '--depth', '2', '--no-local', dir, shallow], { stdio: 'ignore' });
+    assert.equal(planFromGit(workflow, lastParent, shallow), false);
+    assert.throws(() => planFromGit(workflow, before, shallow));
+
+    const beforeRename = git('rev-parse', 'HEAD');
+    mkdirSync(join(dir, 'archive'), { recursive: true });
+    git('mv', 'cloudflare/api/worker.mjs', 'archive/worker.mjs');
+    write('package.json', JSON.stringify({ ...pack, version: '1.2.0' }));
+    write('package-lock.json', JSON.stringify({
+      ...lock, version: '1.2.0',
+      packages: { ...lock.packages, '': { version: '1.2.0' } },
+    }));
+    commit('move relevant Worker out of watched paths');
+    assert.equal(planFromGit(workflow, beforeRename, dir), true, 'a rename must include the removed relevant path');
   } finally {
+    rmSync(shallow, { recursive: true, force: true });
     rmSync(dir, { recursive: true, force: true });
   }
 });
@@ -215,26 +231,29 @@ const repo = 'gernotfound/logbook';
 const sha = 'a'.repeat(40);
 const parentSha = 'b'.repeat(40);
 
-function releaseFixture({ runPatch = {}, gateJobs, priorRunPatch = {}, priorJobs, noPrior = false, plan = () => false } = {}) {
+function releaseFixture({ workflowPath = privateWorkflow, runPatch = {}, gateJobs, priorRunPatch = {}, priorJobs, noPrior = false, plan = () => false } = {}) {
   const common = {
     head_branch: 'main', status: 'completed', conclusion: 'success', run_attempt: 1,
     repository: { full_name: repo }, head_repository: { full_name: repo },
   };
   const run = { ...common, id: 42, head_sha: sha, event: 'push', path: '.github/workflows/verification.yml', ...runPatch };
-  const prior = { ...common, id: 43, head_sha: parentSha, event: 'workflow_run', path: privateWorkflow, ...priorRunPatch };
+  const prior = { ...common, id: 43, head_sha: parentSha, event: 'workflow_run', path: workflowPath, ...priorRunPatch };
   const success = name => ({ name, status: 'completed', conclusion: 'success' });
   const calls = [];
+  const planCalls = [];
+  const jobName = workflowPath === kindeWorkflow ? 'Compile, deploy and attest Kinde HTTP Worker without public route' : 'Deploy and verify private Auth Gate + D1 API';
   const api = path => {
     calls.push(path);
     if (path.endsWith('/runs/42')) return run;
     if (path.includes('/verification.yml/runs?')) return { workflow_runs: [run] };
     if (path.includes('/runs/42/attempts/1/jobs?')) return { jobs: gateJobs ?? [success('Main Release Gate'), success('Security / CodeQL')] };
-    if (path.includes('/cloudflare-api-isolated.yml/runs?')) return { workflow_runs: noPrior ? [] : [prior] };
-    if (path.includes('/runs/43/attempts/1/jobs?')) return { jobs: priorJobs ?? [success('Deploy and verify private Auth Gate + D1 API')] };
+    if (path.includes('/' + workflowPath.split('/').at(-1) + '/runs?')) return { workflow_runs: noPrior ? [] : [prior] };
+    if (path.includes('/runs/43/attempts/1/jobs?')) return { jobs: priorJobs ?? [success(jobName)] };
     throw new Error('Unexpected GitHub API request: ' + path);
   };
-  return { calls, options: { workflowPath: privateWorkflow, repository: repo, sha, baseSha: parentSha,
-    runId: '42', runAttempt: '1', eventName: 'workflow_run', api, pause: async () => {}, plan } };
+  return { calls, planCalls, options: { workflowPath, repository: repo, sha, baseSha: parentSha,
+    runId: '42', runAttempt: '1', eventName: 'workflow_run', api, pause: async () => {},
+    plan: (...args) => { planCalls.push(args); return plan(...args); } } };
 }
 
 void test('private Worker release rejects failed, stale, forked and non-push gate evidence before planning', async () => {
@@ -246,6 +265,7 @@ void test('private Worker release rejects failed, stale, forked and non-push gat
   ]) {
     const f = releaseFixture({ runPatch, plan: () => assert.fail('Untrusted release must not plan a deploy') });
     await assert.rejects(planVerifiedPrivateRelease(f.options), /Missing trusted completed/);
+    assert.equal(f.planCalls.length, 0);
   }
   for (const gateJobs of [
     [{ name: 'Main Release Gate', status: 'completed', conclusion: 'success' }],
@@ -255,6 +275,7 @@ void test('private Worker release rejects failed, stale, forked and non-push gat
   ]) {
     const f = releaseFixture({ gateJobs, plan: () => assert.fail('Incomplete gate must not plan a deploy') });
     await assert.rejects(planVerifiedPrivateRelease(f.options), /CodeQL/);
+    assert.equal(f.planCalls.length, 0);
   }
   await assert.rejects(planVerifiedPrivateRelease({ ...releaseFixture().options, runId: '' }), /triggering verification run/);
   await assert.rejects(planVerifiedPrivateRelease({ ...releaseFixture().options, eventName: 'push' }), /Untrusted deployment trigger/);
@@ -264,6 +285,10 @@ void test('only successful predecessor reconciliation permits a version-only ski
   const good = releaseFixture();
   assert.equal(await planVerifiedPrivateRelease(good.options), false);
   assert.ok(good.calls.some(path => path.includes('head_sha=' + parentSha)));
+  assert.deepEqual(good.planCalls, [[privateWorkflow, parentSha]]);
+  const kinde = releaseFixture({ workflowPath: kindeWorkflow });
+  assert.equal(await planVerifiedPrivateRelease(kinde.options), false);
+  assert.deepEqual(kinde.planCalls, [[kindeWorkflow, parentSha]]);
   for (const config of [
     { noPrior: true }, { priorRunPatch: { conclusion: 'cancelled' } },
     { priorRunPatch: { conclusion: 'failure' } }, { priorRunPatch: { head_sha: sha } },
@@ -273,15 +298,25 @@ void test('only successful predecessor reconciliation permits a version-only ski
   ]) {
     const f = releaseFixture({ ...config, plan: () => assert.fail('Unproven predecessor cannot justify skip') });
     assert.equal(await planVerifiedPrivateRelease(f.options), true);
+    assert.equal(f.planCalls.length, 0);
   }
+  const unavailable = releaseFixture();
+  const priorUnavailable = path => {
+    if (path.includes('/cloudflare-api-isolated.yml/runs?')) throw new Error('GitHub transport failure');
+    return unavailable.options.api(path);
+  };
+  assert.equal(await planVerifiedPrivateRelease({ ...unavailable.options, api: priorUnavailable }), true);
+  assert.equal(unavailable.planCalls.length, 0);
   assert.equal(await planVerifiedPrivateRelease({ ...good.options, baseSha: '' }), true);
   assert.equal(await planVerifiedPrivateRelease(releaseFixture({ plan: () => { throw new Error('missing history'); } }).options), true);
   assert.equal(await planVerifiedPrivateRelease(releaseFixture({ plan: () => true }).options), true);
+  assert.equal(await planVerifiedPrivateRelease(releaseFixture({ plan: () => undefined }).options), true);
 });
 
 void test('explicit manual Kinde deploy still requires the exact successful main gate and never skips', async () => {
   const f = releaseFixture({ plan: () => assert.fail('Manual Kinde deploy must not use relevance optimization') });
   assert.equal(await planVerifiedPrivateRelease({ ...f.options, workflowPath: kindeWorkflow, eventName: 'workflow_dispatch' }), true);
+  assert.equal(f.planCalls.length, 0);
   await assert.rejects(planVerifiedPrivateRelease({ ...f.options, eventName: 'workflow_dispatch' }), /Untrusted deployment trigger/);
   await assert.rejects(planVerifiedPrivateRelease({ ...releaseFixture({ runPatch: { conclusion: 'failure' } }).options,
     workflowPath: kindeWorkflow, eventName: 'workflow_dispatch' }), /Missing trusted completed/);
@@ -294,6 +329,8 @@ void test('private deployment workflows are triggered only by completed trusted 
     assert.match(workflow, /workflows:\n      - Milestone Verification\n    types:\n      - completed\n    branches:\n      - main/);
     assert.match(workflow, /github\.event\.workflow_run\.conclusion == 'success'/);
     assert.match(workflow, /github\.event\.workflow_run\.event == 'push'/);
+    assert.match(workflow, /github\.event\.workflow_run\.head_branch == 'main'/);
+    assert.match(workflow, /github\.ref == 'refs\/heads\/main'/);
     assert.match(workflow, /github\.event\.workflow_run\.head_repository\.full_name == github\.repository/);
     assert.match(workflow, /EXPECTED_SHA: \$\{\{ github\.event\.workflow_run\.head_sha \|\| github\.sha \}\}/);
     assert.match(workflow, /GATE_RUN_ID: \$\{\{ github\.event\.workflow_run\.id \}\}/);
