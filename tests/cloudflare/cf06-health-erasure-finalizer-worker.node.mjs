@@ -142,6 +142,50 @@ void test('D runner fully drains four tables then atomically destroys ADK and re
     assert.equal((await runOneHealthErasureStep(f.db)).outcome, 'idle');
   } finally { f.sqlite.close(); }
 });
+void test('D runner rechecks the exact lease deadline in the terminal write', async () => {
+  for (const offset of [0, -1]) {
+    const f = fixture();
+    const clock = new DatabaseSync(':memory:');
+    try {
+      owner(f); await provision(f); withdraw(f); await awaitKeys(f); expire(f);
+      const legacyTimestamp = clock.prepare(
+        'SELECT CAST((julianday(?) - 2440587.5) * 86400000 AS INTEGER) AS ms',
+      );
+      const startOfSecond = Date.UTC(2030, 10, 24, 12);
+      const deadline = Array.from({ length: 10 }, (_, ms) => startOfSecond + ms)
+        .find(ms => legacyTimestamp.get(new Date(ms).toISOString()).ms === ms - 1);
+      assert.ok(deadline, 'fixture must exercise a millisecond rounded down by SQLite');
+      const julianDay = clock.prepare('SELECT julianday(?) AS value');
+      const formatTime = clock.prepare('SELECT strftime(?, ?) AS value');
+      let now = new Date(deadline - 30_000).toISOString();
+      // Freeze only the clock input. SQLite still evaluates both clocks and
+      // the actual INSERT and triggers against the same statement time.
+      f.sqlite.function('julianday', (date) => julianDay.get(date === 'now' ? now : date).value);
+      f.sqlite.function('strftime', (format, date) =>
+        formatTime.get(format, date === 'now' ? now : date).value);
+      const prepare = f.db.prepare.bind(f.db);
+      f.db.prepare = (sql) => {
+        if (sql.includes('INSERT INTO health_erasure_finalizations')) {
+          assert.equal(row(f, 'health_erasure_jobs').lease_until_ms, deadline);
+          now = new Date(deadline + offset).toISOString();
+        }
+        return prepare(sql);
+      };
+
+      const result = await runOneHealthErasureStep(f.db);
+      if (offset === 0) {
+        assert.deepEqual(result, { outcome: 'contended' });
+        assert.equal(count(f, 'cloud_account_keys'), 1);
+        assert.equal(count(f, 'health_erasure_finalizations'), 0);
+        assert.equal(row(f, 'health_erasure_jobs').status, 'processing');
+        assert.equal(row(f, 'sync_subjects').consent_revision, 1);
+      } else {
+        assert.deepEqual(result, { outcome: 'complete', keyDisposition: 'destroyed' });
+        verify(f, 'destroyed');
+      }
+    } finally { f.sqlite.close(); clock.close(); }
+  }
+});
 void test('an older eligible key finalization is not starved by newer data jobs', async () => {
   const f = fixture();
   try {
@@ -283,8 +327,11 @@ void test('D runner preserves ADK and retries after quota exhaustion or lease ex
           } }; } };
         } };
       } };
-      await assert.rejects(runOneHealthErasureStep(blocked),
-        mode === 'quota' ? /D1 quota exhausted/ : /erasure-finalization-fenced/);
+      if (mode === 'quota') {
+        await assert.rejects(runOneHealthErasureStep(blocked), /D1 quota exhausted/);
+      } else {
+        assert.deepEqual(await runOneHealthErasureStep(blocked), { outcome: 'contended' });
+      }
       assert.equal(count(f, 'cloud_account_keys'), 1);
       assert.equal(count(f, 'health_erasure_finalizations'), 0);
       assert.equal(row(f, 'health_erasure_jobs').status, 'processing');

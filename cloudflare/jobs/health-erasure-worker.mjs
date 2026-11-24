@@ -81,8 +81,9 @@ const CLAIM_JOB = [
   'RETURNING lease_epoch, lease_until_ms',
 ].join('\n');
 
-// Exact contract of B-02 migration 0010, as tested in
-// cf06-atomic-erasure-finalization.node.mjs at B-02 SHA 7196ebcd.
+// Migration 0010 requires its original timestamp expression for the receipt.
+// The lease uses the integer clock again here because it can expire after
+// the independent cutoff is armed and the legacy clock can round down by 1 ms.
 // The INSERT itself owns ALL effects via SQLite triggers, not a D1 batch.
 const FINALIZE = `
 INSERT INTO health_erasure_finalizations (
@@ -101,6 +102,7 @@ LEFT JOIN cloud_key_issuance issuance
   ON issuance.uid = j.uid AND issuance.consent_revision = j.consent_revision
 WHERE j.uid = ? AND j.consent_revision = ? AND j.fence_epoch = ?
   AND j.lease_epoch = ? AND j.lease_token = ?
+  AND j.lease_until_ms > ${SERVER_NOW}
   AND j.status = 'processing' AND j.phase = 'awaiting-keys'
 RETURNING uid, consent_revision, fence_epoch, lease_epoch, completed_at_ms,
   erased_before_revision, sync_revision_at_erasure, key_disposition
