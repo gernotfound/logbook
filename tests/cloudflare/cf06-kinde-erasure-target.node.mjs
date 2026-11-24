@@ -5,6 +5,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import { consumeKindeDeletionAttempt, saveKindeDeletionAttempt } from '../../cloudflare/auth/kinde-deletion-attempts.mjs';
 import { deriveKindeOwnerId } from '../../cloudflare/auth/kinde-owner-id.mjs';
+import healthErasureWorker from '../../cloudflare/jobs/health-erasure-worker.mjs';
+import { runKindeAccountErasureAppStep } from '../../cloudflare/jobs/kinde-account-erasure-app-step.mjs';
 import { acceptKindeAccountErasure, recordKindeAccountErasureIntent, requestKindeAccountErasure } from '../../cloudflare/jobs/kinde-account-erasure-requests.mjs';
 import { createKindeErasureManagement } from '../../cloudflare/jobs/kinde-erasure-management.mjs';
 import { createKindeErasureTargetCodec } from '../../cloudflare/jobs/kinde-erasure-target.mjs';
@@ -74,6 +76,15 @@ function deletionRequestProof(attempt) {
     uid, authEpoch, sessionHash, receiptHash: '9'.repeat(64),
     authenticatedAtMs: Math.floor(Date.now() / 1000) * 1000 - 1000,
   };
+}
+
+function openRecoveryFixture(t) {
+  const sqlite = new DatabaseSync(':memory:');
+  t.after(() => sqlite.close());
+  sqlite.exec('PRAGMA foreign_keys = ON');
+  applyCurrentD1RecoverySchema(sqlite);
+  sqlite.exec("UPDATE recovery_control SET mode='open', generation=2");
+  return { sqlite, db: d1For(sqlite) };
 }
 
 test('derives the same public owner identifier as the trusted callback contract', async () => {
@@ -330,6 +341,58 @@ test('the independent denial survives application failure while the primary stil
   assert.equal(sqlite.prepare('SELECT status FROM sync_subjects WHERE uid=?').get(identity.uid).status, 'withdrawn');
   assert.equal(sqlite.prepare('SELECT status FROM health_erasure_jobs WHERE uid=?').get(identity.uid).status, 'pending');
   assert.equal(registry.prepare('SELECT COUNT(*) AS n FROM recovery_account_erasure_denials').get().n, 1);
+});
+
+test('application erasure drains only the requesting owner’s sessions and attempts within one bounded step', async (t) => {
+  const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
+  const recovery = openRecoveryFixture(t);
+  const proof = deletionRequestProof(attempt);
+  await write(db, identity);
+  const intent = await recordKindeAccountErasureIntent(db, proof);
+  await assert.rejects(runKindeAccountErasureAppStep(db, recovery.db, intent), /independent-recovery-fence-unavailable/);
+  await saveKindeDeletionAttempt(db, attempt);
+  const foreignUid = await deriveKindeOwnerId(issuer, 'kp_independent-session');
+  const issuedAt = Date.now() - 1000;
+  sqlite.prepare("INSERT INTO auth_principals VALUES (?, 'active', ?, 1)").run(foreignUid, issuedAt);
+  const addSession = sqlite.prepare('INSERT INTO auth_sessions VALUES (?, ?, 1, ?, ?, ?, ?, NULL)');
+  for (let i = 0; i < 18; i += 1) {
+    addSession.run(i.toString(16).padStart(64, '0'), identity.uid, 'c'.repeat(64),
+      issuedAt, issuedAt + 30_000, issuedAt + 60_000);
+  }
+  addSession.run('f'.repeat(64), foreignUid, 'c'.repeat(64), issuedAt, issuedAt + 30_000, issuedAt + 60_000);
+  assert.equal(await acceptKindeAccountErasure(db, recovery.db, intent), true);
+
+  const exactCount = sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions WHERE uid=?');
+  assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'progress', removed: 16 });
+  assert.equal(exactCount.get(identity.uid).n, 4);
+  assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'progress', removed: 4 });
+  assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'progress', removed: 1 });
+  assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'application-complete' });
+  assert.equal(exactCount.get(identity.uid).n, 0);
+  assert.equal(exactCount.get(foreignUid).n, 1);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_erasure_targets').get().n, 1);
+});
+
+test('application readiness for a health owner requires the real SQL erasure proof and the independent terminal floor', async (t) => {
+  const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
+  const recovery = openRecoveryFixture(t);
+  const proof = deletionRequestProof(attempt);
+  await write(db, identity);
+  const intent = await recordKindeAccountErasureIntent(db, proof);
+  sqlite.prepare("INSERT INTO sync_subjects(uid,status,consent_revision,fence_epoch) VALUES (?,'active',1,1)").run(identity.uid);
+  sqlite.prepare('INSERT INTO sync_state(uid,revision) VALUES (?,0)').run(identity.uid);
+  recovery.sqlite.prepare("INSERT INTO recovery_owner_fences VALUES (?, 'pending', 0, 1, 0, 1)").run(identity.uid);
+  recovery.sqlite.prepare("UPDATE recovery_owner_fences SET status='active', consent_revision=1, change_seq=2 WHERE uid=?").run(identity.uid);
+  assert.equal(await acceptKindeAccountErasure(db, recovery.db, intent), true);
+  assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'progress', removed: 2 });
+  assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'health-pending' });
+
+  const env = { DB: db, RECOVERY_DB: recovery.db, CF06_ERASURE_RUN_ENABLED: 'enabled' };
+  assert.deepEqual(await healthErasureWorker.scheduled(null, env), { outcome: 'awaiting-keys' });
+  sqlite.exec('UPDATE health_erasure_jobs SET lease_until_ms=1');
+  assert.deepEqual(await healthErasureWorker.scheduled(null, env), { outcome: 'complete', keyDisposition: 'never-issued' });
+  assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'application-complete' });
+  assert.equal(recovery.sqlite.prepare('SELECT finalized FROM recovery_erasure_cutoffs').get().finalized, 1);
 });
 
 test('requests full profile erasure only after proof for the exact linked owner', async () => {

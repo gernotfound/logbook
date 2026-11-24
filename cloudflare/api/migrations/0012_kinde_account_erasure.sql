@@ -50,6 +50,8 @@ CREATE TABLE kinde_deletion_oauth_attempts (
 ) STRICT;
 
 CREATE INDEX kinde_deletion_oauth_expiry ON kinde_deletion_oauth_attempts (expires_at_ms);
+CREATE INDEX kinde_deletion_oauth_owner ON kinde_deletion_oauth_attempts (uid, state_hash);
+CREATE INDEX auth_sessions_owner_token ON auth_sessions (uid, token_hash);
 
 -- This records an explicit, freshly reauthenticated request. A row proves
 -- the owner's decision even if a cross-D1 call or its acknowledgement fails.

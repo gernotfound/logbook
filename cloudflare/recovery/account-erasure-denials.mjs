@@ -25,13 +25,8 @@ export async function requireIndependentAccountAccess(recoveryDb, uid) {
   throw new IndependentFenceUnavailableError();
 }
 
-/**
- * Record an already verified, durable application intent. In production
- * the caller must pass the two primary D1 bindings with independent IAM.
- * @param {{ withSession: (policy: 'first-primary') => any }} recoveryDb
- * @param {{ uid: string, authEpoch: number, receiptHash: string, authenticatedAtMs: number, confirmedAtMs: number }} intent
- */
-export async function armIndependentAccountErasureDenial(recoveryDb, intent) {
+/** @param {{ uid: string, authEpoch: number, receiptHash: string, authenticatedAtMs: number, confirmedAtMs: number }} intent */
+async function digestForIntent(intent) {
   const { uid, authEpoch, receiptHash, authenticatedAtMs, confirmedAtMs } = intent;
   if (!UID.test(uid) || !HASH.test(receiptHash) || !Number.isSafeInteger(authEpoch) || authEpoch < 1
     || !Number.isSafeInteger(authenticatedAtMs) || authenticatedAtMs < 1
@@ -42,16 +37,11 @@ export async function armIndependentAccountErasureDenial(recoveryDb, intent) {
     [INTENT_CONTEXT, uid, authEpoch, receiptHash, authenticatedAtMs, confirmedAtMs],
   ));
   const hashed = await crypto.subtle.digest('SHA-256', bytes);
-  const digest = Array.from(new Uint8Array(hashed), byte => byte.toString(16).padStart(2, '0')).join('');
-  try {
-    await recoveryDb.withSession('first-primary').prepare(`
-      INSERT INTO recovery_account_erasure_denials (uid, intent_digest)
-      SELECT ?, ? WHERE EXISTS (SELECT 1 FROM recovery_control WHERE singleton = 1 AND mode = 'open')
-        AND NOT EXISTS (SELECT 1 FROM recovery_account_erasure_denials WHERE uid = ?)
-    `).bind(uid, digest, uid).run();
-  } catch {
-    // A lost write response does not distinguish commit from failure.
-  }
+  return Array.from(new Uint8Array(hashed), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/** @param {any} recoveryDb @param {string} uid @param {string} digest */
+async function verifyStoredDenial(recoveryDb, uid, digest) {
   try {
     const stored = await recoveryDb.withSession('first-primary').prepare(`
       SELECT d.uid, d.intent_digest FROM recovery_account_erasure_denials d
@@ -63,4 +53,34 @@ export async function armIndependentAccountErasureDenial(recoveryDb, intent) {
     // A primary read failure cannot prove a denial.
   }
   throw new IndependentFenceUnavailableError();
+}
+
+/**
+ * Record an already verified, durable application intent. In production
+ * the caller must pass the two primary D1 bindings with independent IAM.
+ * @param {{ withSession: (policy: 'first-primary') => any }} recoveryDb
+ * @param {Parameters<typeof digestForIntent>[0]} intent
+ */
+export async function armIndependentAccountErasureDenial(recoveryDb, intent) {
+  const { uid } = intent;
+  const digest = await digestForIntent(intent);
+  try {
+    await recoveryDb.withSession('first-primary').prepare(`
+      INSERT INTO recovery_account_erasure_denials (uid, intent_digest)
+      SELECT ?, ? WHERE EXISTS (SELECT 1 FROM recovery_control WHERE singleton = 1 AND mode = 'open')
+        AND NOT EXISTS (SELECT 1 FROM recovery_account_erasure_denials WHERE uid = ?)
+    `).bind(uid, digest, uid).run();
+  } catch {
+    // A lost write response does not distinguish commit from failure.
+  }
+  return verifyStoredDenial(recoveryDb, uid, digest);
+}
+
+/**
+ * Read-only proof for a runner that is already processing the accepted job.
+ * @param {Parameters<typeof armIndependentAccountErasureDenial>[0]} recoveryDb
+ * @param {Parameters<typeof digestForIntent>[0]} intent
+ */
+export async function requireIndependentAccountErasureDenial(recoveryDb, intent) {
+  return verifyStoredDenial(recoveryDb, intent.uid, await digestForIntent(intent));
 }
