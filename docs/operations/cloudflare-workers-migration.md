@@ -28,9 +28,9 @@
   dello scambio del codice. I metadati pubblici del tenant di collaudo
   del 24/11/2026 dichiarano `auth_time` e omettono i contesti
   `mfa` e `phr`. In tale configurazione Kinde può usare l'ora di
-  emissione del token per `auth_time`. Il flusso di cancellazione
-  rimane bloccato finché si può provare una riautenticazione nel
-  callback fidato. [Contratto Kinde](https://docs.kinde.com/developer-tools/about/using-kinde-without-an-sdk/)
+  emissione del token per `auth_time`. Il flusso di cancellazione può
+  proseguire solo quando il callback fidato dispone di una prova di
+  riautenticazione. [Contratto Kinde](https://docs.kinde.com/developer-tools/about/using-kinde-without-an-sdk/)
 
 ## CF-05 — Recupero ciphertext per export diritti dopo revoca (candidato v2.546.0, 19/11/2026)
 

@@ -88,7 +88,7 @@ function openRecoveryFixture(t) {
   return { sqlite, db: d1For(sqlite) };
 }
 
-test('derives the same public owner identifier as the trusted callback contract', async () => {
+void test('derives the same public owner identifier as the trusted callback contract', async () => {
   const expected = 'k_' + createHash('sha256')
     .update('thelogbook:kinde-owner:v1\0' + issuer + '\0' + subject)
     .digest('base64url');
@@ -99,7 +99,7 @@ test('derives the same public owner identifier as the trusted callback contract'
   }
 });
 
-test('seals only the subject bound to its owner and keeps the provider identifier outside stored metadata', async () => {
+void test('seals only the subject bound to its owner and keeps the provider identifier outside stored metadata', async () => {
   const key = await keyFor();
   const uid = await deriveKindeOwnerId(issuer, subject);
   const codec = createKindeErasureTargetCodec({ issuer, keyId, key });
@@ -111,7 +111,7 @@ test('seals only the subject bound to its owner and keeps the provider identifie
   await assert.rejects(codec.seal({ uid, subject: 'kp_different-synthetic-user' }), error);
 });
 
-test('fails closed on owner, tenant, key or ciphertext changes', async () => {
+void test('fails closed on owner, tenant, key or ciphertext changes', async () => {
   const key = await keyFor();
   const uid = await deriveKindeOwnerId(issuer, subject);
   const otherUid = await deriveKindeOwnerId(issuer, 'kp_other-synthetic-user');
@@ -130,14 +130,14 @@ test('fails closed on owner, tenant, key or ciphertext changes', async () => {
   }
 });
 
-test('rejects a key that can be exported or a missing key identifier', async () => {
+void test('rejects a key that can be exported or a missing key identifier', async () => {
   const key = await keyFor(true);
   const privateKey = await keyFor();
   assert.throws(() => createKindeErasureTargetCodec({ issuer, keyId, key }), error);
   assert.throws(() => createKindeErasureTargetCodec({ issuer, keyId: '', key: privateKey }), error);
 });
 
-test('stores one recoverable encrypted target for repeated and concurrent verified callbacks', async (t) => {
+void test('stores one recoverable encrypted target for repeated and concurrent verified callbacks', async (t) => {
   const { sqlite, write, identity } = await erasureStoreFixture(t);
   const db = d1For(sqlite);
   await Promise.all([write(db, identity), write(db, identity)]);
@@ -155,7 +155,7 @@ test('stores one recoverable encrypted target for repeated and concurrent verifi
   assert.throws(() => sqlite.exec('DELETE FROM kinde_erasure_targets'), /kinde-erasure-target-retained/);
 });
 
-test('the candidate schema adds empty erasure tables to populated 0011 without altering identities', async (t) => {
+void test('the candidate schema adds empty erasure tables to populated 0011 without altering identities', async (t) => {
   const sqlite = new DatabaseSync(':memory:');
   t.after(() => sqlite.close());
   sqlite.exec('PRAGMA foreign_keys = ON');
@@ -186,7 +186,7 @@ test('the candidate schema adds empty erasure tables to populated 0011 without a
   assert.deepEqual(sqlite.prepare('PRAGMA foreign_key_check').all(), []);
 });
 
-test('requires a new primary read to recover a lost insertion response and fences an epoch change', async (t) => {
+void test('requires a new primary read to recover a lost insertion response and fences an epoch change', async (t) => {
   const { sqlite, write, identity } = await erasureStoreFixture(t);
   const count = sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_erasure_targets');
   let writes = 0;
@@ -206,7 +206,7 @@ test('requires a new primary read to recover a lost insertion response and fence
   await assert.rejects(write(d1For(sqlite), identity), /kinde-erasure-target-storage-unavailable/);
 });
 
-test('uses one deletion proof across concurrent callbacks and binds it to the original browser and session', async (t) => {
+void test('uses one deletion proof across concurrent callbacks and binds it to the original browser and session', async (t) => {
   const { db, sqlite, attempt, alternateSession } = await deletionAttemptFixture(t);
   assert.equal(await saveKindeDeletionAttempt(db, attempt), true);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts').get().n, 0);
@@ -225,7 +225,7 @@ test('uses one deletion proof across concurrent callbacks and binds it to the or
   assert.equal(await consumeKindeDeletionAttempt(db, attempt), null);
 });
 
-test('rejects expired and revoked deletion proof and keeps ordinary login isolated', async (t) => {
+void test('rejects expired and revoked deletion proof and keeps ordinary login isolated', async (t) => {
   const { db, sqlite, attempt } = await deletionAttemptFixture(t);
   assert.equal(await saveKindeDeletionAttempt(db, { ...attempt, authEpoch: 2 }), false);
   assert.equal(await saveKindeDeletionAttempt(db, { ...attempt, uid: 'k_' + 'a'.repeat(43) }), false);
@@ -240,7 +240,7 @@ test('rejects expired and revoked deletion proof and keeps ordinary login isolat
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts').get().n, 0);
 });
 
-test('one reauthenticated request fences the owner and queues active health erasure even after lost acknowledgement', async (t) => {
+void test('one reauthenticated request fences the owner and queues active health erasure even after lost acknowledgement', async (t) => {
   const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
   const proof = deletionRequestProof(attempt);
   const denied = async (intent) => intent.uid === proof.uid && intent.authEpoch === proof.authEpoch;
@@ -281,7 +281,7 @@ test('one reauthenticated request fences the owner and queues active health eras
     /kinde-account-erasure-request-retained/);
 });
 
-test('an atomic erasure request rolls back on failure and identity-only owners get no synthetic health job', async (t) => {
+void test('an atomic erasure request rolls back on failure and identity-only owners get no synthetic health job', async (t) => {
   const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
   const proof = deletionRequestProof(attempt);
   const denied = async () => true;
@@ -299,7 +299,7 @@ test('an atomic erasure request rolls back on failure and identity-only owners g
   assert.equal(sqlite.prepare('SELECT status FROM auth_principals WHERE uid = ?').get(attempt.uid).status, 'disabled');
 });
 
-test('the independent denial survives application failure while the primary still shows active access', async (t) => {
+void test('the independent denial survives application failure while the primary still shows active access', async (t) => {
   const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
   const registry = new DatabaseSync(':memory:');
   t.after(() => registry.close());
@@ -346,7 +346,7 @@ test('the independent denial survives application failure while the primary stil
   assert.equal(registry.prepare('SELECT COUNT(*) AS n FROM recovery_account_erasure_denials').get().n, 1);
 });
 
-test('application erasure drains only the requesting owner’s sessions and attempts within one bounded step', async (t) => {
+void test('application erasure drains only the requesting owner’s sessions and attempts within one bounded step', async (t) => {
   const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
   const recovery = openRecoveryFixture(t);
   const proof = deletionRequestProof(attempt);
@@ -376,7 +376,7 @@ test('application erasure drains only the requesting owner’s sessions and atte
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_erasure_targets').get().n, 1);
 });
 
-test('application readiness for a health owner requires the real SQL erasure proof and the independent terminal floor', async (t) => {
+void test('application readiness for a health owner requires the real SQL erasure proof and the independent terminal floor', async (t) => {
   const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
   const recovery = openRecoveryFixture(t);
   const proof = deletionRequestProof(attempt);
@@ -398,7 +398,7 @@ test('application readiness for a health owner requires the real SQL erasure pro
   assert.equal(recovery.sqlite.prepare('SELECT finalized FROM recovery_erasure_cutoffs').get().finalized, 1);
 });
 
-test('the provider runs last and the final receipt survives a lost D1 reply after commit', async (t) => {
+void test('the provider runs last and the final receipt survives a lost D1 reply after commit', async (t) => {
   const { db, sqlite, attempt, identity, write, codec } = await deletionAttemptFixture(t);
   const recovery = openRecoveryFixture(t);
   await write(db, identity);
@@ -447,7 +447,7 @@ test('the provider runs last and the final receipt survives a lost D1 reply afte
   await assert.rejects(requireIndependentAccountAccess(recovery.db, identity.uid), /independent-recovery-fence-unavailable/);
 });
 
-test('a lost Management acknowledgement and lookup absence alone cannot finalize account erasure', async (t) => {
+void test('a lost Management acknowledgement and lookup absence alone cannot finalize account erasure', async (t) => {
   const { db, sqlite, attempt, identity, write, codec } = await deletionAttemptFixture(t);
   const recovery = openRecoveryFixture(t);
   await write(db, identity);
@@ -475,7 +475,7 @@ test('a lost Management acknowledgement and lookup absence alone cannot finalize
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_erasure_targets').get().n, 1);
 });
 
-test('requests full profile erasure only after proof for the exact linked owner', async () => {
+void test('requests full profile erasure only after proof for the exact linked owner', async () => {
   const uid = await deriveKindeOwnerId(issuer, subject);
   const token = 'synthetic.worker.token';
   const phases = [];
@@ -503,7 +503,7 @@ test('requests full profile erasure only after proof for the exact linked owner'
   assert.deepEqual(phases, ['fenced', 'management']);
 });
 
-test('withholds the operation on mismatched identity, invalid token or missing durable fence', async () => {
+void test('withholds the operation on mismatched identity, invalid token or missing durable fence', async () => {
   const uid = await deriveKindeOwnerId(issuer, subject);
   for (const proveTerminalFence of [async () => false, async () => { throw new Error('D1 unavailable'); }]) {
     let calls = 0;
@@ -521,7 +521,7 @@ test('withholds the operation on mismatched identity, invalid token or missing d
   }
 });
 
-test('never interprets ambiguous provider results as account erasure', async () => {
+void test('never interprets ambiguous provider results as account erasure', async () => {
   const uid = await deriveKindeOwnerId(issuer, subject);
   const target = { uid, subject, accessToken: 'synthetic.worker.token' };
   const responseFactories = [
@@ -545,7 +545,7 @@ test('never interprets ambiguous provider results as account erasure', async () 
   }
 });
 
-test('readback after a lost delete reply uses an exact uncached Kinde profile listing', async () => {
+void test('readback after a lost delete reply uses an exact uncached Kinde profile listing', async () => {
   const uid = await deriveKindeOwnerId(issuer, subject);
   const observedMethods = [];
   let present = true;
@@ -573,7 +573,7 @@ test('readback after a lost delete reply uses an exact uncached Kinde profile li
   assert.deepEqual(observedMethods, ['GET', 'DELETE', 'GET']);
 });
 
-test('a missing endpoint, foreign result or incomplete exact listing never proves absence', async () => {
+void test('a missing endpoint, foreign result or incomplete exact listing never proves absence', async () => {
   const uid = await deriveKindeOwnerId(issuer, subject);
   const target = { uid, subject, accessToken: 'synthetic.worker.token' };
   for (const response of [
