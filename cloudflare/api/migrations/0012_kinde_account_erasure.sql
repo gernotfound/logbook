@@ -52,10 +52,39 @@ CREATE TABLE kinde_deletion_oauth_attempts (
 CREATE INDEX kinde_deletion_oauth_expiry ON kinde_deletion_oauth_attempts (expires_at_ms);
 
 -- This records an explicit, freshly reauthenticated request. A row proves
--- acceptance and local access denial only. The separate runner must prove
--- application erasure and the external account fence before invoking Kinde.
-CREATE TABLE kinde_account_erasure_requests (
+-- the owner's decision even if a cross-D1 call or its acknowledgement fails.
+CREATE TABLE kinde_account_erasure_intents (
   uid TEXT PRIMARY KEY REFERENCES auth_principals(uid) ON DELETE RESTRICT,
+  auth_epoch INTEGER NOT NULL CHECK (auth_epoch BETWEEN 1 AND 9007199254740990),
+  receipt_hash TEXT NOT NULL UNIQUE CHECK (length(receipt_hash) = 64 AND receipt_hash NOT GLOB '*[^0-9a-f]*'),
+  reauthenticated_at_ms INTEGER NOT NULL CHECK (reauthenticated_at_ms > 0 AND reauthenticated_at_ms % 1000 = 0),
+  confirmed_at_ms INTEGER NOT NULL CHECK (
+    confirmed_at_ms >= reauthenticated_at_ms AND confirmed_at_ms - reauthenticated_at_ms <= 300000
+  )
+) STRICT;
+
+CREATE TRIGGER kinde_account_erasure_intent_fence
+BEFORE INSERT ON kinde_account_erasure_intents
+WHEN EXISTS (SELECT 1 FROM kinde_account_erasure_intents WHERE uid = NEW.uid OR receipt_hash = NEW.receipt_hash)
+  OR NOT EXISTS (
+    SELECT 1 FROM auth_principals p JOIN kinde_erasure_targets t ON t.uid = p.uid
+    WHERE p.uid = NEW.uid AND p.status = 'active' AND p.auth_epoch = NEW.auth_epoch
+  )
+BEGIN SELECT RAISE(ABORT, 'kinde-account-erasure-intent-fenced'); END;
+
+CREATE TRIGGER kinde_account_erasure_intent_immutable
+BEFORE UPDATE ON kinde_account_erasure_intents
+BEGIN SELECT RAISE(ABORT, 'kinde-account-erasure-intent-immutable'); END;
+
+CREATE TRIGGER kinde_account_erasure_intent_no_early_delete
+BEFORE DELETE ON kinde_account_erasure_intents
+WHEN NOT EXISTS (SELECT 1 FROM auth_principals WHERE uid = OLD.uid AND status = 'deleted')
+BEGIN SELECT RAISE(ABORT, 'kinde-account-erasure-intent-retained'); END;
+
+-- A request proves acceptance and local access denial only. The separate
+-- runner must still prove application erasure before invoking Kinde.
+CREATE TABLE kinde_account_erasure_requests (
+  uid TEXT PRIMARY KEY REFERENCES kinde_account_erasure_intents(uid) ON DELETE RESTRICT,
   prior_auth_epoch INTEGER NOT NULL CHECK (prior_auth_epoch BETWEEN 1 AND 9007199254740990),
   receipt_hash TEXT NOT NULL UNIQUE CHECK (length(receipt_hash) = 64 AND receipt_hash NOT GLOB '*[^0-9a-f]*'),
   reauthenticated_at_ms INTEGER NOT NULL CHECK (reauthenticated_at_ms > 0 AND reauthenticated_at_ms % 1000 = 0),
@@ -68,8 +97,11 @@ CREATE TRIGGER kinde_account_erasure_request_fence
 BEFORE INSERT ON kinde_account_erasure_requests
 WHEN EXISTS (SELECT 1 FROM kinde_account_erasure_requests WHERE uid = NEW.uid OR receipt_hash = NEW.receipt_hash)
   OR NOT EXISTS (
-    SELECT 1 FROM auth_principals p JOIN kinde_erasure_targets t ON t.uid = p.uid
-    WHERE p.uid = NEW.uid AND p.status = 'active' AND p.auth_epoch = NEW.prior_auth_epoch
+    SELECT 1 FROM auth_principals p JOIN kinde_account_erasure_intents i ON i.uid = p.uid
+    WHERE p.uid = NEW.uid AND p.status IN ('active', 'disabled')
+      AND p.auth_epoch = NEW.prior_auth_epoch AND p.auth_epoch >= i.auth_epoch
+      AND i.receipt_hash = NEW.receipt_hash AND i.reauthenticated_at_ms = NEW.reauthenticated_at_ms
+      AND i.confirmed_at_ms = NEW.requested_at_ms
   )
 BEGIN SELECT RAISE(ABORT, 'kinde-account-erasure-request-fenced'); END;
 
@@ -81,7 +113,7 @@ BEGIN
   WHERE uid = NEW.uid AND status = 'active';
 
   UPDATE auth_principals SET status = 'disabled', auth_epoch = auth_epoch + 1
-  WHERE uid = NEW.uid AND status = 'active' AND auth_epoch = NEW.prior_auth_epoch;
+  WHERE uid = NEW.uid AND status IN ('active', 'disabled') AND auth_epoch = NEW.prior_auth_epoch;
   SELECT CASE WHEN changes() != 1 THEN RAISE(ABORT, 'kinde-account-erasure-request-fenced') END;
   -- All current sessions are now denied. Physical cleanup belongs to the
   -- bounded runner because one owner may have many sessions.
