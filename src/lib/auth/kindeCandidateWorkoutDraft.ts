@@ -4,16 +4,16 @@ import {
     type WorkoutCompletionDraft,
 } from '../../hooks/workout/workoutSessionPreparation';
 import type { UserData, WorkoutReadiness, WorkoutSession } from '../../types';
-import { DomainParsers } from '../schema';
 import { Logic } from '../logic';
 import type { DomainOperation } from '../sync/domainOperations';
-import { assertWorkoutSessionIdentities, requireDate } from '../sync/domainOperations/validation';
+import { requireDate } from '../sync/domainOperations/validation';
 import { requiredUpdateRecoveryRegistry } from '../sync/requiredUpdateRecovery';
 import { equivalentWorkoutSnapshot } from '../sync/workoutSnapshotEquality';
 import { draftRegistry } from '../utils/draftRegistry';
 import { normalizeTimerSnapshot, stoppedWorkoutTimer, type WorkoutTimerSnapshot } from '../workoutTimerSnapshot';
 import { z } from '../zod';
 import { openKindeCatalogDraft, type KindeCatalogDraftController } from './kindeCandidateCatalogDraft';
+import { parseKindeWorkoutSnapshot } from './kindeCandidateWorkoutSnapshot';
 
 export type KindeWorkoutOrigin = { kind: 'free' } | { kind: 'routine'; routineId: string; cycleId?: string };
 export type KindeWorkoutClosure = { kind: 'complete'; endedAt: number } | { kind: 'delete' };
@@ -44,17 +44,11 @@ const timerSchema = z.unknown().transform(value => {
 }).default(stoppedWorkoutTimer);
 
 const workoutSchema = z.unknown().transform((value): WorkoutSession => {
-    const parsed = DomainParsers.parseActiveWorkout(value);
-    if (!parsed?.id || parsed.isEditingHistory || parsed.originalHistoryId || parsed.globalEndTime !== undefined) {
+    const parsed = parseKindeWorkoutSnapshot(value);
+    if (parsed.isEditingHistory || parsed.originalHistoryId || parsed.globalEndTime !== undefined) {
         throw new Error('Seduta attiva non valida.');
     }
     requireDate(parsed.date ?? '');
-    assertWorkoutSessionIdentities(parsed, 'Bozza seduta');
-    const stored = JSON.parse(JSON.stringify(value)) as WorkoutSession;
-    const canonical = JSON.parse(JSON.stringify(parsed)) as WorkoutSession;
-    // The persisted schema is also a reader with fallbacks. An edit must
-    // never use those fallbacks to replace values from a damaged draft.
-    if (!equal({ pains: [], ...stored }, canonical)) throw new Error('Copia della seduta non verificabile.');
     return parsed;
 });
 

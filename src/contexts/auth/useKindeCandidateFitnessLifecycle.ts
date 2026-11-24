@@ -15,6 +15,7 @@ import type { KindeStepsDraft } from '../../lib/auth/kindeCandidateStepsDraft';
 import type { KindeCardioDraft } from '../../lib/auth/kindeCandidateCardioDraft';
 import type { KindeCycleDraft } from '../../lib/auth/kindeCandidateCycleDraft';
 import type { KindeWorkoutClosure, KindeWorkoutDraft, KindeWorkoutOrigin } from '../../lib/auth/kindeCandidateWorkoutDraft';
+import type { KindeHistoryWorkoutDraft } from '../../lib/auth/kindeCandidateHistoryWorkoutDraft';
 import type { useKindeAccountSession } from './useKindeAccountSession';
 
 type Session = ReturnType<typeof useKindeAccountSession>;
@@ -229,6 +230,7 @@ export function useKindeCandidateFitnessLifecycle({
     const saveWorkoutDraft = (draft: KindeWorkoutDraft) => runMutation(active => active.saveWorkoutDraft(draft));
     const closeWorkoutDraft = (draft: KindeWorkoutDraft, closure: KindeWorkoutClosure) =>
         runMutation(active => active.closeWorkoutDraft(draft, closure));
+    const saveHistoryWorkoutDraft = (draft: KindeHistoryWorkoutDraft) => runMutation(active => active.saveHistoryWorkoutDraft(draft));
 
     const captureEditWitness = () => {
         const active = realm.current;
@@ -276,5 +278,7 @@ export function useKindeCandidateFitnessLifecycle({
         saveCycleDraft,
         openWorkoutDraft: (origin?: KindeWorkoutOrigin) => openDraft(active => active.openWorkoutDraft(origin)),
         saveWorkoutDraft, closeWorkoutDraft,
+        openHistoryWorkoutDraft: (id?: string) => openDraft(active => active.openHistoryWorkoutDraft(id)),
+        saveHistoryWorkoutDraft,
     };
 }
