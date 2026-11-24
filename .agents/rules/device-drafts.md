@@ -196,6 +196,15 @@ generico non lo reinstalla come bozza portabile.
 
 ## Editor storico e chiusura del workout
 
+Il candidato Kinde conserva `draft:history-workout` sotto un Web Lock
+proprio, separato da `draft:active-workout`. Il commit aggiorna la sola
+seduta dello storico se lo snapshot originale coincide ancora nella
+transazione. Una seduta modificata o eliminata altrove sospende il commit e
+preserva la bozza. La copia è disponibile come prova nel backup esplicito.
+La chiusura o la pulizia della bozza dello storico lascia intatta la
+seduta attiva, insieme al suo cronometro.
+
+
 - L'editor dello storico usa `history-editor-context` owner-scoped per conservare la sessione device-local sospesa: modifica e annullamento dello storico non eliminano `activeWorkout` né resettano il timer attivo. Il contesto è scritto prima di pubblicare l'editor; al termine la sessione sospesa viene ripristinata prima del cleanup della chiave. Le chiavi owner-scoped vengono eliminate dal purge tramite il prefisso completo `logbook:v2:${owner}:`.
 
 - Durante il salvataggio dello storico, l'editor resta operativo fino alla conferma locale; una modifica successiva non deve essere scartata al completamento di una write precedente. Il ripristino della sessione sospesa verifica la chiusura durevole (ledger in IndexedDB) per impedire la riapertura dopo cancellazione/completamento in un'altra scheda.

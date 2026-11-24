@@ -86,7 +86,7 @@ export async function openKindeCandidateHistoryWorkoutDraft({
         return {
             handle: {
                 initial: { ...structuredClone(observed.edit), stale, submitted: observed.submitted },
-                write: edit => device.persist({ ...editable(), edit }),
+                write: ({ workout, ratings }) => device.persist({ ...editable(), edit: { workout, ratings } }),
                 discard,
                 close,
             },
