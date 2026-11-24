@@ -164,7 +164,7 @@ test('requests full profile erasure only after proof for the exact linked owner'
   const uid = await deriveKindeOwnerId(issuer, subject);
   const token = 'synthetic.worker.token';
   const phases = [];
-  const remove = createKindeErasureManagement({
+  const { requestErasure } = createKindeErasureManagement({
     issuer,
     async proveTerminalFence(owner) {
       assert.equal(owner, uid);
@@ -184,7 +184,7 @@ test('requests full profile erasure only after proof for the exact linked owner'
       return Response.json({ code: 'OK', message: 'Synthetic acknowledgement' });
     },
   });
-  assert.equal(await remove({ uid, subject, accessToken: token }), 'acknowledged');
+  assert.equal(await requestErasure({ uid, subject, accessToken: token }), 'acknowledged');
   assert.deepEqual(phases, ['fenced', 'management']);
 });
 
@@ -193,11 +193,12 @@ test('withholds the operation on mismatched identity, invalid token or missing d
   for (const proveTerminalFence of [async () => false, async () => { throw new Error('D1 unavailable'); }]) {
     let calls = 0;
     const fetchImpl = async () => { calls += 1; return Response.json({ code: 'OK', message: 'Synthetic' }); };
-    const remove = createKindeErasureManagement({ issuer, fetchImpl, proveTerminalFence });
+    const { requestErasure, readPresence } = createKindeErasureManagement({ issuer, fetchImpl, proveTerminalFence });
     const target = { uid, subject, accessToken: 'synthetic.worker.token' };
-    assert.equal(await remove(target), 'withheld');
-    assert.equal(await remove({ ...target, subject: 'kp_foreign' }), 'withheld');
-    assert.equal(await remove({ ...target, accessToken: 'invalid\nheader' }), 'withheld');
+    assert.equal(await requestErasure(target), 'withheld');
+    assert.equal(await requestErasure({ ...target, subject: 'kp_foreign' }), 'withheld');
+    assert.equal(await requestErasure({ ...target, accessToken: 'invalid\nheader' }), 'withheld');
+    assert.equal(await readPresence(target), 'withheld');
     assert.equal(calls, 0);
     assert.throws(() => createKindeErasureManagement({
       issuer: 'https://other.test', fetchImpl, proveTerminalFence,
@@ -218,12 +219,59 @@ test('never interprets ambiguous provider results as account erasure', async () 
   ];
   for (const response of responseFactories) {
     let calls = 0;
-    const remove = createKindeErasureManagement({
+    const { requestErasure } = createKindeErasureManagement({
       issuer,
       async proveTerminalFence() { return true; },
       async fetchImpl() { calls += 1; return response(); },
     });
-    assert.equal(await remove(target), 'unconfirmed');
+    assert.equal(await requestErasure(target), 'unconfirmed');
     assert.equal(calls, 1);
+  }
+});
+
+test('readback after a lost delete reply uses an exact uncached Kinde profile listing', async () => {
+  const uid = await deriveKindeOwnerId(issuer, subject);
+  const observedMethods = [];
+  let present = true;
+  const target = { uid, subject, accessToken: 'synthetic.worker.token' };
+  const management = createKindeErasureManagement({
+    issuer, async proveTerminalFence(owner) { return owner === uid; },
+    async fetchImpl(request) {
+      observedMethods.push(request.method);
+      const url = new URL(request.url);
+      if (request.method === 'DELETE') {
+        present = false;
+        throw new Error('synthetic response lost after submission');
+      }
+      assert.equal(url.origin, issuer);
+      assert.equal(url.pathname, '/api/v1/users');
+      assert.deepEqual([...url.searchParams], [['user_id', subject], ['page_size', '1']]);
+      assert.equal(request.cache, 'no-store');
+      assert.equal(request.redirect, 'error');
+      return Response.json({ code: 'OK', message: 'Synthetic exact lookup', users: present ? [{ id: subject }] : [] });
+    },
+  });
+  assert.equal(await management.readPresence(target), 'present');
+  assert.equal(await management.requestErasure(target), 'unconfirmed');
+  assert.equal(await management.readPresence(target), 'absent');
+  assert.deepEqual(observedMethods, ['GET', 'DELETE', 'GET']);
+});
+
+test('a missing endpoint, foreign result or incomplete exact listing never proves absence', async () => {
+  const uid = await deriveKindeOwnerId(issuer, subject);
+  const target = { uid, subject, accessToken: 'synthetic.worker.token' };
+  for (const response of [
+    new Response(null, { status: 404 }),
+    new Response(null, { status: 403 }),
+    Response.json({ code: 'OK', message: 'Synthetic page', users: [], next_token: 'another-page' }),
+    Response.json({ code: 'OK', message: 'Synthetic invalid', users: null }),
+    Response.json({ code: 'OK', message: 'Synthetic foreign result', users: [{ id: 'kp_foreign' }] }),
+    Response.json({ code: 'ERROR', message: 'Synthetic authorization error', users: [] }),
+  ]) {
+    const { readPresence } = createKindeErasureManagement({
+      issuer, async proveTerminalFence() { return true; },
+      async fetchImpl() { return response; },
+    });
+    assert.equal(await readPresence(target), 'unconfirmed');
   }
 });
