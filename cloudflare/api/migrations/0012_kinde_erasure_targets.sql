@@ -34,3 +34,19 @@ WHEN NOT EXISTS (
   SELECT 1 FROM auth_principals WHERE uid = OLD.uid AND status = 'deleted'
 )
 BEGIN SELECT RAISE(ABORT, 'kinde-erasure-target-retained'); END;
+
+-- Separate from ordinary login state so a deletion attempt can never
+-- create a normal login session. Only its original session may redeem it.
+CREATE TABLE kinde_deletion_oauth_attempts (
+  state_hash TEXT PRIMARY KEY CHECK (length(state_hash) = 64 AND state_hash NOT GLOB '*[^0-9a-f]*'),
+  browser_hash TEXT NOT NULL CHECK (length(browser_hash) = 64 AND browser_hash NOT GLOB '*[^0-9a-f]*'),
+  session_hash TEXT NOT NULL CHECK (length(session_hash) = 64 AND session_hash NOT GLOB '*[^0-9a-f]*'),
+  uid TEXT NOT NULL REFERENCES auth_principals(uid) ON DELETE RESTRICT,
+  auth_epoch INTEGER NOT NULL CHECK (auth_epoch >= 1),
+  code_verifier TEXT NOT NULL CHECK (length(code_verifier) = 43 AND code_verifier NOT GLOB '*[^A-Za-z0-9_-]*'),
+  nonce TEXT NOT NULL CHECK (length(nonce) = 43 AND nonce NOT GLOB '*[^A-Za-z0-9_-]*'),
+  issued_at_ms INTEGER NOT NULL CHECK (issued_at_ms > 0),
+  expires_at_ms INTEGER NOT NULL CHECK (expires_at_ms = issued_at_ms + 300000)
+) STRICT;
+
+CREATE INDEX kinde_deletion_oauth_expiry ON kinde_deletion_oauth_attempts (expires_at_ms);

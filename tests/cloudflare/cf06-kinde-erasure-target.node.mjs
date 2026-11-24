@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
+import { consumeKindeDeletionAttempt, saveKindeDeletionAttempt } from '../../cloudflare/auth/kinde-deletion-attempts.mjs';
 import { deriveKindeOwnerId } from '../../cloudflare/auth/kinde-owner-id.mjs';
 import { createKindeErasureManagement } from '../../cloudflare/jobs/kinde-erasure-management.mjs';
 import { createKindeErasureTargetCodec } from '../../cloudflare/jobs/kinde-erasure-target.mjs';
@@ -21,16 +22,17 @@ function d1For(sqlite, { beforeWrite = () => {}, afterWrite = () => {} } = {}) {
       assert.equal(policy, 'first-primary');
       return { prepare(sql) {
         const statement = sqlite.prepare(sql);
-        return { bind(...args) {
-          return {
-            async first() { return statement.get(...args) ?? null; },
-            async run() {
-              beforeWrite();
-              statement.run(...args);
-              afterWrite();
-            },
-          };
-        } };
+        const bind = (...args) => ({
+          async first() { return statement.get(...args) ?? null; },
+          async run() {
+            beforeWrite();
+            const { changes } = statement.run(...args);
+            afterWrite();
+            return { success: true, meta: { changes } };
+          },
+          bind,
+        });
+        return bind();
       } };
     },
   };
@@ -45,6 +47,22 @@ async function erasureStoreFixture(t) {
   sqlite.prepare("INSERT INTO auth_principals VALUES (?, 'active', ?, 1)").run(uid, Date.now() - 1000);
   const codec = createKindeErasureTargetCodec({ issuer, keyId, key: await keyFor() });
   return { sqlite, write: createKindeErasureTargetWriter(codec), identity: { uid, subject, authEpoch: 1 } };
+}
+
+async function deletionAttemptFixture(t) {
+  const { sqlite, identity } = await erasureStoreFixture(t);
+  const issuedAt = Date.now() - 1000;
+  const sessionHash = 'b'.repeat(64);
+  const alternateSession = 'a'.repeat(64);
+  const createSession = sqlite.prepare('INSERT INTO auth_sessions VALUES (?, ?, 1, ?, ?, ?, ?, NULL)');
+  for (const hash of [sessionHash, alternateSession]) {
+    createSession.run(hash, identity.uid, 'c'.repeat(64), issuedAt, issuedAt + 30_000, issuedAt + 60_000);
+  }
+  const attempt = {
+    uid: identity.uid, authEpoch: 1, sessionHash, stateHash: 'd'.repeat(64), browserHash: 'e'.repeat(64),
+    verifier: Buffer.alloc(32, 10).toString('base64url'), nonce: Buffer.alloc(32, 11).toString('base64url'),
+  };
+  return { sqlite, db: d1For(sqlite), attempt, alternateSession };
 }
 
 test('derives the same public owner identifier as the trusted callback contract', async () => {
@@ -158,6 +176,40 @@ test('requires a new primary read to recover a lost insertion response and fence
   assert.equal(writes, 1);
   assert.equal(count.get().n, 1);
   await assert.rejects(write(d1For(sqlite), identity), /kinde-erasure-target-storage-unavailable/);
+});
+
+test('uses one deletion proof across concurrent callbacks and binds it to the original browser and session', async (t) => {
+  const { db, sqlite, attempt, alternateSession } = await deletionAttemptFixture(t);
+  assert.equal(await saveKindeDeletionAttempt(db, attempt), true);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts').get().n, 0);
+  assert.equal(await consumeKindeDeletionAttempt(db, { ...attempt, browserHash: 'f'.repeat(64) }), null);
+  assert.equal(await consumeKindeDeletionAttempt(db, { ...attempt, sessionHash: alternateSession }), null);
+  const results = await Promise.all([
+    consumeKindeDeletionAttempt(db, attempt), consumeKindeDeletionAttempt(db, attempt),
+  ]);
+  const saved = results.find(Boolean);
+  assert.equal(results.filter(Boolean).length, 1);
+  assert.deepEqual(saved, {
+    expectedUid: attempt.uid, authEpoch: 1, startedAtMs: saved.startedAtMs,
+    verifier: attempt.verifier, nonce: attempt.nonce,
+  });
+  assert.ok(Number.isSafeInteger(saved.startedAtMs) && saved.startedAtMs > 0);
+  assert.equal(await consumeKindeDeletionAttempt(db, attempt), null);
+});
+
+test('rejects expired and revoked deletion proof and keeps ordinary login isolated', async (t) => {
+  const { db, sqlite, attempt } = await deletionAttemptFixture(t);
+  assert.equal(await saveKindeDeletionAttempt(db, { ...attempt, authEpoch: 2 }), false);
+  assert.equal(await saveKindeDeletionAttempt(db, { ...attempt, uid: 'k_' + 'a'.repeat(43) }), false);
+  assert.equal(await saveKindeDeletionAttempt(db, attempt), true);
+  sqlite.exec('UPDATE kinde_deletion_oauth_attempts SET issued_at_ms = 1, expires_at_ms = 300001');
+  assert.equal(await consumeKindeDeletionAttempt(db, attempt), null);
+  assert.equal(await saveKindeDeletionAttempt(db, attempt), true, 'expired state is pruned');
+  sqlite.prepare('UPDATE auth_sessions SET revoked_at_ms = ? WHERE token_hash = ?')
+    .run(Date.now(), attempt.sessionHash);
+  assert.equal(await consumeKindeDeletionAttempt(db, attempt), null);
+  assert.equal(await saveKindeDeletionAttempt(db, attempt), false);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts').get().n, 0);
 });
 
 test('requests full profile erasure only after proof for the exact linked owner', async () => {
