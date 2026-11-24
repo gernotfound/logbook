@@ -44,8 +44,16 @@ export async function createKindeOAuthFixture() {
   let accessAudience = apiAudience;
   let accessGrantType = ['authorization_code'];
   let idAudience = clientId;
+  let discovery = { issuer, acr_values_supported: ['mfa'], claims_supported: ['auth_time'] };
   const nonceByCode = new Map();
   const fetchImpl = async (url, init) => {
+    if (url === issuer + '/.well-known/openid-configuration') {
+      assert.equal(init.method, 'GET');
+      assert.equal(init.redirect, 'manual');
+      assert.equal(init.cache, 'no-store');
+      assert.equal(init.headers.Authorization, undefined);
+      return Response.json(discovery);
+    }
     assert.equal(url, issuer + '/oauth2/token');
     assert.equal(init.method, 'POST');
     assert.equal(init.redirect, 'manual');
@@ -149,6 +157,7 @@ export async function createKindeOAuthFixture() {
     setAccessAudience: value => { accessAudience = value; },
     setAccessGrantType: value => { accessGrantType = value; },
     setIdAudience: value => { idAudience = value; },
+    setDiscovery: value => { discovery = value; },
     calls: () => issuedTokens,
     close: () => sqlite.close(),
   };

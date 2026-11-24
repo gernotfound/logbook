@@ -26,6 +26,7 @@ void test('deletion OAuth forces new authentication and yields one owner-bound p
   const [deletionCookie] = first.headers.getSetCookie();
   assert.match(deletionCookie, /^__Host-logbook_delete_oauth=/);
   assert.equal(auth.searchParams.get('max_age'), '0');
+  assert.equal(auth.searchParams.get('prompt'), 'login');
   assert.equal(auth.searchParams.get('redirect_uri'), appOrigin + '/api/auth/kinde/deletion/callback');
   const saved = f.sqlite.prepare('SELECT * FROM kinde_deletion_oauth_attempts').get();
   assert.equal(auth.searchParams.get('code_challenge'),
@@ -57,6 +58,43 @@ void test('deletion OAuth forces new authentication and yields one owner-bound p
   assert.deepEqual(proof, { uid, authEpoch: 1, authenticatedAtMs: proof.authenticatedAtMs, sessionHash });
   assert.equal(f.calls(), 3);
   assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 1);
+});
+
+void test('deletion OAuth fails closed when Kinde cannot attest authentication time', async (t) => {
+  const f = await fixture();
+  t.after(() => f.close());
+  const login = await f.start();
+  const issued = await f.oauth.complete(f.db, f.callback(login));
+  const cookie = issued.headers.getSetCookie()[0].split(';')[0];
+  const sessionHash = createHash('sha256').update(cookie.split('=')[1]).digest('hex');
+  const { uid } = f.sqlite.prepare('SELECT uid FROM auth_principals').get();
+  const claims = {
+    authenticated: true, csrfVerified: true, rateGatePassed: true, uid, fenceEpoch: 1, sessionHash,
+  };
+  const request = new Request(appOrigin + '/api/auth/kinde/deletion/start', {
+    method: 'POST', headers: { origin: appOrigin, 'sec-fetch-site': 'same-origin', cookie },
+  });
+  const supported = { issuer: f.config.issuer, acr_values_supported: ['mfa'], claims_supported: ['auth_time'] };
+  for (const discovery of [
+    { issuer: f.config.issuer, claims_supported: ['auth_time'] },
+    { ...supported, issuer: 'https://foreign.invalid' },
+    { ...supported, claims_supported: [] },
+  ]) {
+    f.setDiscovery(discovery);
+    const rejected = await f.deletion.start(f.db, request, claims);
+    assert.equal(rejected.status, 503);
+    assert.equal(rejected.headers.has('Location'), false);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_deletion_oauth_attempts').get().n, 0);
+  }
+  f.setDiscovery(supported);
+  const valid = await f.deletion.start(f.db, request, claims);
+  assert.equal(valid.status, 303);
+  f.setDiscovery({ issuer: f.config.issuer, claims_supported: ['auth_time'] });
+  const callback = f.deletionCallback(new URL(valid.headers.get('Location')), 'unsupported-discovery',
+    cookie + '; ' + valid.headers.getSetCookie()[0].split(';')[0], true);
+  assert.equal(await f.deletion.complete(f.db, callback), null);
+  assert.equal(f.calls(), 1, 'only the ordinary login exchanged a code');
+  assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_deletion_oauth_attempts').get().n, 0);
 });
 
 void test('Kinde server flow stores hashed state/browser and verifies SHA-256 PKCE challenge', async () => {

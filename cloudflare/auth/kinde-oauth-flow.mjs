@@ -144,8 +144,9 @@ function callbackParameters(url) {
   return { state, code, error };
 }
 
-async function tokenResponse(response) {
+async function boundedProviderJson(response) {
   if (!(response instanceof Response) || !response.ok
+    || response.redirected
     || !/^application\/json(?:\s*;|$)/i.test(response.headers.get('content-type') ?? '')) {
     throw new KindeOAuthError();
   }
@@ -170,15 +171,34 @@ async function tokenResponse(response) {
   const bytes = new Uint8Array(length);
   let position = 0;
   for (const chunk of chunks) { bytes.set(chunk, position); position += chunk.byteLength; }
-  let tokens;
-  try { tokens = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); }
+  try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); }
   catch { throw new KindeOAuthError(); }
+}
+
+async function tokenResponse(response) {
+  const tokens = await boundedProviderJson(response);
   if (!tokens || typeof tokens !== 'object' || Array.isArray(tokens)
     || typeof tokens.access_token !== 'string' || typeof tokens.id_token !== 'string'
     || tokens.access_token.length > 8192 || tokens.id_token.length > 8192) {
     throw new KindeOAuthError();
   }
   return { accessToken: tokens.access_token, idToken: tokens.id_token };
+}
+
+async function requireProviderAuthenticationTime(config, fetchImpl) {
+  const response = await fetchImpl(config.issuer + '/.well-known/openid-configuration', {
+    method: 'GET', redirect: 'manual', cache: 'no-store', signal: AbortSignal.timeout(5000),
+    headers: { Accept: 'application/json' },
+  });
+  const discovery = await boundedProviderJson(response);
+  // Kinde documents that tenants without this capability may ignore max_age
+  // and put token issuance time into auth_time instead of authentication time.
+  if (discovery?.issuer !== config.issuer
+    || !Array.isArray(discovery.acr_values_supported)
+    || !discovery.acr_values_supported.some(value => value === 'mfa' || value === 'phr')
+    || !Array.isArray(discovery.claims_supported) || !discovery.claims_supported.includes('auth_time')) {
+    throw new KindeOAuthError();
+  }
 }
 
 function authorizeUrl(config, { state, nonce, codeChallenge }, reauthenticate = false) {
@@ -189,7 +209,10 @@ function authorizeUrl(config, { state, nonce, codeChallenge }, reauthenticate = 
     audience: config.apiAudience, state, nonce,
     code_challenge: codeChallenge, code_challenge_method: 'S256',
   })) authorize.searchParams.set(name, value);
-  if (reauthenticate) authorize.searchParams.set('max_age', '0');
+  if (reauthenticate) {
+    authorize.searchParams.set('prompt', 'login');
+    authorize.searchParams.set('max_age', '0');
+  }
   return authorize;
 }
 
@@ -371,6 +394,7 @@ export function createKindeDeletionOAuthFlow(configuration, { rateLimit, fetchIm
       if (await rateLimit(request) !== true) return denied(429);
       const sessionHash = await digestHex(session);
       if (sessionHash !== claims.sessionHash) return denied(403);
+      await requireProviderAuthenticationTime(config, fetchImpl);
       const state = randomSecret();
       const nonce = randomSecret();
       const verifier = randomSecret();
@@ -405,6 +429,7 @@ export function createKindeDeletionOAuthFlow(configuration, { rateLimit, fetchIm
         stateHash: await digestHex(input.state), browserHash: await digestHex(browser), sessionHash,
       });
       if (!saved || input.error !== null) return null;
+      await requireProviderAuthenticationTime(config, fetchImpl);
       const response = await exchangeCode(fetchImpl, config, input.code, saved.verifier);
       const tokens = await tokenResponse(response);
       const proof = await verify({ ...tokens, expectedNonce: saved.nonce }, saved);
