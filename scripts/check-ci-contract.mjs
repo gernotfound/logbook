@@ -185,10 +185,14 @@ requirePattern('matrix fail-fast disabled', workflow, /^      fail-fast: false\s
 requirePattern('Ubuntu 24.04 shard runner', workflow, /^    runs-on: ubuntu-24\.04\s*$/m);
 // Check each checkout step, not a global count of isolated safe-looking lines.
 // Otherwise an unguarded checkout could coexist with four protected ones.
+const codeqlWorkflow = workflow.match(/^  codeql:\n([\s\S]*?)(?=^  [\w-]+:\s*$)/m)?.[1] ?? '';
+const codeqlCheckout = codeqlWorkflow.split(/^      - /m)
+  .find(step => /^\s*uses:\s*actions\/checkout@/m.test(step));
 const checkoutSteps = workflow.split(/^      - /m)
   .filter(step => /^\s*uses:\s*actions\/checkout@/m.test(step));
 if (checkoutSteps.length !== 4) failures.push(`Expected four pinned, credential-free checkout steps, got ${checkoutSteps.length}`);
 let prCheckouts = 0;
+let codeqlCheckouts = 0;
 let mainCheckouts = 0;
 for (const step of checkoutSteps) {
   const action = step.match(/^\s*uses:\s*(actions\/checkout@[^\s#]+)/m)?.[1];
@@ -202,8 +206,13 @@ for (const step of checkoutSteps) {
   }
   const ref = options.get('ref');
   if (ref === '${{ github.event.pull_request.head.sha || github.sha }}') {
-    prCheckouts += 1;
-    if (options.get('fetch-depth') !== '0') failures.push('PR checkout must fetch full history for main-relative checks');
+    if (step.trim() === codeqlCheckout?.trim()) {
+      codeqlCheckouts += 1;
+      if (options.get('fetch-depth') !== "${{ github.event_name == 'push' && '1' || '0' }}") failures.push('CodeQL must retain PR history and use exact-tree checkout on push');
+    } else {
+      prCheckouts += 1;
+      if (options.get('fetch-depth') !== '0') failures.push('PR checkout must fetch full history for main-relative checks');
+    }
   } else if (ref === '${{ github.sha }}') {
     mainCheckouts += 1;
     if (options.get('fetch-depth') !== '1') failures.push('Main release checkout must use bounded history');
@@ -211,8 +220,8 @@ for (const step of checkoutSteps) {
     failures.push('Checkout ref must be exact PR head or exact main SHA');
   }
 }
-if (prCheckouts !== 3 || mainCheckouts !== 1) {
-  failures.push('Checkout policy: expected three PR SHA checkouts and one main release checkout');
+if (prCheckouts !== 2 || codeqlCheckouts !== 1 || mainCheckouts !== 1) {
+  failures.push('Checkout policy: expected two full-history PR checkouts, CodeQL and one main release checkout');
 }
 requirePattern('Node setup action pin', workflow, /^        uses: actions\/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7\s*$/m);
 requirePattern('Node 24 runtime', workflow, /^          node-version: ['"]?24['"]?\s*$/m);

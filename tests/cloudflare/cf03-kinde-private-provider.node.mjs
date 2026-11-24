@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
+import { privateDeploymentPaths } from '../../scripts/cloudflare-private-deploy-plan.mjs';
 import { verifyPrivateKindeWorker } from '../../scripts/verify-cloudflare-kinde-private-provider.mjs';
 
 const account = '0123456789abcdef0123456789abcdef';
@@ -90,14 +91,14 @@ void test('deployment changes only Kinde Worker after exact-main verification an
   assert.match(yml, /^    branches:\n      - main$/m);
   // A change to the OAuth implementation must update the *private* live Worker,
   // not just the Static Assets frontend, after the exact-main release gate.
-  const watch = yml.split('    paths:\n')[1]?.split('  workflow_dispatch:')[0] ?? '';
-  assert.ok(watch.includes("      - 'cloudflare/auth/**'"));
-  assert.ok(watch.includes('      - cloudflare/api/logout-worker.mjs'));
-  assert.ok(watch.includes('      - .github/workflows/cloudflare-kinde-private.yml'));
+  const watch = privateDeploymentPaths('.github/workflows/cloudflare-kinde-private.yml');
+  assert.ok(watch.includes('cloudflare/auth/**'));
+  assert.ok(watch.includes('cloudflare/api/logout-worker.mjs'));
+  assert.ok(watch.includes('.github/workflows/cloudflare-kinde-private.yml'));
 
   assert.match(yml, /github.ref == 'refs\/heads\/main'/);
-  assert.match(yml, /Wait for|Verify current main and its complete trusted release gate/);
-  assert.match(yml, /actions\/workflows\/verification\.yml\/runs\?event=push/);
+  assert.match(yml, /Verify completed exact-main release and decide deployment relevance/);
+  assert.match(yml, /github\.event\.workflow_run\.event == 'push'/);
   assert.match(yml, /git ls-remote --exit-code origin refs\/heads\/main/);
   assert.match(yml, /npx --yes wrangler@4\.159\.0 deploy --dry-run --config cloudflare\/auth\/wrangler\.kinde\.isolated\.jsonc/);
   assert.match(yml, /command: deploy --config cloudflare\/auth\/wrangler\.kinde\.isolated\.jsonc/);

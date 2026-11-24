@@ -1,23 +1,13 @@
 name: Cloudflare Isolated D1 API (private only)
 
 on:
-  push:
+  workflow_run: # zizmor: ignore[dangerous-triggers] Exact current main and trusted completed push gate are verified before provider access.
+    workflows:
+      - Milestone Verification
+    types:
+      - completed
     branches:
       - main
-    paths:
-      - cloudflare/api/**
-      - cloudflare/auth/**
-      - 'cloudflare/recovery/**'
-      - 'cloudflare/sql/**'
-      - 'cloudflare/http/**'
-      - package.json
-      - package-lock.json
-      - scripts/cloudflare-private-deploy-plan.mjs
-      - scripts/check-cloudflare-api-isolation.mjs
-      - scripts/check-install-scripts.mjs
-      - scripts/check-cloudflare-api-isolation.mjs
-      - scripts/verify-cloudflare-api-provider.mjs
-      - .github/workflows/cloudflare-api-isolated.yml
 
 permissions:
   contents: read
@@ -25,29 +15,36 @@ permissions:
 
 concurrency:
   group: cloudflare-isolated-api
-  cancel-in-progress: false
+  queue: max
 
 jobs:
   private-api:
     name: Deploy and verify private Auth Gate + D1 API
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      (github.event_name == 'workflow_run' &&
+       github.ref == 'refs/heads/main' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.event == 'push')
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 20
     env:
-      EXPECTED_SHA: ${{ github.sha }}
+      EXPECTED_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout exact validated main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ env.EXPECTED_SHA }}
-          fetch-depth: 0
+          fetch-depth: 2
           persist-credentials: false
       - name: Verify lease on exact current main (no credentials)
         shell: bash
         run: |
           set -euo pipefail
           [[ "${EXPECTED_SHA}" =~ ^[a-f0-9]{40}$ ]] || exit 1
+          test "${GITHUB_SHA}" = "${EXPECTED_SHA}"
           test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}"
           test "$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')" = "${EXPECTED_SHA}"
       - name: Setup Node
@@ -55,30 +52,17 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
-      - name: Decide private API deployment relevance
+      - name: Verify completed exact-main release and decide deployment relevance
         id: relevance
         env:
-          PUSH_BEFORE_SHA: ${{ github.event.before }}
-        run: echo "required=$(node scripts/cloudflare-private-deploy-plan.mjs .github/workflows/cloudflare-api-isolated.yml)" >> "$GITHUB_OUTPUT"
-      - name: Wait for verified release gate of this exact main SHA
-        if: steps.relevance.outputs.required == 'true'
+          GATE_RUN_ID: ${{ github.event.workflow_run.id }}
+          GATE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
         shell: bash
         run: |
           set -euo pipefail
-          verified=false
-          # A full exact-main release can finish after the 3-minute diagnostic
-          # window. Wait boundedly, but never deploy after a failed gate.
-          for attempt in $(seq 1 40); do
-            gate="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/verification.yml/runs?event=push&head_sha=${EXPECTED_SHA}&per_page=40" \
-              --jq ".workflow_runs | map(select(.head_sha == \"${EXPECTED_SHA}\" and .event == \"push\")) | first | .conclusion // \"pending\"")"
-            case "${gate}" in
-              success) verified=true; break ;;
-              failure|cancelled|timed_out|action_required) echo 'Verified main release gate failed'; exit 1 ;;
-            esac
-            if [ "${attempt}" != 40 ]; then sleep 15; fi
-          done
-          test "${verified}" = true
-          test "$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')" = "${EXPECTED_SHA}"
+          required="$(node scripts/cloudflare-private-deploy-plan.mjs .github/workflows/cloudflare-api-isolated.yml)"
+          [[ "${required}" == true || "${required}" == false ]]
+          echo "required=${required}" >> "$GITHUB_OUTPUT"
       - name: Audit dependency install and verify private config
         if: steps.relevance.outputs.required == 'true'
         run: |
@@ -115,6 +99,12 @@ jobs:
           accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: '4.159.0'
           command: deploy --config cloudflare/auth/wrangler.isolated.jsonc
+      - name: Verify main lease before second provider write
+        if: steps.relevance.outputs.required == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')" = "${EXPECTED_SHA}"
       - name: Deploy private API service binding (no public route)
         if: steps.relevance.outputs.required == 'true'
         uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4
