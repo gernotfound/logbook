@@ -1,5 +1,9 @@
 # Consenso salute, diritti e cancellazione dei dati — TheLogBook
 
+## CF-06 — Confine fra revoca salute e cancellazione account
+
+La finalizzazione sanitaria richiede il lease D1 esatto ancora valido nella scrittura terminale (#1403), non un controllo antecedente; in caso di lease scaduto non distruggere ADK né produrre ricevute. La pipeline account candidata (#1404/#1405) aggiunge deny indipendente e prova Kinde-last; non confondere la ricevuta di revoca o la finalizzazione dei soli dati salute con cancellazione account completa. Il marker attività dell'account non è prova di consenso. Il percorso account, incluso enqueue inattività e cron, non è attivato: vedere [Ciclo account](account-lifecycle.md) e [CF-06](https://github.com/gernotfound/logbook/issues/1060).
+
 ## CF-05 — Ingresso React candidato: revoca e diritti senza GO fitness (19/11/2026)
 
 Il solo ingresso Kinde **candidato** può esporre revoca e diritti quando

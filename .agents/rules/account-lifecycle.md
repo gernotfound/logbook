@@ -1,5 +1,13 @@
 # Ciclo account, Auth e guest — TheLogBook
 
+> **Checkpoint 24/11:** gli incrementi datati qui sotto descrivono anche stadi storici. La [mappa corrente](../../docs/operations/cloudflare-current-state.md) distingue le funzioni candidate già integrate da quelle mancanti. Il pubblico resta identity-only.
+
+### CF-06 — Cancellazione account e inattività candidate
+
+La cancellazione account è distinta dalla sola revoca salute. Riferimento Kinde da identità OIDC verificata, cifrato con chiave dedicata e vincolato all'owner; mai collegamento per email. La riautenticazione dedicata usa state/PKCE/nonce monouso, sessione/owner originari e prova temporale firmata effettiva: se discovery non attesta il supporto richiesto, negare, senza emissione di sessione normale. L'intento durevole precede il deny indipendente; la richiesta accettata blocca accesso e accoda erasure sanitaria se necessaria. La prova di pulizia applicativa, ADK e floor indipendente precede l'eliminazione Kinde, sotto lease D1 corrente. ACK ambiguo o sola assenza non provano completamento. Pulire anche il marker attività del solo owner.
+
+L'attività online candidata usa `recordKindeForegroundActivity` dopo Auth Gate, CSRF/rate gate e sessione primaria corrente; timestamp SQL, nessuna falsa attività offline/background. Aggregazione conservativa 10 minuti. `readKindeInactivityCandidates` è dry-run bounded (16), non accoda/disabilita. Scadenza 12 mesi calendari UTC con margine; owner senza marker esclusi. La 0013 inizializza il controllo paused; ogni cambio generazione invalida selezioni precedenti. Il futuro enqueue deve ricontrollare atomicamente UID, epoch, marker, scadenza e generazione: la sola rilettura prima di un await non basta. Nessun cron o nuova rotta live, né autorizzazione a cancellare account reali. Rif. [CF-06 #1060](https://github.com/gernotfound/logbook/issues/1060).
+
 ### CF-03 — Orologio D1 per sessione e consenso
 
 Le scritture D1 dei timestamp di identità, sessione, logout e consenso
@@ -21,10 +29,7 @@ mentre la duplicazione Kinde usa lo stesso compilatore attraverso
 `realm.submit()`. Il reducer Domain Operations resta l'autorità sulla
 validità finale dello stato, sulle identità e sull'ordinamento.
 
-La disponibilità del compilatore **non** abilita il form Kinde:
-apertura, mutazioni bufferizzate e recupero di `draft_routine` richiedono
-un adapter owner/epoch/consenso cifrato indipendente dal guest e prove
-di errore, ripresa, multitab, logout e PWA update. Non inferire una bozza
+Il form Kinde candidato dispone ora dell'adapter cifrato dedicato (#1366); apertura, mutazioni bufferizzate e recupero di `draft_routine` restano vincolati a owner/epoch/consenso, senza fallback guest. Il form non è montato nel pubblico; multitab, logout e PWA update su provider/dispositivi richiedono prove ulteriori. Non inferire una bozza
 salvata da una `DomainOperation` non ancora committata.
 
 ### CF-03/04 — Duplicazione ed eliminazione delle schede Kinde (22/11/2026)
@@ -42,10 +47,7 @@ consenso, owner o permit cambiano, il submit è respinto; un journal pending
 non viene dichiarato cloud ACK e il pulsante di recheck non reinvia
 l'intento. Non si cancellano automaticamente dati device in caso di errore.
 
-La creazione e modifica di schede dall'editor restano disabilitate:
-`draft_routine` usa ancora il writer device e i marker di consenso del
-legacy, incompatibili col perimetro Kinde finché non esiste un adapter
-di bozza cifrata owner/consenso/fence/recovery dedicato e provato.
+La creazione e modifica di schede dall'editor candidato usano l'adapter di bozza cifrata Kinde integrato in #1366, non il writer guest/legacy; il contratto resta owner/consenso/fence/recovery.
 Il frontend pubblico resta `identityOnly`. Test sintetici e CodeQL non
 costituiscono un collaudo account/D1 Production.
 
@@ -57,13 +59,12 @@ soltanto con snapshot `ready` del realm owner-scoped, separata da
 `RoutineCard` rende le azioni di menu solo quando il chiamante
 fornisce i rispettivi handler: il wrapper guest conserva modifica,
 duplica ed elimina; il candidato Kinde offre duplicazione ed eliminazione
-attraverso il realm, ma non la creazione o modifica mediante editor.
+attraverso il realm; creazione e modifica sono state aggiunte nel candidato con #1366.
 Ricerca, espansione,
 riepilogo serie e mappa muscolare usano soltanto la libreria dello
 stesso owner Kinde e sono smontati alla perdita del permesso.
 
-Le bozze delle schede, `draft_routine`, il controllo dei testimoni
-fra schede e l'editor non sono ancora migrati. Il writer delle azioni
+Le bozze delle schede e l'editor sono disponibili nel candidato isolato (#1366), con controlli dedicati e senza confondere i testimoni guest. Il writer delle azioni
 immediate è soltanto `realm.submit()` con journal cifrato: un'azione
 account non può usare l'owner o il recupero del guest.
 I test React contrappongono dati guest con gli stessi
@@ -90,9 +91,7 @@ Una conferma tardiva dopo revoca/logout o una risposta di errore
 di una sessione precedente non possono autorizzare una nuova
 cancellazione né mostrare un alert obsoleto.
 
-Restano disabilitate la creazione/modifica dello storico e la modifica
-di allenamenti attivi, dipendenti da un writer e da bozze device Kinde
-ancora da realizzare. `WorkoutReportModal` e il suo writer guest
+Seduta attiva ed editor dello storico sono ora disponibili nel candidato (#1400–#1402), con bozze cifrate separate e CAS sul dato osservato. La chiusura della seduta crea lo storico; l'editor modifica solo la seduta esistente, senza ricrearla se cancellata. Non sono montati nel pubblico. `WorkoutReportModal` e il suo writer guest
 rimangono separati. Alla perdita di sessione, epoch, consenso o
 chiusura dell'archivio la vista e i report vengono smontati.
 Le regressioni UI controllano owner guest estraneo, operazione esatta,
@@ -441,7 +440,7 @@ Il proprietario ha registrato un account email/password di prova su Kinde e ha c
 
 `readKindeCandidateIdentity` legge due status trusted con controllo di generazione e CSRF per distinguere la sessione assente dall'email non verificata, mantenendo i percorsi rights-only privi di permessi fitness. La sola variante `identityOnly` di `KindeAccountEntry` è montata nell'ingresso React: non adotta né crea un `User` Firebase e non interroga consenso/ADK. Le tre scelte esplicite per il consenso D1 e la replica restano candidate non montate. Il guest rimane escluso dalle operazioni Kinde mentre il trasferimento non è implementato; non si cancellano dati guest. La risposta positiva di identità o consenso non sblocca IndexedDB né la replica. Il cutover effettivo richiede separazione di AuthContext e percorso cloud con test browser/provider; non attivare salute sul dominio senza tutti i gate.
 
-### Ingresso Kinde nella PWA — solo identità (17/11/2026, candidato v2.506.0)
+### Checkpoint storico — ingresso Kinde nella PWA (17/11/2026, v2.506.0; prima di GuestOnlyAuthProvider)
 
 La schermata account **senza Firebase User** in `src/App.tsx` monta ora `KindeAccountEntry identityOnly` solo quando `AuthProvider` segnala nessun account Firebase e nessuna sessione guest. Lo stato viene letto esclusivamente dal servizio `/api/auth/session` con conferma dell'email e cookie CSRF; in questa fase non viene chiamato `/v1/consent/status`, non viene prodotto alcun `User` Firebase, non viene adottato un owner Kinde e non si sblocca il vault né la sincronizzazione. La modalità guest locale resta accessibile per scelta esplicita dopo 401 oppure quando Kinde è indisponibile, senza mai concedere permessi cloud o adottare un owner remoto. Una sessione Kinde verificata (anche con email non verificata) non offre un ingresso guest implicito. La schermata guest già avviata presenta ora un blocco informativo senza chiamare Firebase: **il trasferimento guest→Kinde non è ancora supportato** e i dati locali restano preservati. L'app continua a montare `AuthProvider` Firebase e gli altri consumer legacy; **non è il cutover completo**.
 
@@ -449,9 +448,9 @@ La schermata account **senza Firebase User** in `src/App.tsx` monta ora `KindeAc
 
 Dopo l'emissione della sessione D1, il Worker risponde con un redirect 303 a `/` sullo stesso origin. La destinazione è fissa, senza parametri OAuth o dell'utente. All'arrivo la schermata account React verifica la sessione tramite `POST /api/auth/session`; il redirect da solo non concede accesso al vault o ai dati. La pagina `/verifica-accesso` resta consultabile direttamente per la diagnostica.
 
-## Target Kinde selezionato — 14/11/2026 (sessione diagnostica parzialmente attiva)
+## Target Kinde selezionato — contratto corrente
 
-Kinde è il provider di identità per la **nuova baseline fresh start**. Lo stack legacy Firebase descritto nelle sezioni successive documenta ancora il runtime attuale e i suoi invarianti, **non** impone di usare Firebase dopo il cutover. Nessun dato/credenziale/UID vecchio viene migrato. Il backend Worker verifica token Kinde con RS256/JWKS, `iss` e `aud` esatti, `azp` per il solo client autorizzato e scadenze brevi; un token valido **non** costituisce da solo prova di email verificata, consenso salute, o autorizzazione D1. L'identità Kinde (`iss` + `sub`) deve essere associata all'owner interno senza collisioni e verificata tramite flusso trusted prima che `session-issuer.mjs` crei una sessione. Nessun endpoint pubblico può emettere sessioni con UID forniti dal chiamante. Il candidato interno `cloudflare/auth/kinde-principal-provisioner.mjs` deriva un owner ID `k_` dal digest SHA-256 separato per dominio di `issuer + subject` **solo dopo** verifica OIDC con email verificata e nonce dal callback trusted. Il primo insert in D1 è idempotente e una read primaria valida lo stato; login successivi non riattivano owner disabled/deleted e non reimpostano `auth_epoch`. La derivazione non è una chiave cifrante né una prova di sessione. Il candidato HTTP `kinde-oauth-flow.mjs` già consuma state e PKCE monouso, verifica nonce e token firmati e crea la sessione D1; `kinde-http-worker.mjs` non è collegato al frontend o pubblicato. Il percorso con il provider Kinde reale, la gestione completa di revoca/email cambiata e il login browser restano da implementare o verificare. Revoca/erasure aggiornano il fence applicativo in D1 e impediscono subito accesso, indipendentemente dalla vita residua degli access token Kinde. Login, reset, signup e cambio password devono rispettare minimo 15 caratteri tramite workflow `NewPasswordProvided`, collaudato anche dopo reset. Google, emailVerified, guest→account, Safari/PWA, anti-replay, multi-tab/device e cancellazione account sono gate; audit dei test prima di ritirare i flussi Firebase.
+Kinde è il provider di identità per la **nuova baseline fresh start**. Lo stack legacy Firebase descritto nelle sezioni successive documenta i chiamanti e gli invarianti ancora da sostituire; il frontend pubblico monta GuestOnlyAuthProvider e l'ingresso Kinde identity-only, **non** impone di usare Firebase dopo il cutover. Nessun dato/credenziale/UID vecchio viene migrato. Il backend Worker verifica token Kinde con RS256/JWKS, `iss` e `aud` esatti, `azp` per il solo client autorizzato e scadenze brevi; un token valido **non** costituisce da solo prova di email verificata, consenso salute, o autorizzazione D1. L'identità Kinde (`iss` + `sub`) deve essere associata all'owner interno senza collisioni e verificata tramite flusso trusted prima che `session-issuer.mjs` crei una sessione. Nessun endpoint pubblico può emettere sessioni con UID forniti dal chiamante. Il provisioner interno `cloudflare/auth/kinde-principal-provisioner.mjs`, tramite `kinde-owner-id.mjs`, deriva un owner ID `k_` dal digest SHA-256 separato per dominio di `issuer + subject` **solo dopo** verifica OIDC con email verificata e nonce dal callback trusted. Il primo insert in D1 è idempotente e una read primaria valida lo stato; login successivi non riattivano owner disabled/deleted e non reimpostano `auth_epoch`. La derivazione non è una chiave cifrante né una prova di sessione. Il candidato HTTP `kinde-oauth-flow.mjs` già consuma state e PKCE monouso, verifica nonce e token firmati e crea la sessione D1; il Worker HTTP Kinde privato è collegato al gateway frontend limitato a OAuth/sessione identity-only, non a D1 fitness. Le prove manuali di email/password e Google/logout/rientro sono registrate in CF-03; reset, revoca/email cambiata, lifecycle completo e collaudo su dispositivi reali restano da verificare. Revoca/erasure aggiornano il fence applicativo in D1 e impediscono subito accesso, indipendentemente dalla vita residua degli access token Kinde. Login, reset, signup e cambio password devono rispettare minimo 15 caratteri tramite workflow `NewPasswordProvided`, collaudato anche dopo reset. Google, emailVerified, guest→account, Safari/PWA, anti-replay, multi-tab/device e cancellazione account sono gate; audit dei test prima di ritirare i flussi Firebase.
 
 Il candidato `acceptKindeCandidateInitialConsent()` raccoglie la decisione esplicita
 (maggiore età, Termini e dati salute), invia solo il formato Server-D1 corrente

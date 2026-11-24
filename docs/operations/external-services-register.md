@@ -1,5 +1,9 @@
 # Registro dei servizi esterni — stato corrente TheLogBook
 
+## Readback Cloudflare — 24/11/2026
+
+Zona attiva, Custom Domain `thelogbook.me` → `thelogbook-frontend`, Always Use HTTPS on, DNSSEC disabled. Frontend solo APP_ORIGIN/ASSETS/KINDE_HTTP, senza D1_API. API privata con DB, RECOVERY_DB, AUTH_GATE e CLOUD_ACCOUNT_KEK_V1 secret_text. Quattro Worker, zero schedule; entrambe le D1 isolate EU con read replication disabled. Ledger applicativo 0011, recovery 0004; migrazioni candidate 0012/0013 e 0005 non applicate. Nessuna lettura di valori segreti o dati account. Custodia KEK indipendente, Management Kinde, riautenticazione effettiva, quote e privacy restano da attestare. [Quadro operativo e prove exact-SHA](cloudflare-current-state.md). Le riletture precedenti sono storiche.
+
 ## Cloudflare CF-05 — KEK privata provisionata (readback 19/11/2026)
 
 **Worker API privato `thelogbook-api-isolated`, ACTIVE-ISOLATED:** il secret binding `CLOUD_ACCOUNT_KEK_V1` è presente con tipo Cloudflare `secret_text` ed è confermato anche dall'endpoint di elenco dei secret; nessun valore è stato richiesto o esposto. Binding del Worker letti direttamente: `API_ORIGIN`, `AUTH_GATE`, `CLOUD_ACCOUNT_KEK_V1`, `CONSENT_PRIVACY_VERSION`, `CONSENT_TERMS_VERSION`, `DB` e `RECOVERY_DB`. Il frontend `thelogbook-frontend` mostra soltanto `APP_ORIGIN`, `ASSETS`, `KINDE_HTTP` e **non** `D1_API`. Nessun cambiamento al provider effettuato durante questa ricognizione.
