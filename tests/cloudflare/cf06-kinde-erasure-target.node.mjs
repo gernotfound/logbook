@@ -5,11 +5,13 @@ import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import { consumeKindeDeletionAttempt, saveKindeDeletionAttempt } from '../../cloudflare/auth/kinde-deletion-attempts.mjs';
 import { deriveKindeOwnerId } from '../../cloudflare/auth/kinde-owner-id.mjs';
-import { recordKindeAccountErasureIntent, requestKindeAccountErasure } from '../../cloudflare/jobs/kinde-account-erasure-requests.mjs';
+import { acceptKindeAccountErasure, recordKindeAccountErasureIntent, requestKindeAccountErasure } from '../../cloudflare/jobs/kinde-account-erasure-requests.mjs';
 import { createKindeErasureManagement } from '../../cloudflare/jobs/kinde-erasure-management.mjs';
 import { createKindeErasureTargetCodec } from '../../cloudflare/jobs/kinde-erasure-target.mjs';
 import { createKindeErasureTargetWriter } from '../../cloudflare/jobs/kinde-erasure-target-store.mjs';
-import { applyCurrentD1Schema } from './current-d1-schema.mjs';
+import { requireIndependentAccountAccess } from '../../cloudflare/recovery/account-erasure-denials.mjs';
+import { requireIndependentOwnerFence } from '../../cloudflare/recovery/independent-owner-fence.mjs';
+import { applyCurrentD1RecoverySchema, applyCurrentD1Schema } from './current-d1-schema.mjs';
 
 const issuer = 'https://synthetic-tenant.kinde.com';
 const subject = 'kp_synthetic-deletion-reference';
@@ -281,6 +283,53 @@ test('an atomic erasure request rolls back on failure and identity-only owners g
   assert.equal(await requestKindeAccountErasure(db, intent, denied), true);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM health_erasure_jobs').get().n, 0);
   assert.equal(sqlite.prepare('SELECT status FROM auth_principals WHERE uid = ?').get(attempt.uid).status, 'disabled');
+});
+
+test('the independent denial survives application failure while the primary still shows active access', async (t) => {
+  const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
+  const registry = new DatabaseSync(':memory:');
+  t.after(() => registry.close());
+  registry.exec('PRAGMA foreign_keys = ON');
+  applyCurrentD1RecoverySchema(registry);
+  const registryDb = d1For(registry);
+  const otherUid = await deriveKindeOwnerId(issuer, 'kp_independent-other');
+  const proof = deletionRequestProof(attempt);
+  await write(db, identity);
+  const intent = await recordKindeAccountErasureIntent(db, proof);
+  assert.throws(() => acceptKindeAccountErasure(db, db, intent), /kinde-erasure-request-unavailable/);
+  await assert.rejects(acceptKindeAccountErasure(db, registryDb, intent), /kinde-erasure-request-unavailable/);
+  assert.equal(registry.prepare('SELECT COUNT(*) AS n FROM recovery_account_erasure_denials').get().n, 0);
+  await assert.rejects(requireIndependentAccountAccess(registryDb, identity.uid), /independent-recovery-fence-unavailable/);
+
+  registry.exec("UPDATE recovery_control SET mode='open', generation=2");
+  const enroll = registry.prepare("INSERT INTO recovery_owner_fences VALUES (?, 'pending', 0, 1, 0, 1)");
+  const activate = registry.prepare("UPDATE recovery_owner_fences SET status='active', consent_revision=1, change_seq=2 WHERE uid=?");
+  for (const uid of [identity.uid, otherUid]) { enroll.run(uid); activate.run(uid); }
+  const originalScope = { uid: identity.uid, status: 'active', consentRevision: 1, fenceEpoch: 1, erasedBeforeRevision: 0 };
+  await requireIndependentAccountAccess(registryDb, identity.uid);
+  assert.equal(await requireIndependentOwnerFence(registryDb, originalScope), true);
+  sqlite.prepare("INSERT INTO sync_subjects(uid,status,consent_revision,fence_epoch) VALUES (?,'active',1,1)").run(identity.uid);
+  sqlite.exec(`CREATE TRIGGER pause_application_acceptance BEFORE UPDATE ON auth_principals
+    WHEN NEW.status = 'disabled' BEGIN SELECT RAISE(ABORT, 'synthetic application outage'); END`);
+  const unknownRegistryAck = d1For(registry, { afterWrite() { throw new Error('synthetic registry ACK lost'); } });
+  await assert.rejects(acceptKindeAccountErasure(db, unknownRegistryAck, intent), /kinde-erasure-request-unavailable/);
+  const denied = registry.prepare('SELECT * FROM recovery_account_erasure_denials').get();
+  assert.equal(denied.uid, identity.uid);
+  assert.notEqual(denied.intent_digest, intent.receiptHash);
+  assert.equal(sqlite.prepare('SELECT status FROM auth_principals WHERE uid=?').get(identity.uid).status, 'active');
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_requests').get().n, 0);
+  await assert.rejects(requireIndependentAccountAccess(registryDb, identity.uid), /independent-recovery-fence-unavailable/);
+  await assert.rejects(requireIndependentOwnerFence(registryDb, originalScope), /independent-recovery-fence-unavailable/);
+  await requireIndependentAccountAccess(registryDb, otherUid);
+  assert.throws(() => registry.exec('DELETE FROM recovery_account_erasure_denials'), /account-erasure-denial-immutable/);
+  assert.equal(await acceptKindeAccountErasure(db, registryDb, { ...intent, receiptHash: '8'.repeat(64) }), false);
+
+  sqlite.exec('DROP TRIGGER pause_application_acceptance');
+  sqlite.prepare('UPDATE auth_principals SET auth_epoch=2 WHERE uid=?').run(identity.uid);
+  assert.equal(await acceptKindeAccountErasure(db, registryDb, intent), true);
+  assert.equal(sqlite.prepare('SELECT status FROM sync_subjects WHERE uid=?').get(identity.uid).status, 'withdrawn');
+  assert.equal(sqlite.prepare('SELECT status FROM health_erasure_jobs WHERE uid=?').get(identity.uid).status, 'pending');
+  assert.equal(registry.prepare('SELECT COUNT(*) AS n FROM recovery_account_erasure_denials').get().n, 1);
 });
 
 test('requests full profile erasure only after proof for the exact linked owner', async () => {

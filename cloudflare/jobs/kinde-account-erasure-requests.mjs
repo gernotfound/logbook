@@ -1,4 +1,5 @@
 import { D1_NOW_MS } from '../sql/d1-time.mjs';
+import { armIndependentAccountErasureDenial } from '../recovery/account-erasure-denials.mjs';
 
 const UID = /^k_[A-Za-z0-9_-]{43}$/;
 const HASH = /^[a-f0-9]{64}$/;
@@ -113,4 +114,17 @@ export async function requestKindeAccountErasure(db, intent, proveIndependentDen
     // Do not expose database errors or treat an unavailable primary as absent.
   }
   throw new Error('kinde-erasure-request-unavailable');
+}
+
+/**
+ * Cross-D1 transition for a durable, reauthenticated decision. Each step is
+ * idempotent and remains denied if the following database is unavailable.
+ * @param {Parameters<typeof requestKindeAccountErasure>[0]} db
+ * @param {Parameters<typeof armIndependentAccountErasureDenial>[0]} recoveryDb
+ * @param {Parameters<typeof requestKindeAccountErasure>[1]} intent
+ */
+export function acceptKindeAccountErasure(db, recoveryDb, intent) {
+  if (!db || !recoveryDb || db === recoveryDb) throw new Error('kinde-erasure-request-unavailable');
+  return requestKindeAccountErasure(db, intent, current =>
+    armIndependentAccountErasureDenial(recoveryDb, current));
 }
