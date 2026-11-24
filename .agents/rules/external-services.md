@@ -5,7 +5,7 @@
 
 Questa regola disciplina i sistemi esterni la cui configurazione effettiva non è rappresentata integralmente dal repository Git.
 
-Il registro decisionale stabile e leggibile anche fuori dal codice è `docs/operations/external-services-register.md`.
+Il registro decisionale stabile e leggibile anche fuori dal codice è `docs/operations/external-services-register.md`. Per il checkpoint effettivo di schema, binding, schedule e deploy consultare il [quadro operativo Cloudflare](../../docs/operations/cloudflare-current-state.md); verificare di nuovo i provider. Un deploy Worker non applica automaticamente migrazioni D1: usare soltanto i workflow manuali isolati con ledger, hash SQL, gate exact-SHA e preflight, senza assumere autorizzazione a scritture reali.
 
 **Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
