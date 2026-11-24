@@ -1,5 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { createHash } from 'node:crypto';
+import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import { deriveKindeOwnerId } from '../../cloudflare/auth/kinde-owner-id.mjs';
@@ -111,6 +112,32 @@ test('stores one recoverable encrypted target for repeated and concurrent verifi
     /kinde-erasure-target-fenced/);
   assert.throws(() => sqlite.exec('UPDATE kinde_erasure_targets SET iv=iv'), /kinde-erasure-target-immutable/);
   assert.throws(() => sqlite.exec('DELETE FROM kinde_erasure_targets'), /kinde-erasure-target-retained/);
+});
+
+test('the candidate schema adds an empty target table to populated 0011 without altering identities', async (t) => {
+  const sqlite = new DatabaseSync(':memory:');
+  t.after(() => sqlite.close());
+  sqlite.exec('PRAGMA foreign_keys = ON');
+  const migrations = new URL('../../cloudflare/api/migrations/', import.meta.url);
+  const beforeTargets = readdirSync(migrations).filter(name => /^00(0[1-9]|1[01])_.*\.sql$/.test(name)).sort();
+  assert.equal(beforeTargets.length, 11);
+  for (const name of beforeTargets) sqlite.exec(readFileSync(new URL(name, migrations), 'utf8'));
+  const uid = await deriveKindeOwnerId(issuer, subject);
+  const issued = Date.now() - 1000;
+  sqlite.prepare("INSERT INTO auth_principals VALUES (?, 'active', ?, 1)").run(uid, issued);
+  sqlite.prepare('INSERT INTO auth_sessions VALUES (?, ?, 1, ?, ?, ?, ?, NULL)')
+    .run('a'.repeat(64), uid, 'b'.repeat(64), issued, issued + 30_000, issued + 60_000);
+  const principals = sqlite.prepare('SELECT * FROM auth_principals');
+  const sessions = sqlite.prepare('SELECT * FROM auth_sessions');
+  const oldPrincipals = principals.all();
+  const oldSessions = sessions.all();
+
+  sqlite.exec(readFileSync(new URL('0012_kinde_erasure_targets.sql', migrations), 'utf8'));
+
+  assert.deepEqual(principals.all(), oldPrincipals);
+  assert.deepEqual(sessions.all(), oldSessions);
+  assert.deepEqual(sqlite.prepare('SELECT * FROM kinde_erasure_targets').all(), []);
+  assert.deepEqual(sqlite.prepare('PRAGMA foreign_key_check').all(), []);
 });
 
 test('requires a new primary read to recover a lost insertion response and fences an epoch change', async (t) => {
