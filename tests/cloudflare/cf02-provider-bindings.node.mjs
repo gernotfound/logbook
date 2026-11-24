@@ -117,12 +117,13 @@ void test('private Worker deployment preflights and rechecks the KEK after exact
   const preflight = yml.indexOf(verify);
   const mainLease = yml.indexOf('name: Verify main lease again immediately before provider writes');
   const deployAuth = yml.indexOf('name: Deploy private auth gate');
+  const secondLease = yml.indexOf('name: Verify main lease before second provider write');
   const deployApi = yml.indexOf('name: Deploy private API service binding');
   const postDeploy = yml.lastIndexOf(verify);
   assert.equal(yml.split(verify).length - 1, 2);
-  assert.ok(preflight > yml.indexOf('Wait for verified release gate')
+  assert.ok(preflight > yml.indexOf('Verify completed exact-main release and decide deployment relevance')
     && preflight < mainLease && mainLease < deployAuth
-    && deployAuth < deployApi && deployApi < postDeploy);
+    && deployAuth < secondLease && secondLease < deployApi && deployApi < postDeploy);
   assert.doesNotMatch(yml, /secret put|CLOUD_ACCOUNT_KEK_V1\s*:/);
 });
 

@@ -4,6 +4,8 @@
 
 ## Ultima integrazione verificata
 
+- #1407 ha integrato su `main` v2.670.0 (`46725d7d8b3bb4bf3b640052ced6eb05821558ab`) l'orchestrazione post-verifica dei Worker privati e il checkout CodeQL main a profondità 1. [CI candidata](https://github.com/gernotfound/logbook/actions/runs/45447265920) riuscita; attestazioni post-merge e prestazioni effettive da rileggere separatamente. Nessuna migrazione SQL o nuova route autorizzata da questo incremento.
+
 - [CI PR #1405](https://github.com/gernotfound/logbook/actions/runs/45440872427), [gate main e CodeQL](https://github.com/gernotfound/logbook/actions/runs/45441648072), [Static Assets e smoke byte-esatto](https://github.com/gernotfound/logbook/actions/runs/45443109699), [API D1 privata](https://github.com/gernotfound/logbook/actions/runs/45441648108), [Kinde privato](https://github.com/gernotfound/logbook/actions/runs/45441648166) e [riconciliazione Firestore legacy](https://github.com/gernotfound/logbook/actions/runs/45443109842): tutti success sullo SHA pertinente. Un workflow privato/Firestore verde non prova una scrittura provider se i passi di deploy erano skipped.
 - #1386 ha integrato i diff audit FIX/TST; le checklist #1322/#1327 non certificano per questo tutti i file. Gli incrementi CF successivi #1387–#1405 sono antenati del checkpoint.
 - #1391/#1393/#1397/#1399: clock primario D1, prova temporale consenso/sessione e scadenza locale conservativa. #1403: finalizzazione sanitaria vincolata al lease esatto.
