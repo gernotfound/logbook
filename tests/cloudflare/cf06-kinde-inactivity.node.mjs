@@ -103,11 +103,12 @@ void test('the dry run finds only observed owners at their exact due time and on
   await recordKindeForegroundActivity(db, claims);
   const dueAt = earliestKindeInactivityErasureAt(VISIT);
   advance(dueAt - VISIT - 1);
-  assert.deepEqual(await readKindeInactivityCandidates(db), []);
+  assert.deepEqual((await readKindeInactivityCandidates(db)).candidates, []);
   sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=2");
-  assert.deepEqual(await readKindeInactivityCandidates(db), []);
+  assert.deepEqual((await readKindeInactivityCandidates(db)).candidates, []);
   advance(1);
-  const valid = await readKindeInactivityCandidates(db);
+  const { candidates: valid, nextCursor } = await readKindeInactivityCandidates(db);
+  assert.equal(nextCursor, null);
   assert.deepEqual(valid, [{
     uid: UID, authEpoch: 1, generation: 2, lastRecordedAtMs: VISIT, eligibleAtMs: dueAt,
   }]);
@@ -123,18 +124,18 @@ void test('a fresh online observation or a pause invalidates an already selected
   const dueAt = earliestKindeInactivityErasureAt(VISIT);
   advance(dueAt - VISIT);
   sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=2");
-  const [first] = await readKindeInactivityCandidates(db);
+  const { candidates: [first] } = await readKindeInactivityCandidates(db);
   sqlite.exec("UPDATE kinde_inactivity_control SET mode='paused', generation=3");
   assert.equal(await isKindeInactivityCandidateCurrent(db, first), false);
   sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=4");
   assert.equal(await isKindeInactivityCandidateCurrent(db, first), false);
-  const [second] = await readKindeInactivityCandidates(db);
+  const { candidates: [second] } = await readKindeInactivityCandidates(db);
   const newHash = 'f'.repeat(64);
   sqlite.prepare('INSERT INTO auth_sessions VALUES (?, ?, 1, ?, ?, ?, ?, NULL)')
     .run(newHash, UID, 'd'.repeat(64), dueAt, dueAt + IDLE_TTL, dueAt + IDLE_TTL);
   assert.deepEqual(await recordKindeForegroundActivity(db, { ...claims, sessionHash: newHash }), { outcome: 'recorded' });
   assert.equal(await isKindeInactivityCandidateCurrent(db, second), false);
-  assert.deepEqual(await readKindeInactivityCandidates(db), []);
+  assert.deepEqual((await readKindeInactivityCandidates(db)).candidates, []);
   assert.equal(sqlite.prepare('SELECT status FROM auth_principals WHERE uid=?').get(UID).status, 'active');
 });
 
@@ -155,7 +156,50 @@ void test('a due page reads at most sixteen recorded owners without changing the
   advance(earliestKindeInactivityErasureAt(VISIT) - VISIT);
   sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=2");
   const page = await readKindeInactivityCandidates(db);
-  assert.deepEqual(page.map(item => item.uid), uids.slice(0, 16));
+  assert.deepEqual(page.candidates.map(item => item.uid), uids.slice(0, 16));
+  assert.deepEqual(page.nextCursor, { lastRecordedAtMs: VISIT, uid: uids[15] });
+  const tail = await readKindeInactivityCandidates(db, page.nextCursor);
+  assert.deepEqual(tail.candidates.map(item => item.uid), uids.slice(16));
+  assert.equal(tail.nextCursor, null);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_activity').get().n, 20);
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM auth_principals WHERE status != 'active'").get().n, 0);
+});
+
+void test('an empty eligible page still advances past a leap-day anniversary inversion', async (t) => {
+  const { db, sqlite, advance } = fixture(t);
+  const older = Date.parse('2028-02-28T23:55:00.000Z');
+  const newer = Date.parse('2028-02-29T00:00:00.000Z');
+  const now = Date.parse('2029-02-28T12:00:00.000Z');
+  advance(older - VISIT);
+  const principal = sqlite.prepare("INSERT INTO auth_principals VALUES (?, 'active', ?, 1)");
+  const session = sqlite.prepare('INSERT INTO auth_sessions VALUES (?, ?, 1, ?, ?, ?, ?, NULL)');
+  const uids = [];
+  for (let i = 0; i < 16; i += 1) {
+    const uid = 'k_' + i.toString(16).padStart(43, '0');
+    const sessionHash = i.toString(16).padStart(64, '0');
+    principal.run(uid, older - 1000);
+    session.run(sessionHash, uid, 'd'.repeat(64), older - 1000, older + IDLE_TTL, older + IDLE_TTL);
+    assert.deepEqual(await recordKindeForegroundActivity(db, { ...claims, uid, sessionHash }), { outcome: 'recorded' });
+    uids.push(uid);
+  }
+  advance(newer - older);
+  const sessionHash = 'e'.repeat(64);
+  session.run(sessionHash, OTHER_UID, 'd'.repeat(64), newer - 1000, newer + IDLE_TTL, newer + IDLE_TTL);
+  assert.deepEqual(await recordKindeForegroundActivity(db, { ...claims, uid: OTHER_UID, sessionHash }), { outcome: 'recorded' });
+  advance(now - newer);
+  sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=2");
+
+  const first = await readKindeInactivityCandidates(db);
+  assert.deepEqual(first.candidates, []);
+  assert.deepEqual(first.nextCursor, { lastRecordedAtMs: older, uid: uids[15] });
+  const second = await readKindeInactivityCandidates(db, first.nextCursor);
+  assert.deepEqual(second, {
+    candidates: [{ uid: OTHER_UID, authEpoch: 1, generation: 2, lastRecordedAtMs: newer,
+      eligibleAtMs: Date.parse('2029-02-28T00:10:00.000Z') }],
+    nextCursor: null,
+  });
+  assert.equal(await isKindeInactivityCandidateCurrent(db, second.candidates[0]), true);
+  await assert.rejects(readKindeInactivityCandidates(db, { lastRecordedAtMs: 0, uid: OTHER_UID }),
+    /invalid-kinde-inactivity-cursor/);
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM auth_principals WHERE status != 'active'").get().n, 0);
 });

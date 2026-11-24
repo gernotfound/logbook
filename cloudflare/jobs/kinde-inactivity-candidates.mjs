@@ -13,15 +13,25 @@ const ELIGIBLE_SOURCE = `
 /**
  * Bounded dry-run candidates from recorded foreground activity. Each row
  * includes the account and pause generations to revalidate in the enqueue
- * transaction. Reading this page never queues or disables an account.
+ * transaction. Advance by the last scanned row, not the last eligible row:
+ * UTC anniversaries around leap day need not preserve marker order.
+ * Reading this page never queues or disables an account.
  * @param {{withSession: (policy: 'first-primary') => any}} db
+ * @param {{lastRecordedAtMs: number, uid: string} | null} [after]
  */
-export async function readKindeInactivityCandidates(db) {
+export async function readKindeInactivityCandidates(db, after = null) {
+  if (after !== null && (!Number.isSafeInteger(after.lastRecordedAtMs)
+    || after.lastRecordedAtMs <= 0 || typeof after.uid !== 'string' || !UID.test(after.uid))) {
+    throw new TypeError('invalid-kinde-inactivity-cursor');
+  }
+  const cursorPredicate = after === null ? '' : 'AND (a.last_recorded_at_ms, a.uid) > (?, ?)';
+  const cursorBindings = after === null ? [] : [after.lastRecordedAtMs, after.uid];
   const page = await db.withSession('first-primary').prepare(`
     SELECT a.uid, p.auth_epoch, a.last_recorded_at_ms, control.generation, ${D1_NOW_MS} AS observed_at_ms
     ${ELIGIBLE_SOURCE} AND a.last_recorded_at_ms <= ${D1_NOW_MS} - ?
+    ${cursorPredicate}
     ORDER BY a.last_recorded_at_ms, a.uid LIMIT ${MAX_PAGE}
-  `).bind(DAYS_365_MS).all();
+  `).bind(DAYS_365_MS, ...cursorBindings).all();
   if (page?.success !== true || !Array.isArray(page.results) || page.results.length > MAX_PAGE) {
     throw new Error('kinde-inactivity-candidates-unavailable');
   }
@@ -30,7 +40,9 @@ export async function readKindeInactivityCandidates(db) {
     const eligibleAtMs = earliestKindeInactivityErasureAt(row.last_recorded_at_ms);
     if (!Number.isSafeInteger(row.observed_at_ms) || row.observed_at_ms <= 0
       || !Number.isSafeInteger(row.auth_epoch) || row.auth_epoch < 1
-      || !Number.isSafeInteger(row.generation) || row.generation < 1 || !UID.test(row.uid)) {
+      || !Number.isSafeInteger(row.generation) || row.generation < 1
+      || !Number.isSafeInteger(row.last_recorded_at_ms) || row.last_recorded_at_ms <= 0
+      || typeof row.uid !== 'string' || !UID.test(row.uid)) {
       throw new Error('kinde-inactivity-candidates-unavailable');
     }
     if (eligibleAtMs !== null && eligibleAtMs <= row.observed_at_ms) {
@@ -38,14 +50,18 @@ export async function readKindeInactivityCandidates(db) {
         lastRecordedAtMs: row.last_recorded_at_ms, eligibleAtMs });
     }
   }
-  return candidates;
+  const last = page.results.at(-1);
+  const nextCursor = page.results.length === MAX_PAGE
+    ? { lastRecordedAtMs: last.last_recorded_at_ms, uid: last.uid }
+    : null;
+  return { candidates, nextCursor };
 }
 
 /**
  * A dry-run read to validate a selection. The future erasure write must
  * repeat these predicates in its own SQL statement before accepting intent.
  * @param {Parameters<typeof readKindeInactivityCandidates>[0]} db
- * @param {Awaited<ReturnType<typeof readKindeInactivityCandidates>>[number]} candidate
+ * @param {Awaited<ReturnType<typeof readKindeInactivityCandidates>>['candidates'][number]} candidate
  */
 export async function isKindeInactivityCandidateCurrent(db, candidate) {
   const { uid, authEpoch, generation, lastRecordedAtMs, eligibleAtMs } = candidate;
