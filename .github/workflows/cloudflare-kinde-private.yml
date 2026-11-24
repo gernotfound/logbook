@@ -1,21 +1,13 @@
 name: Cloudflare Kinde HTTP Worker (private, main-only)
 
 on:
-  push:
+  workflow_run: # zizmor: ignore[dangerous-triggers] Exact current main and trusted completed push gate are verified before provider access.
+    workflows:
+      - Milestone Verification
+    types:
+      - completed
     branches:
       - main
-    paths:
-      - .github/workflows/cloudflare-kinde-private.yml
-      - 'cloudflare/auth/**'
-      - 'cloudflare/sql/**'
-      - cloudflare/api/logout-worker.mjs
-      - scripts/verify-cloudflare-kinde-private-provider.mjs
-      - 'cloudflare/http/**'
-      - package.json
-      - package-lock.json
-      - scripts/cloudflare-private-deploy-plan.mjs
-      - scripts/check-cloudflare-api-isolation.mjs
-      - scripts/check-install-scripts.mjs
   workflow_dispatch:
 
 permissions:
@@ -24,62 +16,55 @@ permissions:
 
 concurrency:
   group: cloudflare-isolated-api
-  cancel-in-progress: false
+  queue: max
 
 jobs:
   private-kinde-http:
     name: Compile, deploy and attest Kinde HTTP Worker without public route
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.ref == 'refs/heads/main' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.event == 'push')
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 20
     env:
-      EXPECTED_SHA: ${{ github.sha }}
+      EXPECTED_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout exact main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ env.EXPECTED_SHA }}
-          fetch-depth: 0
+          fetch-depth: 2
           persist-credentials: false
+      - name: Verify lease on exact current main (no credentials)
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${EXPECTED_SHA}" =~ ^[a-f0-9]{40}$ ]] || exit 1
+          test "${GITHUB_SHA}" = "${EXPECTED_SHA}"
+          test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}"
+          test "$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')" = "${EXPECTED_SHA}"
       - name: Set up pinned Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '24'
           package-manager-cache: false
-      - name: Decide private Kinde deployment relevance
+      - name: Verify completed exact-main release and decide deployment relevance
         id: relevance
         env:
-          TRIGGER_EVENT: ${{ github.event_name }}
-          PUSH_BEFORE_SHA: ${{ github.event.before }}
-        run: |
-          if [ "${TRIGGER_EVENT}" = "workflow_dispatch" ]; then
-            echo "required=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "required=$(node scripts/cloudflare-private-deploy-plan.mjs .github/workflows/cloudflare-kinde-private.yml)" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Verify current main and its complete trusted release gate
-        if: steps.relevance.outputs.required == 'true'
+          GATE_RUN_ID: ${{ github.event.workflow_run.id }}
+          GATE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
         shell: bash
         run: |
           set -euo pipefail
-          [[ "${EXPECTED_SHA}" =~ ^[a-f0-9]{40}$ ]] || exit 1
-          test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}"
-          test "$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')" = "${EXPECTED_SHA}"
-          verified=false
-          # A full exact-main release can finish after the 3-minute diagnostic
-          # window. Wait boundedly, but never deploy after a failed gate.
-          for attempt in $(seq 1 40); do
-            gate="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/verification.yml/runs?event=push&head_sha=${EXPECTED_SHA}&per_page=40" \
-              --jq ".workflow_runs | map(select(.head_sha == \"${EXPECTED_SHA}\" and .event == \"push\")) | first | .conclusion // \"pending\"")"
-            case "${gate}" in
-              success) verified=true; break ;;
-              failure|cancelled|timed_out|action_required) echo 'Verified main release gate failed'; exit 1 ;;
-            esac
-            if [ "${attempt}" != 40 ]; then sleep 15; fi
-          done
-          test "${verified}" = true
-          test "$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')" = "${EXPECTED_SHA}"
+          required="$(node scripts/cloudflare-private-deploy-plan.mjs .github/workflows/cloudflare-kinde-private.yml)"
+          [[ "${required}" == true || "${required}" == false ]]
+          echo "required=${required}" >> "$GITHUB_OUTPUT"
       - name: Test private configuration and provider verifier
         if: steps.relevance.outputs.required == 'true'
         shell: bash
@@ -95,6 +80,12 @@ jobs:
         run: |
           set -euo pipefail
           npx --yes wrangler@4.159.0 deploy --dry-run --config cloudflare/auth/wrangler.kinde.isolated.jsonc
+      - name: Read back complete private OAuth bindings before deployment
+        if: steps.relevance.outputs.required == 'true'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node scripts/verify-cloudflare-kinde-private-provider.mjs --require-configured-oauth
       - name: Confirm exact-main lease immediately before provider write
         if: steps.relevance.outputs.required == 'true'
         shell: bash
@@ -102,12 +93,6 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}"
           test "$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')" = "${EXPECTED_SHA}"
-      - name: Read back complete private OAuth bindings before deployment
-        if: steps.relevance.outputs.required == 'true'
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: node scripts/verify-cloudflare-kinde-private-provider.mjs --require-configured-oauth
       - name: Deploy only the unrouted Kinde HTTP Worker
         if: steps.relevance.outputs.required == 'true'
         uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4
