@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, type ReactNode } from 'react';
 import { CheckCircle2, Trash2, Save, Search } from 'lucide-react';
 import type { useWorkoutSession } from '../../hooks/useWorkoutSession';
 import { useWakeLock } from '../../hooks/useWakeLock';
@@ -39,10 +39,11 @@ type WorkoutSessionEditorProps = ActiveWorkoutSessionProps & {
         | 'manualDuration' | 'setManualDuration' | 'pains' | 'setPains' | 'togglePain'>;
     isCurrentTarget: (workoutId: string, index: number, exerciseId: string | undefined) => boolean;
     onClockAnomaly?: () => void;
+    restTimer?: ReactNode;
 };
 
 export function WorkoutSessionEditor({
-    session, historyEditor, isCurrentTarget, onClockAnomaly, onNavigateToHistory, onRequestEnd, isActive = true,
+    session, historyEditor, isCurrentTarget, onClockAnomaly, restTimer, onNavigateToHistory, onRequestEnd, isActive = true,
 }: WorkoutSessionEditorProps) {
     const {
         activeWorkout, library, history,
@@ -189,7 +190,7 @@ export function WorkoutSessionEditor({
         <BufferedWorkoutScope.Provider key={String(activeWorkout.id)} value={String(activeWorkout.id)}>
             <div className="training-sub-view active workout-session">
             <SessionHeader
-                isActive={isActive}
+                restTimer={restTimer}
                 isEditingHistory={activeWorkout.isEditingHistory}
                 routineName={activeWorkout.routineName}
                 date={activeWorkout.date}

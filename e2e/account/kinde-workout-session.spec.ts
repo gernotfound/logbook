@@ -28,6 +28,8 @@ test('starts a Kinde routine, restores series and review from the device, and co
 
         const finish = workout.getByRole('button', { name: 'Termina allenamento' });
         await expect(finish).toBeVisible();
+        await expect(workout.getByText('Durata allenamento', { exact: true })).toBeVisible();
+        await expect(workout.getByRole('button', { name: 'Avvia recupero' })).toHaveCount(0);
         await expect.poll(receipts).toBe(before + 1);
         const exercise = workout.getByRole('button', { name: /Panca sintetica/ });
         await exercise.click();
