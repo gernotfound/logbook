@@ -5,6 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import { consumeKindeDeletionAttempt, saveKindeDeletionAttempt } from '../../cloudflare/auth/kinde-deletion-attempts.mjs';
 import { deriveKindeOwnerId } from '../../cloudflare/auth/kinde-owner-id.mjs';
+import { requestKindeAccountErasure } from '../../cloudflare/jobs/kinde-account-erasure-requests.mjs';
 import { createKindeErasureManagement } from '../../cloudflare/jobs/kinde-erasure-management.mjs';
 import { createKindeErasureTargetCodec } from '../../cloudflare/jobs/kinde-erasure-target.mjs';
 import { createKindeErasureTargetWriter } from '../../cloudflare/jobs/kinde-erasure-target-store.mjs';
@@ -50,7 +51,7 @@ async function erasureStoreFixture(t) {
 }
 
 async function deletionAttemptFixture(t) {
-  const { sqlite, identity } = await erasureStoreFixture(t);
+  const { sqlite, identity, write } = await erasureStoreFixture(t);
   const issuedAt = Date.now() - 1000;
   const sessionHash = 'b'.repeat(64);
   const alternateSession = 'a'.repeat(64);
@@ -62,7 +63,15 @@ async function deletionAttemptFixture(t) {
     uid: identity.uid, authEpoch: 1, sessionHash, stateHash: 'd'.repeat(64), browserHash: 'e'.repeat(64),
     verifier: Buffer.alloc(32, 10).toString('base64url'), nonce: Buffer.alloc(32, 11).toString('base64url'),
   };
-  return { sqlite, db: d1For(sqlite), attempt, alternateSession };
+  return { sqlite, db: d1For(sqlite), attempt, alternateSession, identity, write };
+}
+
+function deletionRequestProof(attempt) {
+  const { uid, authEpoch, sessionHash } = attempt;
+  return {
+    uid, authEpoch, sessionHash, receiptHash: '9'.repeat(64),
+    authenticatedAtMs: Math.floor(Date.now() / 1000) * 1000 - 1000,
+  };
 }
 
 test('derives the same public owner identifier as the trusted callback contract', async () => {
@@ -132,7 +141,7 @@ test('stores one recoverable encrypted target for repeated and concurrent verifi
   assert.throws(() => sqlite.exec('DELETE FROM kinde_erasure_targets'), /kinde-erasure-target-retained/);
 });
 
-test('the candidate schema adds an empty target table to populated 0011 without altering identities', async (t) => {
+test('the candidate schema adds empty erasure tables to populated 0011 without altering identities', async (t) => {
   const sqlite = new DatabaseSync(':memory:');
   t.after(() => sqlite.close());
   sqlite.exec('PRAGMA foreign_keys = ON');
@@ -150,11 +159,13 @@ test('the candidate schema adds an empty target table to populated 0011 without 
   const oldPrincipals = principals.all();
   const oldSessions = sessions.all();
 
-  sqlite.exec(readFileSync(new URL('0012_kinde_erasure_targets.sql', migrations), 'utf8'));
+  sqlite.exec(readFileSync(new URL('0012_kinde_account_erasure.sql', migrations), 'utf8'));
 
   assert.deepEqual(principals.all(), oldPrincipals);
   assert.deepEqual(sessions.all(), oldSessions);
   assert.deepEqual(sqlite.prepare('SELECT * FROM kinde_erasure_targets').all(), []);
+  assert.deepEqual(sqlite.prepare('SELECT * FROM kinde_deletion_oauth_attempts').all(), []);
+  assert.deepEqual(sqlite.prepare('SELECT * FROM kinde_account_erasure_requests').all(), []);
   assert.deepEqual(sqlite.prepare('PRAGMA foreign_key_check').all(), []);
 });
 
@@ -210,6 +221,57 @@ test('rejects expired and revoked deletion proof and keeps ordinary login isolat
   assert.equal(await consumeKindeDeletionAttempt(db, attempt), null);
   assert.equal(await saveKindeDeletionAttempt(db, attempt), false);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts').get().n, 0);
+});
+
+test('one reauthenticated request fences the owner and queues active health erasure even after lost acknowledgement', async (t) => {
+  const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
+  const proof = deletionRequestProof(attempt);
+  const denied = async (uid, epoch) => uid === proof.uid && epoch === proof.authEpoch;
+  await write(db, identity);
+  const foreignUid = await deriveKindeOwnerId(issuer, 'kp_other-owner');
+  sqlite.prepare("INSERT INTO auth_principals VALUES (?, 'active', ?, 1)").run(foreignUid, Date.now() - 1000);
+  sqlite.prepare("INSERT INTO sync_subjects(uid,status,consent_revision,fence_epoch) VALUES (?,'active',1,1)").run(attempt.uid);
+  assert.equal(await requestKindeAccountErasure(db, proof, async () => false), false);
+  assert.equal(await requestKindeAccountErasure(db, { ...proof, authenticatedAtMs: proof.authenticatedAtMs - 300_000 }, denied), false);
+  assert.equal(await requestKindeAccountErasure(db, { ...proof, sessionHash: '2'.repeat(64) }, denied), false);
+  sqlite.exec(`CREATE TRIGGER synthetic_late_failure BEFORE UPDATE ON auth_principals
+    WHEN NEW.status = 'disabled' BEGIN SELECT RAISE(ABORT, 'synthetic late failure'); END`);
+  await assert.rejects(requestKindeAccountErasure(db, proof, denied), /kinde-erasure-request-unavailable/);
+  assert.equal(sqlite.prepare('SELECT status FROM sync_subjects WHERE uid=?').get(attempt.uid).status, 'active');
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM health_erasure_jobs').get().n, 0);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_requests').get().n, 0);
+  sqlite.exec('DROP TRIGGER synthetic_late_failure');
+
+  const lostAck = d1For(sqlite, { afterWrite() { throw new Error('synthetic request ACK lost'); } });
+  assert.equal(await requestKindeAccountErasure(lostAck, proof, denied), true);
+  assert.equal(await requestKindeAccountErasure(db, proof, denied), true);
+  assert.equal(await requestKindeAccountErasure(db, { ...proof, receiptHash: '8'.repeat(64) }, denied), false);
+  const principals = sqlite.prepare('SELECT status, auth_epoch FROM auth_principals WHERE uid=?');
+  assert.deepEqual({ ...principals.get(attempt.uid) }, { status: 'disabled', auth_epoch: 2 });
+  assert.deepEqual({ ...principals.get(foreignUid) }, { status: 'active', auth_epoch: 1 });
+  assert.equal(sqlite.prepare('SELECT status FROM sync_subjects WHERE uid=?').get(attempt.uid).status, 'withdrawn');
+  assert.equal(sqlite.prepare('SELECT status FROM health_erasure_jobs WHERE uid=?').get(attempt.uid).status, 'pending');
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM health_erasure_jobs').get().n, 1);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_requests').get().n, 1);
+  assert.throws(() => sqlite.prepare("UPDATE auth_principals SET status='active', auth_epoch=3 WHERE uid=?").run(attempt.uid),
+    /kinde-account-erasure-request-retained/);
+});
+
+test('an atomic erasure request rolls back on failure and identity-only owners get no synthetic health job', async (t) => {
+  const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
+  const proof = deletionRequestProof(attempt);
+  const denied = async () => true;
+  assert.equal(await requestKindeAccountErasure(db, proof, denied), false, 'an unrecorded Kinde target cannot queue');
+  await write(db, identity);
+  sqlite.exec(`CREATE TRIGGER synthetic_failure BEFORE UPDATE ON auth_principals
+    WHEN NEW.status = 'disabled' BEGIN SELECT RAISE(ABORT, 'synthetic failure'); END`);
+  await assert.rejects(requestKindeAccountErasure(db, proof, denied), /kinde-erasure-request-unavailable/);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_requests').get().n, 0);
+  assert.equal(sqlite.prepare('SELECT status FROM auth_principals WHERE uid = ?').get(attempt.uid).status, 'active');
+  sqlite.exec('DROP TRIGGER synthetic_failure');
+  assert.equal(await requestKindeAccountErasure(db, proof, denied), true);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM health_erasure_jobs').get().n, 0);
+  assert.equal(sqlite.prepare('SELECT status FROM auth_principals WHERE uid = ?').get(attempt.uid).status, 'disabled');
 });
 
 test('requests full profile erasure only after proof for the exact linked owner', async () => {
