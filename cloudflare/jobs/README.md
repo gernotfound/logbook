@@ -21,7 +21,10 @@ cron, account deletion o inattività.
   un tick già avviato; i job e i lease restano persistiti per il recupero.
   Questo è un arresto del **processore**, distinto dal controllo candidato
   dell'inattività introdotto in 0013 (paused per default, generazione).
-  La selezione dry-run non accoda; manca ancora il collegamento atomico
+  La selezione dry-run non accoda e avanza di una pagina SQL bounded anche
+  quando nessuna riga è eleggibile; il futuro scanner deve distinguere
+  pagina senza candidati da fine scansione e ripartire a cambio generazione.
+  Manca ancora il collegamento atomico
   dell'enqueue al controllo e al marker attività corrente. La futura
   abilitazione richiede revisione e autorizzazione specifica, senza
   modificare implicitamente il manifesto isolato. I test sintetici che
