@@ -79,7 +79,8 @@ describe('candidate first-party Kinde client boundary', () => {
     });
 
     it('reads a future session deadline only after matching consent and session readback', async () => {
-        const deadline = Date.now() + 60_000;
+        const observedAtMs = Date.parse('2026-11-14T10:00:00.000Z');
+        const deadline = observedAtMs + 60_000;
         const header = 'X-Logbook-Session-Expires-At-Ms';
         const active = (value: string) => {
             const response = reply(status('active', 1));
@@ -87,14 +88,34 @@ describe('candidate first-party Kinde client boundary', () => {
             return response;
         };
         await expect(read(responses(reply(session(A, 1, 1)), active(String(deadline)),
-            reply(session(A, 1, 1))))).resolves.toMatchObject({ sessionExpiresAtMs: deadline });
-        for (const invalid of [String(Date.now() - 1), '9007199254740992', `0${deadline}`, `${deadline}, ${deadline}`]) {
+            reply(session(A, 1, 1))))).resolves.toMatchObject({
+            sessionDeadline: { observedAtMs, expiresAtMs: deadline },
+        });
+        for (const invalid of [String(observedAtMs - 1), String(observedAtMs),
+            '9007199254740992', `0${deadline}`, `${deadline}, ${deadline}`]) {
             const result = await read(responses(reply(session(A, 1, 1)), active(invalid), reply(session(A, 1, 1))));
             expect(result).toMatchObject({ kind: 'consent-confirmed' });
-            expect(result).not.toHaveProperty('sessionExpiresAtMs');
+            expect(result).not.toHaveProperty('sessionDeadline');
         }
         await expect(read(responses(reply(session(A, 1, 1)), active(String(deadline)),
             reply(session(B, 1, 1))))).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+    });
+
+    it('does not grant local access if the final session read consumes the remaining time', async () => {
+        const wall = vi.spyOn(Date, 'now').mockReturnValue(100);
+        vi.spyOn(performance, 'now').mockReturnValue(1);
+        const consent = reply(status('active', 1));
+        const observedAtMs = Date.parse('2026-11-14T10:00:00.000Z');
+        consent.headers.set('X-Logbook-Session-Expires-At-Ms', String(observedAtMs + 500));
+        let sessionReads = 0;
+        const send: typeof fetch = async input => {
+            if (input === '/v1/consent/status') return consent;
+            if (++sessionReads === 2) wall.mockReturnValue(600);
+            return reply(session(A, 1, 1));
+        };
+        const result = await read(send);
+        expect(result.kind).toBe('consent-confirmed');
+        expect(result).not.toHaveProperty('sessionDeadline');
     });
 
     it('distinguishes absent session from transport failure, logout races and consent suspension', async () => {

@@ -1,6 +1,7 @@
 import equal from 'fast-deep-equal';
 import { KindeCandidateBoundaryError, type KindeCandidateAccess } from './kindeCandidateClient';
 import { normalizeKindeFitnessIntents } from './kindeCandidateDomainIntent';
+import { isKindeSessionDeadlineCurrent } from './kindeCandidateSessionDeadline';
 import type { DomainOperationBatch } from '../sync/domainOperations';
 import { readLocal } from '../sync/localArchiveBootstrap';
 import { commitDomainOperations, type LocalWriteGuard } from '../sync/localDomainCommit';
@@ -18,18 +19,16 @@ export function createKindeCandidateOfflineJournal(
     const owner = local.owner;
     const vault = readVaultControl(owner);
     const replica = local.replica;
-    if (!vault || vault.phase !== 'active' || !replica || access.sessionExpiresAtMs === undefined) return null;
+    const proof = access.sessionDeadline;
+    if (!vault || vault.phase !== 'active' || !replica || !proof) return null;
 
-    const deadline = Math.min(access.sessionExpiresAtMs, replica.leaseUntilMs);
-    const verifiedAt = Date.now();
-    if (deadline <= verifiedAt) return null;
-    const monotonicDeadline = performance.now() + (deadline - verifiedAt);
+    const hasTime = () => isKindeSessionDeadlineCurrent(proof, replica.leaseUntilMs);
+    if (!hasTime()) return null;
     let invalidated = false;
     const isCurrent = () => {
         try {
             if (invalidated || navigator.onLine !== false) return false;
-            const now = Date.now();
-            if (!realmIsCurrent() || now < verifiedAt || now >= deadline || performance.now() >= monotonicDeadline) {
+            if (!realmIsCurrent() || !hasTime()) {
                 invalidated = true;
                 return false;
             }

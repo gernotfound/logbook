@@ -546,7 +546,7 @@ describe('isolated Kinde fitness realm with trusted owner, no Firebase/global gr
             const requests = client.paths.length;
             online = false;
             catalogSource.read.mockImplementationOnce(async () => {
-                vi.spyOn(Date, 'now').mockReturnValue(deadline);
+                vi.spyOn(Date, 'now').mockReturnValue(deadline + 1_000);
                 return catalog;
             });
             await expect(realm.submit({ type: 'profile.patch', patch: { height: '181' } })).rejects.toThrow();
@@ -582,6 +582,40 @@ describe('isolated Kinde fitness realm with trusted owner, no Firebase/global gr
         } finally { fixture.close(); }
     });
 
+    it('bounds offline access by the primary session clock even when the device clock has a fixed offset', async () => {
+        for (const offset of [-120_000, 120_000]) {
+            const fixture = await createCloudKeyHttpFixture([uid]);
+            const realNow = Date.now;
+            try {
+                await fixture.consent(uid);
+                const expiry = realNow() + 30_000;
+                fixture.sqlite.prepare('UPDATE auth_sessions SET idle_expires_at_ms=? WHERE uid=?').run(expiry, uid);
+                const clock = vi.spyOn(Date, 'now').mockImplementation(() => realNow() + offset);
+                const client = browser(fixture);
+                const realm = await openKindeCandidateFitnessRealm({ ...client, expected });
+                online = false;
+                const sealed = await get('logbook:v2:' + owner);
+                const requests = client.paths.length;
+                expect(realm.snapshot()).toMatchObject({ owner });
+
+                clock.mockReturnValue(expiry + offset + 1_000);
+                expect(realm.snapshot()).toBeNull();
+                await expect(realm.submit({ type: 'profile.patch', patch: { height: '199' } }))
+                    .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+                expect(await get('logbook:v2:' + owner)).toBe(sealed);
+                expect(client.paths).toHaveLength(requests);
+                realm.close();
+            } finally {
+                vi.restoreAllMocks();
+                online = true;
+                lockAllVaults();
+                await clear();
+                localStorage.clear();
+                fixture.close();
+            }
+        }
+    });
+
     it('expires an observed account realm without a browser event, blocking plaintext and writes', async () => {
         const fixture = await createCloudKeyHttpFixture([uid]);
         try {
@@ -593,7 +627,7 @@ describe('isolated Kinde fitness realm with trusted owner, no Firebase/global gr
             const sealed = await get('logbook:v2:' + owner);
             const requests = client.paths.length;
             expect(realm.snapshot()).not.toBeNull();
-            vi.spyOn(Date, 'now').mockReturnValue(expiry);
+            vi.spyOn(Date, 'now').mockReturnValue(expiry + 1_000);
             expect(realm.isCurrent()).toBe(false);
             expect(realm.snapshot()).toBeNull();
             await expect(realm.submit({ type: 'profile.patch', patch: { height: '199' } }))
@@ -605,7 +639,7 @@ describe('isolated Kinde fitness realm with trusted owner, no Firebase/global gr
         } finally { fixture.close(); }
     });
 
-    it('does not extend a Kinde realm when monotonic time passes but the wall clock is rolled back', async () => {
+    it('expires a Kinde realm when the monotonic clock advances and the wall clock stops', async () => {
         const fixture = await createCloudKeyHttpFixture([uid]);
         try {
             await fixture.consent(uid);
@@ -614,6 +648,7 @@ describe('isolated Kinde fitness realm with trusted owner, no Firebase/global gr
             const client = browser(fixture);
             const realm = await openKindeCandidateFitnessRealm({ ...client, expected });
             expect(realm.snapshot()).not.toBeNull();
+            vi.spyOn(Date, 'now').mockReturnValue(Date.now());
             const oldPerformance = performance.now();
             vi.spyOn(performance, 'now').mockReturnValue(oldPerformance + 60_000);
             expect(realm.snapshot()).toBeNull();
