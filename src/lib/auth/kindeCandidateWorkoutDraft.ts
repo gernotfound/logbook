@@ -11,15 +11,17 @@ import { assertWorkoutSessionIdentities, requireDate } from '../sync/domainOpera
 import { requiredUpdateRecoveryRegistry } from '../sync/requiredUpdateRecovery';
 import { equivalentWorkoutSnapshot } from '../sync/workoutSnapshotEquality';
 import { draftRegistry } from '../utils/draftRegistry';
+import { normalizeTimerSnapshot, stoppedWorkoutTimer, type WorkoutTimerSnapshot } from '../workoutTimerSnapshot';
 import { z } from '../zod';
 import { openKindeCatalogDraft, type KindeCatalogDraftController } from './kindeCandidateCatalogDraft';
 
-export type KindeWorkoutOrigin = { kind: 'free' } | { kind: 'routine'; routineId: string };
+export type KindeWorkoutOrigin = { kind: 'free' } | { kind: 'routine'; routineId: string; cycleId?: string };
 export type KindeWorkoutClosure = { kind: 'complete'; endedAt: number } | { kind: 'delete' };
 export type KindeWorkoutEdit = {
     workout: WorkoutSession;
     readiness: Omit<WorkoutReadiness, 'capturedAt'>;
     review: { endedAt: number | null; values: WorkoutCompletionDraft } | null;
+    timer: WorkoutTimerSnapshot;
 };
 
 const readinessRating = z.number().int().min(1).max(5).optional();
@@ -35,6 +37,11 @@ const reviewSchema = z.object({
         mood: z.string(), pump: z.string(), fatigue: z.string(), water: z.string(), pains: z.array(z.string()),
     }).strict(),
 }).strict().nullable();
+const timerSchema = z.unknown().transform(value => {
+    const timer = normalizeTimerSnapshot(value);
+    if (!timer || !equal(timer, value)) throw new Error('Timer della seduta non verificabile.');
+    return timer;
+}).default(stoppedWorkoutTimer);
 
 const workoutSchema = z.unknown().transform((value): WorkoutSession => {
     const parsed = DomainParsers.parseActiveWorkout(value);
@@ -59,6 +66,7 @@ const draftSchema = z.object({
     workout: workoutSchema,
     readiness: readinessSchema,
     review: reviewSchema,
+    timer: timerSchema,
 }).strict().superRefine(({ expectedCloud, workout, closing, submitted, review }, context) => {
     if (expectedCloud !== null && expectedCloud.id !== workout.id) {
         context.addIssue({ code: 'custom', message: 'La bozza appartiene a un’altra seduta.' });
@@ -76,6 +84,18 @@ export type KindeWorkoutDraft = {
 };
 
 type WorkoutDraftController = KindeCatalogDraftController<KindeWorkoutDraft>;
+
+function cycleForRoutine(data: UserData, cycleId: string, routineId: string) {
+    return cycleId === data.activeCycleId
+        ? data.trainingCycles?.find(cycle => cycle.id === cycleId && cycle.routines.some(item => item.routineId === routineId))
+        : undefined;
+}
+
+function preparedSourceCurrent(data: UserData, workout: WorkoutSession): boolean {
+    if (!workout.routineId) return !workout.cycleId;
+    return data.routines?.some(routine => routine.id === workout.routineId) === true
+        && (!workout.cycleId || Boolean(cycleForRoutine(data, workout.cycleId, workout.routineId)));
+}
 
 function prepareClosure({ workout, review }: KindeWorkoutEdit, closure: KindeWorkoutClosure, activePains: string[]): DomainOperation {
     const id = workout.id;
@@ -112,7 +132,11 @@ export async function openKindeCandidateWorkoutDraft({
             if (origin && cloud) throw new Error('Una seduta è già in corso.');
             const routine = origin?.kind === 'routine' ? data.routines?.find(item => item.id === origin.routineId) : undefined;
             if (origin?.kind === 'routine' && !routine) throw new Error('Scheda non disponibile.');
-            const workout = routine ? buildRoutineWorkout(data, routine) : origin ? buildFreeWorkout() : cloud;
+            const requestedCycle = origin?.kind === 'routine' && origin.cycleId
+                ? cycleForRoutine(data, origin.cycleId, origin.routineId) : undefined;
+            if (origin?.kind === 'routine' && origin.cycleId && !requestedCycle) throw new Error('Rotazione del ciclo cambiata.');
+            const cycle = requestedCycle ? { cycleId: requestedCycle.id, cycleName: requestedCycle.name } : undefined;
+            const workout = routine ? buildRoutineWorkout(data, routine, cycle) : origin ? buildFreeWorkout() : cloud;
             if (!workout) throw new Error('Nessuna seduta da riprendere.');
             return draftSchema.parse({
                 version: 1, submitted: false, closing: false, expectedCloud: cloud, workout, readiness: {}, review: null,
@@ -133,7 +157,11 @@ export async function openKindeCandidateWorkoutDraft({
             || (origin.kind === 'routine' ? observed.workout.routineId !== origin.routineId : observed.workout.routineId))) {
             throw new Error('Riprendi prima la seduta già preparata.');
         }
-        const stale = !equivalentWorkoutSnapshot(cloud, observed.expectedCloud);
+        if (origin?.kind === 'routine' && origin.cycleId && observed.workout.cycleId !== origin.cycleId) {
+            throw new Error('Riprendi prima la seduta già preparata.');
+        }
+        const stale = !equivalentWorkoutSnapshot(cloud, observed.expectedCloud)
+            || (observed.expectedCloud === null && !preparedSourceCurrent(data, observed.workout));
         const editable = () => {
             if (stale) throw new Error('La seduta condivisa è cambiata. Copia sul dispositivo conservata.');
             return device.editable();
@@ -150,13 +178,15 @@ export async function openKindeCandidateWorkoutDraft({
         return {
             handle: {
                 initial: {
-                    ...structuredClone({ workout: observed.workout, readiness: observed.readiness, review: observed.review }),
+                    ...structuredClone({
+                        workout: observed.workout, readiness: observed.readiness, review: observed.review, timer: observed.timer,
+                    }),
                     stale, submitted: observed.submitted,
                 },
-                write: ({ workout, readiness, review }) => {
+                write: ({ workout, readiness, review, timer }) => {
                     const current = editable();
                     if (workout.id !== current.workout.id) throw new Error('La seduta è cambiata.');
-                    device.persist({ ...current, workout, readiness, review });
+                    device.persist({ ...current, workout, readiness, review, timer });
                 },
                 discard,
                 close,
@@ -170,6 +200,10 @@ export async function openKindeCandidateWorkoutDraft({
                 const prepared = device.prepareCommit(submitted, operation, envelope => {
                     if (!equivalentWorkoutSnapshot(envelope.data.activeWorkout, submitted.expectedCloud)) {
                         throw new Error('La seduta condivisa è cambiata. Copia sul dispositivo conservata.');
+                    }
+                    if (!closure && submitted.expectedCloud === null
+                        && !preparedSourceCurrent(envelope.data, submitted.workout)) {
+                        throw new Error('La scheda o il ciclo sono cambiati. Copia sul dispositivo conservata.');
                     }
                     if (closure?.kind === 'complete' && !equal(envelope.data.activePains ?? [], lastPains)) {
                         throw new Error('Le informazioni della seduta sono cambiate. Copia sul dispositivo conservata.');

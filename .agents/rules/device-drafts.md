@@ -173,8 +173,13 @@ blocca il commit della bozza senza perderne i valori.
 
 ### CF-04 — Seduta nel percorso Kinde candidato
 
-`draft:active-workout` conserva la copia device di check-in, seduta e
-valutazione finale sotto Web Lock, legata a owner, vault, consenso e sessione.
+`draft:active-workout` conserva la copia device di check-in, seduta,
+cronometro di recupero e valutazione finale sotto Web Lock, legata a owner,
+vault, consenso e sessione. I comandi del cronometro scrivono nella bozza
+della seduta Kinde prima di cambiare lo stato mostrato e usano timestamp
+assoluti per la ripresa. Un record candidato precedente senza cronometro
+riparte con cronometro fermo. Un valore presente ma invalido blocca la
+lettura senza riscrivere la bozza.
 Il form rende visibile un input dopo la scrittura cifrata. Il registro
 update/reload verifica gli stessi bytes osservati. Le conferme asincrone
 rivalidano sessione e identità della seduta, dell'esercizio o della serie.

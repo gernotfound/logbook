@@ -110,10 +110,12 @@ describe('isolated Kinde fitness realm with trusted owner, no Firebase/global gr
             try {
                 const draft = await first.openWorkoutDraft({ kind: 'free' });
                 workoutId = draft.initial.workout.id;
+                const startedAt = Date.now();
                 draft.write({
                     ...draft.initial, readiness: { energy: 4 },
+                    timer: { version: 1, state: 'running', startTime: startedAt, accumulated: 0 },
                     workout: {
-                        ...draft.initial.workout, globalStartTime: Date.now(),
+                        ...draft.initial.workout, globalStartTime: startedAt,
                         exercises: [{ id: 'session-exercise', exId: 'exercise', sessionNote: 'Nota sintetica della serie',
                             sets: [{ id: 'set', kg: '50', reps: '8' }] }],
                     },
@@ -121,6 +123,9 @@ describe('isolated Kinde fitness realm with trusted owner, no Firebase/global gr
                 const sealed = localStorage.getItem(slot);
                 expect(sealed).toMatch(/^tlb-sealed:v1:/);
                 expect(sealed).not.toContain('Nota sintetica della serie');
+                expect(() => draft.write({ ...draft.initial,
+                    timer: { version: 1, state: 'running', startTime: -1, accumulated: 0 } })).toThrow();
+                expect(localStorage.getItem(slot)).toBe(sealed);
                 expect(first.snapshot()?.data.activeWorkout).toBeNull();
                 expect(fixture.count('sync_receipts', uid)).toBe(0);
                 requiredUpdateRecoveryRegistry.captureAll();
@@ -137,6 +142,7 @@ describe('isolated Kinde fitness realm with trusted owner, no Firebase/global gr
             try {
                 const resumed = await reopened.openWorkoutDraft();
                 expect(resumed.initial.readiness).toEqual({ energy: 4 });
+                expect(resumed.initial.timer).toMatchObject({ state: 'running', accumulated: 0 });
                 expect(resumed.initial.workout).toMatchObject({
                     id: workoutId, exercises: [{ sessionNote: 'Nota sintetica della serie', sets: [{ kg: '50', reps: '8' }] }],
                 });
@@ -167,6 +173,38 @@ describe('isolated Kinde fitness realm with trusted owner, no Firebase/global gr
                 expect(localStorage.getItem(slot)).toBeNull();
                 await expect(reopened.openWorkoutDraft()).rejects.toThrow('Nessuna seduta');
             } finally { reopened.close(); }
+        } finally { fixture.close(); }
+    });
+
+    it('keeps a prepared cycle workout when another realm changes the active cycle before its start', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        const slot = protectedDeviceKey('draft:active-workout', owner);
+        try {
+            await fixture.consent(uid);
+            const first = await openKindeCandidateFitnessRealm({ ...browser(fixture), expected });
+            try {
+                await first.submit([
+                    { type: 'routine.create', routine: { id: 'routine-in-cycle', name: 'Scheda', exercises: [] } },
+                    { type: 'training-cycle.upsert', cycle: { id: 'cycle-selected', name: 'Ciclo', durationWeeks: 4,
+                        routines: [{ routineId: 'routine-in-cycle', frequencyPerWeek: 1 }] } },
+                    { type: 'active-cycle.switch', id: 'cycle-selected', expectedActiveId: null },
+                ]);
+                const draft = await first.openWorkoutDraft({ kind: 'routine', routineId: 'routine-in-cycle', cycleId: 'cycle-selected' });
+                draft.write({ ...draft.initial, workout: { ...draft.initial.workout, globalStartTime: Date.now() } });
+                const raw = localStorage.getItem(slot);
+                const second = await openKindeCandidateFitnessRealm({ ...browser(fixture), expected });
+                try {
+                    await second.submit({ type: 'active-cycle.switch', id: null, expectedActiveId: 'cycle-selected' });
+                    await expect(first.saveWorkoutDraft(draft)).rejects.toThrow('La scheda o il ciclo sono cambiati');
+                    expect(localStorage.getItem(slot)).toBe(raw);
+                    expect(fixture.count('sync_receipts', uid)).toBe(2);
+                    const recovery = await second.openWorkoutDraft();
+                    expect(recovery.initial).toMatchObject({
+                        stale: true, submitted: false, workout: { cycleId: 'cycle-selected', routineId: 'routine-in-cycle' },
+                    });
+                    expect(second.snapshot()?.data.activeWorkout).toBeNull();
+                } finally { second.close(); }
+            } finally { first.close(); }
         } finally { fixture.close(); }
     });
 

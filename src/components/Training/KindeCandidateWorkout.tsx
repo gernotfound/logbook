@@ -6,11 +6,14 @@ import type {
 } from '../../lib/auth/kindeCandidateWorkoutDraft';
 import { getLocalDateString } from '../../lib/utils/date';
 import { isWorkoutClockAnomalyError, resetWorkoutClockGuard } from '../../lib/workoutClockGuard';
+import { stoppedWorkoutTimer } from '../../lib/workoutTimerSnapshot';
 import { useDialogStore } from '../../store/useDialogStore';
 import type { WorkoutSession } from '../../types';
 import { DurableWorkoutEditScope } from '../UI/bufferedWorkoutScope';
 import { WorkoutReadinessForm } from './PreSessionCheckIn';
 import { WorkoutSessionEditor } from './WorkoutSessionEditor';
+import { TrainingSessionSetupView } from './TrainingSessionSetupView';
+import { WorkoutTimerControls } from './WorkoutTimerControls';
 import PostSessionReview from './session/PostSessionReview';
 import './training-session.css';
 
@@ -28,7 +31,6 @@ export function KindeCandidateWorkout({ realm }: { realm: Realm }) {
     const persistenceBlocked = useRef(false);
     const [pending, setPending] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [routineId, setRoutineId] = useState('');
     const showConfirm = useDialogStore(state => state.showConfirm);
 
     const publish = useCallback((next: Editor | null) => {
@@ -75,6 +77,7 @@ export function KindeCandidateWorkout({ realm }: { realm: Realm }) {
 
     if (realm.state.phase !== 'ready') return null;
     const data = realm.state.snapshot.data;
+    const activeCycle = data.trainingCycles?.find(cycle => cycle.id === data.activeCycleId);
     const enter = async (origin?: KindeWorkoutOrigin) => {
         const witness = realm.captureEditWitness();
         if (!witness?.isCurrent()) return;
@@ -141,6 +144,7 @@ export function KindeCandidateWorkout({ realm }: { realm: Realm }) {
         const startedAt = Date.now();
         if (!write(edit => ({
             ...edit,
+            timer: stoppedWorkoutTimer(),
             workout: {
                 ...edit.workout, date: getLocalDateString(startedAt), globalStartTime: startedAt,
                 ...(includeReadiness && Object.values(edit.readiness).some(value => value !== undefined)
@@ -177,23 +181,12 @@ export function KindeCandidateWorkout({ realm }: { realm: Realm }) {
                 onClick={() => { void run(() => enter(), 'Nessuna seduta da riprendere oppure la copia è aperta in un’altra scheda.'); }}>
                 Riprendi allenamento
             </button>
-            {!data.activeWorkout && <>
-                <button type="button" className="btn btn-primary" disabled={pending}
-                    onClick={() => { void run(() => enter({ kind: 'free' }), 'Impossibile preparare un allenamento. Verifica la bozza esistente.'); }}>
-                    Allenamento libero
-                </button>
-                {!!data.routines?.length && <>
-                    <label htmlFor="kinde-workout-routine">Scheda</label>
-                    <select id="kinde-workout-routine" value={routineId} onChange={event => setRoutineId(event.target.value)}>
-                        <option value="">Seleziona una scheda</option>
-                        {data.routines.map(routine => <option key={routine.id} value={routine.id}>{routine.name}</option>)}
-                    </select>
-                    <button type="button" className="btn btn-primary" disabled={pending || !routineId}
-                        onClick={() => { void run(() => enter({ kind: 'routine', routineId }), 'Impossibile preparare la scheda. Verifica la bozza esistente.'); }}>
-                        Allenati con la scheda
-                    </button>
-                </>}
-            </>}
+            {!data.activeWorkout && <TrainingSessionSetupView activeCycle={activeCycle}
+                routines={data.routines ?? []} history={data.history ?? []}
+                startWorkout={(routineId, cycle) => run(() => enter({ kind: 'routine', routineId, cycleId: cycle?.cycleId }),
+                    'Impossibile preparare la scheda. Verifica il ciclo o la bozza esistente.')}
+                startFreeWorkout={() => run(() => enter({ kind: 'free' }),
+                    'Impossibile preparare un allenamento. Verifica la bozza esistente.')} />}
         </> : <>
             <button type="button" className="btn" disabled={pending} onClick={leave}>Chiudi e conserva seduta</button>
             {current.draft.initial.stale || current.draft.initial.submitted ? <>
@@ -242,6 +235,8 @@ export function KindeCandidateWorkout({ realm }: { realm: Realm }) {
                             const latest = read();
                             return Boolean(exerciseId && latest?.id === id && latest.exercises[index]?.id === exerciseId && capture()?.());
                         }} onRequestEnd={startReview}
+                        restTimer={<WorkoutTimerControls key={workout.id} snapshot={current.edit.timer}
+                            onChange={timer => write(edit => ({ ...edit, timer }))} />}
                         onClockAnomaly={reportClockAnomaly} />}
             </DurableWorkoutEditScope.Provider>}
         </>}
