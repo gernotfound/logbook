@@ -42,7 +42,7 @@ function fixture(t, rejectAfterWrite = false) {
   return { sqlite, db, advance(ms) { observedAt += ms; } };
 }
 
-test('only the currently authenticated foreground owner can record a server-clock observation', async (t) => {
+void test('only the currently authenticated foreground owner can record a server-clock observation', async (t) => {
   const { db, sqlite } = fixture(t);
   for (const invalid of [
     { ...claims, csrfVerified: false }, { ...claims, authenticated: false },
@@ -56,7 +56,7 @@ test('only the currently authenticated foreground owner can record a server-cloc
     { uid: UID, first_observed_at_ms: VISIT, last_recorded_at_ms: VISIT });
 });
 
-test('concurrent foreground visits conserve the marker and write again only at the trusted ten-minute boundary', async (t) => {
+void test('concurrent foreground visits conserve the marker and write again only at the trusted ten-minute boundary', async (t) => {
   const { db, sqlite, advance } = fixture(t);
   const simultaneous = await Promise.all([recordKindeForegroundActivity(db, claims), recordKindeForegroundActivity(db, claims)]);
   assert.deepEqual(simultaneous.map(result => result.outcome).sort(), ['observed', 'recorded']);
@@ -73,7 +73,7 @@ test('concurrent foreground visits conserve the marker and write again only at t
   assert.equal(marker.get(UID).last_recorded_at_ms, VISIT + ACTIVITY_WRITE_INTERVAL_MS);
 });
 
-test('a lost write reply is recoverable only while the authenticated observation is current', async (t) => {
+void test('a lost write reply is recoverable only while the authenticated observation is current', async (t) => {
   const { db, sqlite } = fixture(t, true);
   assert.deepEqual(await recordKindeForegroundActivity(db, claims), { outcome: 'observed' });
   sqlite.prepare('UPDATE auth_sessions SET revoked_at_ms=? WHERE token_hash=?').run(VISIT, HASH);
@@ -81,7 +81,7 @@ test('a lost write reply is recoverable only while the authenticated observation
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_activity').get().n, 1);
 });
 
-test('twelve calendar months preserve throttled observations across UTC leap-day boundaries', () => {
+void test('twelve calendar months preserve throttled observations across UTC leap-day boundaries', () => {
   for (const [last, due] of [
     ['2026-11-24T16:38:00.000Z', '2027-11-24T16:48:00.000Z'],
     ['2027-02-28T23:55:00.000Z', '2028-03-01T00:05:00.000Z'],
