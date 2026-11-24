@@ -2,6 +2,8 @@ import { expect, test } from '../fixtures';
 import { mountKindePlanning, withKindeReplicaDevices } from './kindeReplicaFixture';
 
 test('starts a Kinde routine, restores series and review from the device, and completes once', async ({ browser }) => {
+    // Two reloads each re-establish the encrypted archive before the next commit.
+    test.setTimeout(60_000);
     await withKindeReplicaDevices(browser, async ({ first, second, receipts, allowFirstCommit }) => {
         const seed = await second.evaluate(() => window.kindeReplicaFixture!.submit([
             { type: 'exercise.upsert', exercise: { id: 'test-bench', name: 'Panca sintetica', setsCount: 1, sets: [] } },
