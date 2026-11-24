@@ -1,6 +1,6 @@
 import { deriveKindeOwnerId, validKindeIssuer, validKindeSubject } from '../auth/kinde-owner-id.mjs';
 
-const FORMAT = 'thelogbook-kinde-erasure-target';
+export const KINDE_ERASURE_TARGET_FORMAT = 'thelogbook-kinde-erasure-target';
 const UID = /^k_[A-Za-z0-9_-]{43}$/;
 const KEY_ID = /^[A-Za-z0-9_-]{1,32}$/;
 const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
@@ -39,7 +39,8 @@ export function createKindeErasureTargetCodec({ issuer, keyId, key }) {
   /** @param {string} uid @param {Uint8Array<ArrayBuffer>} iv */
   function parameters(uid, iv) {
     if (!UID.test(uid)) throw new KindeErasureTargetError();
-    return { name: 'AES-GCM', iv, tagLength: 128, additionalData: encoder.encode(JSON.stringify([FORMAT, 1, issuer, keyId, uid])) };
+    const additionalData = encoder.encode(JSON.stringify([KINDE_ERASURE_TARGET_FORMAT, 1, issuer, keyId, uid]));
+    return { name: 'AES-GCM', iv, tagLength: 128, additionalData };
   }
 
   return {
@@ -52,7 +53,7 @@ export function createKindeErasureTargetCodec({ issuer, keyId, key }) {
       const bytes = encoder.encode(subject);
       try {
         const sealed = new Uint8Array(await crypto.subtle.encrypt(parameters(uid, iv), key, bytes));
-        return { format: FORMAT, version: 1, keyId, uid, iv: base64(iv), ciphertext: base64(sealed) };
+        return { format: KINDE_ERASURE_TARGET_FORMAT, version: 1, keyId, uid, iv: base64(iv), ciphertext: base64(sealed) };
       } catch { throw new KindeErasureTargetError(); }
       finally { bytes.fill(0); }
     },
@@ -63,7 +64,8 @@ export function createKindeErasureTargetCodec({ issuer, keyId, key }) {
         const stored = /** @type {{format?: string, version?: number, keyId?: string, uid?: string, iv?: string, ciphertext?: string}} */ (record);
         if (!stored || typeof stored !== 'object' || Object.getPrototypeOf(stored) !== Object.prototype
           || Object.keys(stored).sort().join(',') !== 'ciphertext,format,iv,keyId,uid,version'
-          || stored.uid !== uid || stored.format !== FORMAT || stored.version !== 1 || stored.keyId !== keyId) {
+          || stored.uid !== uid || stored.format !== KINDE_ERASURE_TARGET_FORMAT
+          || stored.version !== 1 || stored.keyId !== keyId) {
           throw new KindeErasureTargetError();
         }
         const iv = parseBytes(stored.iv, 12, 12);

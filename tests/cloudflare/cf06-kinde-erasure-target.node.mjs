@@ -1,15 +1,50 @@
 import { strict as assert } from 'node:assert';
 import { createHash } from 'node:crypto';
+import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import { deriveKindeOwnerId } from '../../cloudflare/auth/kinde-owner-id.mjs';
 import { createKindeErasureManagement } from '../../cloudflare/jobs/kinde-erasure-management.mjs';
 import { createKindeErasureTargetCodec } from '../../cloudflare/jobs/kinde-erasure-target.mjs';
+import { createKindeErasureTargetWriter } from '../../cloudflare/jobs/kinde-erasure-target-store.mjs';
+import { applyCurrentD1Schema } from './current-d1-schema.mjs';
 
 const issuer = 'https://synthetic-tenant.kinde.com';
 const subject = 'kp_synthetic-deletion-reference';
 const keyId = 'synthetic-erasure-v1';
 const error = { message: 'kinde-erasure-target-unavailable' };
 const keyFor = (extractable = false) => crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, extractable, ['encrypt', 'decrypt']);
+
+function d1For(sqlite, { beforeWrite = () => {}, afterWrite = () => {} } = {}) {
+  return {
+    withSession(policy) {
+      assert.equal(policy, 'first-primary');
+      return { prepare(sql) {
+        const statement = sqlite.prepare(sql);
+        return { bind(...args) {
+          return {
+            async first() { return statement.get(...args) ?? null; },
+            async run() {
+              beforeWrite();
+              statement.run(...args);
+              afterWrite();
+            },
+          };
+        } };
+      } };
+    },
+  };
+}
+
+async function erasureStoreFixture(t) {
+  const sqlite = new DatabaseSync(':memory:');
+  t.after(() => sqlite.close());
+  sqlite.exec('PRAGMA foreign_keys = ON');
+  applyCurrentD1Schema(sqlite);
+  const uid = await deriveKindeOwnerId(issuer, subject);
+  sqlite.prepare("INSERT INTO auth_principals VALUES (?, 'active', ?, 1)").run(uid, Date.now() - 1000);
+  const codec = createKindeErasureTargetCodec({ issuer, keyId, key: await keyFor() });
+  return { sqlite, write: createKindeErasureTargetWriter(codec), identity: { uid, subject, authEpoch: 1 } };
+}
 
 test('derives the same public owner identifier as the trusted callback contract', async () => {
   const expected = 'k_' + createHash('sha256')
@@ -58,6 +93,44 @@ test('rejects a key that can be exported or a missing key identifier', async () 
   const privateKey = await keyFor();
   assert.throws(() => createKindeErasureTargetCodec({ issuer, keyId, key }), error);
   assert.throws(() => createKindeErasureTargetCodec({ issuer, keyId: '', key: privateKey }), error);
+});
+
+test('stores one recoverable encrypted target for repeated and concurrent verified callbacks', async (t) => {
+  const { sqlite, write, identity } = await erasureStoreFixture(t);
+  const db = d1For(sqlite);
+  await Promise.all([write(db, identity), write(db, identity)]);
+  const targetRows = sqlite.prepare('SELECT * FROM kinde_erasure_targets');
+  const before = targetRows.all();
+  assert.equal(before.length, 1);
+  assert.equal(before[0].uid, identity.uid);
+  assert.equal(JSON.stringify(before).includes(identity.subject), false);
+  await write(db, identity);
+  await assert.rejects(write(db, { ...identity, subject: 'kp_foreign' }), /kinde-erasure-target-storage-unavailable/);
+  assert.deepEqual(targetRows.all(), before);
+  assert.throws(() => sqlite.exec('INSERT OR REPLACE INTO kinde_erasure_targets SELECT * FROM kinde_erasure_targets'),
+    /kinde-erasure-target-fenced/);
+  assert.throws(() => sqlite.exec('UPDATE kinde_erasure_targets SET iv=iv'), /kinde-erasure-target-immutable/);
+  assert.throws(() => sqlite.exec('DELETE FROM kinde_erasure_targets'), /kinde-erasure-target-retained/);
+});
+
+test('requires a new primary read to recover a lost insertion response and fences an epoch change', async (t) => {
+  const { sqlite, write, identity } = await erasureStoreFixture(t);
+  const count = sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_erasure_targets');
+  let writes = 0;
+  await assert.rejects(write(d1For(sqlite, { beforeWrite() {
+    sqlite.exec("UPDATE auth_principals SET status='disabled', auth_epoch=2");
+  } }), identity), /kinde-erasure-target-storage-unavailable/);
+  assert.equal(count.get().n, 0);
+
+  sqlite.exec("UPDATE auth_principals SET status='active', auth_epoch=3");
+  const current = { ...identity, authEpoch: 3 };
+  await write(d1For(sqlite, { afterWrite() {
+    writes += 1;
+    throw new Error('committed but synthetic D1 reply lost');
+  } }), current);
+  assert.equal(writes, 1);
+  assert.equal(count.get().n, 1);
+  await assert.rejects(write(d1For(sqlite), identity), /kinde-erasure-target-storage-unavailable/);
 });
 
 test('requests full profile erasure only after proof for the exact linked owner', async () => {
