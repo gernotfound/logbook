@@ -80,7 +80,7 @@ test('reads and switches the active Kinde cycle with a verified second-device re
         await expect(oldCycle.getByText('Ciclo attivo', { exact: true })).toBeVisible();
         await newCycle.getByRole('button', { name: /Seconda fase/ }).click();
         await expect(newCycle.getByLabel('Sequenza schede del ciclo')).toContainText('Allenamento A');
-        await expect(newCycle.getByRole('button', { name: 'Modifica', exact: true })).toHaveCount(0);
+        await expect(newCycle.getByRole('button', { name: 'Modifica', exact: true })).toBeEnabled();
         expect(receipts()).toBe(before);
 
         await newCycle.getByRole('button', { name: 'Imposta come ciclo attivo' }).click();
