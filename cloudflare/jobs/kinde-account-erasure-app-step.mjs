@@ -7,6 +7,7 @@ const CHUNK_SIZE = 16;
 const AUTH_TABLES = [
   { name: 'auth_sessions', key: 'token_hash' },
   { name: 'kinde_deletion_oauth_attempts', key: 'state_hash' },
+  { name: 'kinde_account_activity', key: 'uid' },
 ];
 const HEALTH_TABLES = [
   'sync_state', 'sync_documents', 'sync_receipts', 'sync_replicas', 'sync_replica_mutations',

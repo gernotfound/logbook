@@ -15,6 +15,7 @@ import { createKindeErasureTargetWriter } from '../../cloudflare/jobs/kinde-eras
 import { requireIndependentAccountAccess } from '../../cloudflare/recovery/account-erasure-denials.mjs';
 import { requireIndependentOwnerFence } from '../../cloudflare/recovery/independent-owner-fence.mjs';
 import { applyCurrentD1RecoverySchema, applyCurrentD1Schema } from './current-d1-schema.mjs';
+import { D1_NOW_MS } from '../../cloudflare/sql/d1-time.mjs';
 
 const issuer = 'https://synthetic-tenant.kinde.com';
 const subject = 'kp_synthetic-deletion-reference';
@@ -363,6 +364,10 @@ void test('application erasure drains only the requesting owner’s sessions and
       issuedAt, issuedAt + 30_000, issuedAt + 60_000);
   }
   addSession.run('f'.repeat(64), foreignUid, 'c'.repeat(64), issuedAt, issuedAt + 30_000, issuedAt + 60_000);
+  const activity = sqlite.prepare(`INSERT INTO kinde_account_activity
+    (uid, first_observed_at_ms, last_recorded_at_ms) VALUES (?, ${D1_NOW_MS}, ${D1_NOW_MS})`);
+  activity.run(identity.uid);
+  activity.run(foreignUid);
   assert.equal(await acceptKindeAccountErasure(db, recovery.db, intent), true);
 
   const exactCount = sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions WHERE uid=?');
@@ -370,7 +375,11 @@ void test('application erasure drains only the requesting owner’s sessions and
   assert.equal(exactCount.get(identity.uid).n, 4);
   assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'progress', removed: 4 });
   assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'progress', removed: 1 });
+  assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'progress', removed: 1 });
   assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'application-complete' });
+  const ownerActivity = sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_activity WHERE uid=?');
+  assert.equal(ownerActivity.get(identity.uid).n, 0);
+  assert.equal(ownerActivity.get(foreignUid).n, 1);
   assert.equal(exactCount.get(identity.uid).n, 0);
   assert.equal(exactCount.get(foreignUid).n, 1);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_erasure_targets').get().n, 1);
