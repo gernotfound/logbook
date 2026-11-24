@@ -10,6 +10,7 @@ import { openKindeCandidateSleepDraft, type KindeSleepDraft } from './kindeCandi
 import { openKindeCandidateStepsDraft, type KindeStepsDraft } from './kindeCandidateStepsDraft';
 import { openKindeCandidateCardioDraft, type KindeCardioDraft } from './kindeCandidateCardioDraft';
 import { openKindeCandidateCycleDraft, type KindeCycleDraft } from './kindeCandidateCycleDraft';
+import { openKindeCandidateHistoryWorkoutDraft, type KindeHistoryWorkoutDraft } from './kindeCandidateHistoryWorkoutDraft';
 import {
     openKindeCandidateWorkoutDraft, type KindeWorkoutClosure, type KindeWorkoutDraft, type KindeWorkoutOrigin,
 } from './kindeCandidateWorkoutDraft';
@@ -39,7 +40,7 @@ export type KindeCandidateFitnessSnapshot = Readonly<{
 
 type MutationOutcome = Awaited<ReturnType<typeof submitKindeCandidateDomainIntent>>;
 type DraftHandle = KindeRoutineDraft | KindeExerciseDraft | KindeMeasurementDraft
-    | KindeSleepDraft | KindeStepsDraft | KindeCardioDraft | KindeCycleDraft | KindeWorkoutDraft;
+    | KindeSleepDraft | KindeStepsDraft | KindeCardioDraft | KindeCycleDraft | KindeWorkoutDraft | KindeHistoryWorkoutDraft;
 type DraftSave = { outcome: MutationOutcome; draftCleared: boolean };
 
 export type KindeCandidateFitnessRealm = {
@@ -64,6 +65,8 @@ export type KindeCandidateFitnessRealm = {
     openWorkoutDraft: (origin?: KindeWorkoutOrigin) => Promise<KindeWorkoutDraft>;
     saveWorkoutDraft: (draft: KindeWorkoutDraft) => Promise<DraftSave>;
     closeWorkoutDraft: (draft: KindeWorkoutDraft, closure: KindeWorkoutClosure) => Promise<DraftSave>;
+    openHistoryWorkoutDraft: (id?: string) => Promise<KindeHistoryWorkoutDraft>;
+    saveHistoryWorkoutDraft: (draft: KindeHistoryWorkoutDraft) => Promise<DraftSave>;
     close: () => void;
 };
 
@@ -94,6 +97,7 @@ export async function openKindeCandidateFitnessRealm({
     let cardioDraft: KindeCatalogDraftController<KindeCardioDraft> | null = null;
     let cycleDraft: KindeCatalogDraftController<KindeCycleDraft> | null = null;
     let workoutDraft: Awaited<ReturnType<typeof openKindeCandidateWorkoutDraft>> | null = null;
+    let historyWorkoutDraft: KindeCatalogDraftController<KindeHistoryWorkoutDraft> | null = null;
     let needsReconciliation = false;
     let sessionPermit: KindeSessionDeadline | null = null;
     const offline = () => navigator.onLine === false;
@@ -125,6 +129,7 @@ export async function openKindeCandidateFitnessRealm({
         cardioDraft?.handle.close();
         cycleDraft?.handle.close();
         workoutDraft?.handle.close();
+        historyWorkoutDraft?.handle.close();
         routineDraft = null;
         exerciseDraft = null;
         measurementDraft = null;
@@ -133,6 +138,7 @@ export async function openKindeCandidateFitnessRealm({
         cardioDraft = null;
         cycleDraft = null;
         workoutDraft = null;
+        historyWorkoutDraft = null;
     };
 
     const load = async (): Promise<KindeCandidateFitnessSnapshot> => {
@@ -236,7 +242,8 @@ export async function openKindeCandidateFitnessRealm({
     };
 
     const saveDraft = async (handle: DraftHandle, closure?: KindeWorkoutClosure): Promise<DraftSave> => {
-        const active = [routineDraft, exerciseDraft, measurementDraft, sleepDraft, stepsDraft, cardioDraft, cycleDraft, workoutDraft]
+        const active = [routineDraft, exerciseDraft, measurementDraft, sleepDraft, stepsDraft, cardioDraft, cycleDraft,
+            workoutDraft, historyWorkoutDraft]
             .find(draft => draft?.handle === handle);
         if (busy || !visible || !viewPermitted() || !active) throw new KindeCandidateBoundaryError();
         if (closure && workoutDraft?.handle !== handle) throw new KindeCandidateBoundaryError();
@@ -336,5 +343,11 @@ export async function openKindeCandidateFitnessRealm({
         }, draft => { workoutDraft = draft; }),
         saveWorkoutDraft: saveDraft,
         closeWorkoutDraft: saveDraft,
+        openHistoryWorkoutDraft: workoutId => openDraft((data, scope) => {
+            historyWorkoutDraft?.handle.close();
+            historyWorkoutDraft = null;
+            return openKindeCandidateHistoryWorkoutDraft({ ...scope, workoutId, history: data.history });
+        }, draft => { historyWorkoutDraft = draft; }),
+        saveHistoryWorkoutDraft: saveDraft,
     };
 }

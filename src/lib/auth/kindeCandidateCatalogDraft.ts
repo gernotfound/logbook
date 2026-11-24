@@ -19,7 +19,7 @@ export async function openKindeCatalogDraft<T extends { submitted: boolean }>({
 }: {
     owner: string;
     key: 'draft_routine' | 'draft_exercise' | 'draft_measurement' | 'draft_sleep'
-        | 'draft_training_cycle' | 'draft:active-workout';
+        | 'draft_training_cycle' | 'draft:active-workout' | 'draft:history-workout';
     revision: number;
     permitted: () => boolean;
     parse: (value: unknown) => T;

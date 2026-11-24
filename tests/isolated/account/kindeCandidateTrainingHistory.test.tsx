@@ -43,7 +43,7 @@ beforeEach(() => { vi.mocked(useDialogStore.getState().showConfirm).mockReset();
 afterEach(() => { cleanup(); });
 
 describe('Kinde training history: owner-scoped presentation and deletion', () => {
-    it('does not adopt legacy owner data or expose the guest editing action', () => {
+    it('offers the account editor and keeps legacy owner data and writers separate', () => {
         const oldData = useAppStore.getState().userData;
         const oldOwner = useAppStore.getState().dataOwner;
         const oldDispatch = useAppStore.getState().dispatchDomainOperation;
@@ -61,7 +61,7 @@ describe('Kinde training history: owner-scoped presentation and deletion', () =>
 
             fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
             expect(screen.getByRole('menuitem', { name: 'Vedi report' })).toBeDefined();
-            expect(screen.queryByRole('menuitem', { name: 'Modifica allenamento' })).toBeNull();
+            expect(screen.getByRole('menuitem', { name: 'Modifica allenamento' })).toBeDefined();
             expect(screen.getByRole('menuitem', { name: 'Elimina allenamento' })).toBeDefined();
             fireEvent.click(screen.getByRole('menuitem', { name: 'Vedi report' }));
             expect(screen.getByRole('dialog', { name: 'Sessione account' })).toBeDefined();

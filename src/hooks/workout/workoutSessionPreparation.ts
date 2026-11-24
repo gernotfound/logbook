@@ -65,7 +65,7 @@ function repairWorkoutInstanceIdentities(
     };
 }
 
-function parseOptionalWaterLiters(value: unknown): number | undefined {
+export function parseOptionalWaterLiters(value: unknown): number | undefined {
     if (typeof value !== 'string' && typeof value !== 'number') return undefined;
     const raw = String(value).trim();
     // Number/parseFloat alone accept partial or non-decimal values.

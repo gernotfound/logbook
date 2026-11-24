@@ -99,6 +99,80 @@ afterEach(() => {
 });
 
 describe('isolated Kinde fitness realm with trusted owner, no Firebase/global grant', () => {
+    it('restores a historical workout draft and changes only the verified history entry', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        const activeSlot = protectedDeviceKey('draft:active-workout', owner);
+        const historySlot = protectedDeviceKey('draft:history-workout', owner);
+        try {
+            await fixture.consent(uid);
+            const first = await openKindeCandidateFitnessRealm({ ...browser(fixture), expected });
+            let originalActiveDraft: string | null = null;
+            try {
+                await first.submit([
+                    { type: 'history.upsert', workout: { id: 'history-edit', date: '2026-11-20',
+                        routineName: 'Storico', globalDurationStr: '00:30:00', exercises: [] } },
+                    { type: 'active-workout.set', workout: { id: 'session-still-active', date: '2026-11-24',
+                        routineName: 'In corso', exercises: [] } },
+                ]);
+                const activeDraft = await first.openWorkoutDraft();
+                activeDraft.write({ ...activeDraft.initial,
+                    workout: { ...activeDraft.initial.workout, routineName: 'Copia ancora in corso' } });
+                originalActiveDraft = localStorage.getItem(activeSlot);
+                const editor = await first.openHistoryWorkoutDraft('history-edit');
+                editor.write({ ...editor.initial, ratings: { ...editor.initial.ratings, water: '1,25' },
+                    workout: { ...editor.initial.workout, manualDurationStr: '45 min' } });
+                expect(localStorage.getItem(historySlot)).toMatch(/^tlb-sealed:v1:/);
+                expect(localStorage.getItem(historySlot)).not.toContain('45 min');
+                requiredUpdateRecoveryRegistry.captureAll();
+            } finally { first.close(); }
+
+            const reopened = await openKindeCandidateFitnessRealm({ ...browser(fixture), expected });
+            try {
+                const recovered = await reopened.openHistoryWorkoutDraft();
+                expect(recovered.initial.workout.manualDurationStr).toBe('45 min');
+                expect(recovered.initial.ratings.water).toBe('1,25');
+                await expect(reopened.saveHistoryWorkoutDraft(recovered)).resolves.toMatchObject({
+                    outcome: { kind: 'cloud-acknowledged' }, draftCleared: true,
+                });
+                const data = reopened.snapshot()?.data;
+                expect(data?.history).toMatchObject([{ id: 'history-edit', globalDurationStr: '00:45:00', waterLiters: 1.25 }]);
+                expect(data?.history?.[0]).not.toHaveProperty('isEditingHistory', true);
+                expect(data?.activeWorkout).toMatchObject({ id: 'session-still-active', routineName: 'In corso' });
+                expect(localStorage.getItem(activeSlot)).toBe(originalActiveDraft);
+                expect(localStorage.getItem(historySlot)).toBeNull();
+                expect(fixture.count('sync_receipts', uid)).toBe(2);
+            } finally { reopened.close(); }
+        } finally { fixture.close(); }
+    });
+
+    it('keeps an unsubmitted history draft when another realm deletes its entry before commit', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        const slot = protectedDeviceKey('draft:history-workout', owner);
+        try {
+            await fixture.consent(uid);
+            const first = await openKindeCandidateFitnessRealm({ ...browser(fixture), expected });
+            try {
+                await first.submit({ type: 'history.upsert', workout: { id: 'historical-race', date: '2026-11-20',
+                    routineName: 'Seduta da conservare come bozza', exercises: [] } });
+                const editor = await first.openHistoryWorkoutDraft('historical-race');
+                editor.write({ ...editor.initial, workout: { ...editor.initial.workout, manualDurationStr: '20 min' } });
+                const raw = localStorage.getItem(slot);
+                const second = await openKindeCandidateFitnessRealm({ ...browser(fixture), expected });
+                try {
+                    await second.submit({ type: 'history.delete', id: 'historical-race' });
+                    await expect(first.saveHistoryWorkoutDraft(editor)).rejects.toThrow('La seduta originale è cambiata');
+                    expect(localStorage.getItem(slot)).toBe(raw);
+                    const recovered = await second.openHistoryWorkoutDraft();
+                    expect(recovered.initial).toMatchObject({
+                        stale: true, submitted: false, workout: { id: 'historical-race', manualDurationStr: '20 min' },
+                    });
+                    expect(second.snapshot()?.data.history).toEqual([]);
+                    expect(fixture.count('sync_receipts', uid)).toBe(2);
+                } finally { second.close(); }
+            } finally { first.close(); }
+        } finally { fixture.close(); }
+    });
+
     it('recovers a separate active workout draft, reconciles its pending journal and closes it in history once', async () => {
         const fixture = await createCloudKeyHttpFixture([uid]);
         const draftName = 'draft:active-workout';

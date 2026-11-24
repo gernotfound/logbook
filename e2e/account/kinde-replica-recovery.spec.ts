@@ -315,7 +315,7 @@ test('reads Kinde training history and report without writing another owner\'s d
         await first.getByRole('button', { name: 'Opzioni' }).click();
         await expect(first.getByRole('menuitem', { name: 'Vedi report' })).toBeVisible();
         await expect(first.getByRole('menuitem', { name: 'Elimina allenamento' })).toBeVisible();
-        await expect(first.getByRole('menuitem', { name: 'Modifica allenamento' })).toHaveCount(0);
+        await expect(first.getByRole('menuitem', { name: 'Modifica allenamento' })).toBeVisible();
         await card.click();
         const report = first.getByRole('dialog', { name: 'Sessione Kinde' });
         await expect(report).toBeVisible();
