@@ -178,7 +178,7 @@ test('requests full profile erasure only after proof for the exact linked owner'
       assert.equal(url.pathname, '/api/v1/user');
       assert.deepEqual([...url.searchParams], [['id', subject], ['is_delete_profile', 'true']]);
       assert.equal(request.method, 'DELETE');
-      assert.equal(request.redirect, 'error');
+      assert.equal(request.redirect, 'manual');
       assert.equal(request.headers.get('authorization'), 'Bearer ' + token);
       assert.equal(request.body, null);
       return Response.json({ code: 'OK', message: 'Synthetic acknowledgement' });
@@ -210,7 +210,8 @@ test('never interprets ambiguous provider results as account erasure', async () 
   const uid = await deriveKindeOwnerId(issuer, subject);
   const target = { uid, subject, accessToken: 'synthetic.worker.token' };
   const responseFactories = [
-    ...[204, 302, 401, 403, 404, 429, 500].map(status => () => new Response(null, { status })),
+    ...[204, 401, 403, 404, 429, 500].map(status => () => new Response(null, { status })),
+    () => new Response(null, { status: 302, headers: { location: 'https://another.example/profile' } }),
     () => new Response('proxy page', { headers: { 'content-type': 'text/html' } }),
     () => new Response('invalid json', { headers: { 'content-type': 'application/json' } }),
     () => Response.json({ code: 'ERROR', message: 'Rejected' }),
@@ -247,7 +248,7 @@ test('readback after a lost delete reply uses an exact uncached Kinde profile li
       assert.equal(url.pathname, '/api/v1/users');
       assert.deepEqual([...url.searchParams], [['user_id', subject], ['page_size', '1']]);
       assert.equal(request.cache, 'no-store');
-      assert.equal(request.redirect, 'error');
+      assert.equal(request.redirect, 'manual');
       return Response.json({ code: 'OK', message: 'Synthetic exact lookup', users: present ? [{ id: subject }] : [] });
     },
   });

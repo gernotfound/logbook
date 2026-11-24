@@ -70,7 +70,9 @@ export function createKindeErasureManagement({ issuer, fetchImpl, proveTerminalF
         method,
         headers: { Authorization: 'Bearer ' + accessToken, Accept: 'application/json' },
         cache: 'no-store',
-        redirect: 'error',
+        // Workers supports manual redirects. Never forward authorization to
+        // a redirect target, and treat the 3xx response as unconfirmed.
+        redirect: 'manual',
         signal: AbortSignal.timeout(5000),
       });
     } catch { return null; }
