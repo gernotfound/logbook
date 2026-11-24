@@ -3,7 +3,7 @@ import { CalendarDays } from 'lucide-react';
 import { useDialogStore } from '../../../store/useDialogStore';
 import { Logic } from '../../../lib/logic';
 import type { Exercise, TrainingCycle, WorkoutRoutine } from '../../../types';
-import { useCycleForm } from './useCycleForm';
+import { useCycleForm, type CycleFormPersistence } from './useCycleForm';
 import { CycleSchedulePreview } from './CycleSchedulePreview';
 import { CycleRoutinesList } from './CycleRoutinesList';
 import { CycleMuscleMap } from './CycleMuscleMap';
@@ -13,14 +13,15 @@ import { calculateCycleMacroVolume } from './cycleMacroVolume';
 
 const EMPTY_LIBRARY: Exercise[] = [];
 
-interface CycleEditorProps {
+type CycleEditorProps = CycleFormPersistence & {
     initialCycle?: TrainingCycle | null;
     routines: WorkoutRoutine[];
     library?: Exercise[];
     hasRecordedSessions?: boolean;
-    onSave: (cycleData: TrainingCycle) => void | Promise<void>;
     onCancel: () => void;
-}
+    onDiscardDraft?: () => void;
+    draftStatus?: string;
+};
 
 export const CycleEditor: React.FC<CycleEditorProps> = ({
     initialCycle,
@@ -28,10 +29,13 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
     library = EMPTY_LIBRARY,
     hasRecordedSessions = false,
     onSave,
-    onCancel
+    onCancel,
+    draft,
+    onDiscardDraft,
+    draftStatus,
 }) => {
     const showAlert = useDialogStore(state => state.showAlert);
-    const form = useCycleForm({ initialCycle, routines, onSave, showAlert });
+    const form = useCycleForm({ initialCycle, routines, showAlert, ...(draft ? { draft } : { onSave }) });
 
     const {
         refs: { startDatePickerRef, endDatePickerRef },
@@ -56,6 +60,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
             showSchedulePreview,
             setShowSchedulePreview,
             isSaving,
+            writeBlocked,
             tempWeeks,
             tempFreq
         },
@@ -79,6 +84,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
             handleSubmit
         }
     } = form;
+    const editingLocked = writeBlocked || draft?.canEdit === false;
 
     const togglePreview = useCallback(() => {
         setShowSchedulePreview(!showSchedulePreview);
@@ -116,10 +122,14 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                     {initialCycle ? 'Modifica ciclo' : 'Nuovo ciclo'}
                     {!initialCycle ? <span className="sr-only"> Crea ciclo di allenamento</span> : null}
                 </h2>
-                <button type="button" className="planning-close-button" onClick={onCancel}>Chiudi</button>
+                <button type="button" className="planning-close-button" onClick={onCancel}
+                    disabled={Boolean(draft && isSaving)}>Chiudi</button>
             </header>
 
-            <div className="planning-editor-fields" inert={isSaving}>
+            {draftStatus && <p role="status">{draftStatus}</p>}
+            {writeBlocked && <p role="alert">Bozza da verificare. Chiudi e riapri il ciclo per rileggere la copia cifrata.</p>}
+            <fieldset className="planning-editor-fields" disabled={editingLocked} inert={isSaving}>
+            <legend className="sr-only">Dati del ciclo</legend>
             <label className="planning-field" htmlFor="cycle-name">
                 <span>Nome ciclo</span>
                 <input
@@ -295,11 +305,15 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
             />
 
             <CycleVolumeAccordion items={macroVolume} />
-            </div>
+            </fieldset>
 
             <div className="planning-editor-actions">
-                <button type="button" className="btn" onClick={onCancel}>Annulla</button>
-                <button type="submit" className="btn btn-primary" disabled={isSaving}>
+                <button type="button" className="btn" onClick={onCancel} disabled={Boolean(draft && isSaving)}>
+                    {draft ? 'Chiudi e conserva bozza' : 'Annulla'}
+                </button>
+                {onDiscardDraft && <button type="button" className="btn btn-danger" onClick={onDiscardDraft}
+                    disabled={isSaving}>Elimina bozza ciclo</button>}
+                <button type="submit" className="btn btn-primary" disabled={isSaving || editingLocked}>
                     {isSaving ? 'Salvataggio in corso…' : initialCycle ? 'Salva modifiche' : 'Salva ciclo'}
                 </button>
             </div>

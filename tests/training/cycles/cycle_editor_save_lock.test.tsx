@@ -2,6 +2,7 @@ import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CycleEditor } from '../../../src/components/Training/planning/CycleEditor';
+import { initialCycleForm } from '../../../src/lib/trainingCycleForm';
 import { useDialogStore } from '../../../src/store/useDialogStore';
 import type { TrainingCycle, WorkoutRoutine } from '../../../src/types';
 
@@ -25,6 +26,25 @@ afterEach(() => {
 });
 
 describe('CycleEditor durable save boundaries', () => {
+    it('keeps the last durable form image when saving a draft change fails', () => {
+        const write = vi.fn().mockImplementationOnce(() => undefined)
+            .mockImplementationOnce(() => { throw new Error('draft unavailable'); });
+        const save = vi.fn().mockResolvedValue(undefined);
+        const { container, getByRole } = render(<CycleEditor initialCycle={initialCycle} routines={routines}
+            draft={{ values: initialCycleForm(initialCycle), canEdit: true, write, save }} onCancel={vi.fn()} />);
+        const start = container.querySelector<HTMLInputElement>('#cycle-start-date')!;
+        const form = container.querySelector<HTMLFormElement>('#cycle-editor-form')!;
+        fireEvent.change(start, { target: { value: '05/11/2026' } });
+        expect(write).toHaveBeenCalledOnce();
+        expect(write.mock.calls[0]?.[0]).toMatchObject({ startDate: '2026-11-05', endDate: '2026-12-02' });
+        expect(start.value).toBe('05/11/2026');
+        fireEvent.change(start, { target: { value: '07/11/2026' } });
+        expect(start.value).toBe('05/11/2026');
+        expect(getByRole('alert').textContent).toContain('Bozza da verificare');
+        fireEvent.submit(form);
+        expect(save).not.toHaveBeenCalled();
+    });
+
     it('blocks late edits and duplicate submissions but preserves intentional closing during a pending save', async () => {
         let completeSave!: () => void;
         const onSave = vi.fn((_cycle: TrainingCycle) => new Promise<void>(resolve => { completeSave = resolve; }));

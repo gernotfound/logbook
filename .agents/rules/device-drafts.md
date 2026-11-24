@@ -122,6 +122,14 @@ L'editor Kinde degli esercizi personali applica lo stesso contratto a
 confronta i campi modificabili di partenza e ricontrolla l'unicità del
 nome. Una bozza di scheda e una bozza di esercizio possono coesistere.
 
+Il candidato Kinde conserva l'editor dei cicli in `draft_training_cycle`.
+Ogni modifica, compresi i campi data derivati, viene scritta come una sola
+copia cifrata prima di aggiornare il form. Update e reload verificano la
+copia osservata. L'upsert del ciclo confronta la versione osservata e
+ricontrolla le schede collegate nel commit del journal. Crea e seleziona il
+primo ciclo atomicamente se l'archivio resta vuoto. Una bozza la cui
+origine è cambiata o è stata eliminata resta consultabile per verifica.
+
 **MUST (CRITICAL, recupero check-in/fine allenamento):** le copie sincrone `draft:pre-session:<workoutId>` e `draft:post-session:<workoutId>` devono registrare owner, nome della chiave e revisione del consenso all'interno dello stesso record cifrato dei valori (senza modifiche a IndexedDB o al journal). Il bootstrap dei componenti, ogni edit, il flush di update/reload, l'avvio della sessione, la finalizzazione e il cleanup verificano provenienza e sessione prima di usare o sostituire la copia. Le copie account senza revisione e identificazione owner/chiave non vengono rilette automaticamente, nemmeno nella prima generazione; non sovrascriverle né cancellarle e preservare i byte originali per il backup esplicito. Il guest mantiene il proprio formato corrente. Una mutazione di business già durabile e la successiva pulizia device sono risultati distinti.
 
 **MUST (CRITICAL, bozze datate):** le bozze sincrone di misurazioni, sonno e attività (`draft:<kind>:<date>`) sono dati sanitari locali modificabili, non semplici preferenze. Una bozza autenticata nuova conserva owner e revisione consenso nello stesso record device cifrato dei valori. Una bozza account V2 senza `consentRevision`, anche nella prima generazione e anche se è un tombstone, non prova l'origine e viene rifiutata senza riscrivere o eliminare i byte; la mancanza del marker impedisce inoltre di creare nuove copie o tombstone account. Disaccordi di owner/epoch bloccano rendering, overwrite, pulizia e salvataggi attraverso la barriera `localPersistenceBlocked`, conservando la copia per l'export esplicito. Una nuova bozza valida con revisione corrente continua a funzionare. Le scritture guest e account usano il wrapper device datato V2 con identificatore casuale per ogni revisione; il guest non richiede il marker di consenso account. V1 e copie non avvolte non sono importate nel formato corrente. Nessun reimport automatico di bozze da vecchie generazioni.
