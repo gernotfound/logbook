@@ -57,7 +57,20 @@ export async function runKindeAccountErasureAppStep(appDb, recoveryDb, intent) {
     if (removed > 0) return { outcome: 'progress', removed };
   }
 
-  const observed = await primary.prepare(`
+  return verifyKindeAccountErasureAppComplete(appDb, recoveryDb, intent);
+}
+
+/**
+ * Recertify cleanup and the current independent floor immediately before a
+ * provider request. A restored application database cannot reuse old proof.
+ * @param {Parameters<typeof runKindeAccountErasureAppStep>[0]} appDb
+ * @param {Parameters<typeof runKindeAccountErasureAppStep>[1]} recoveryDb
+ * @param {Parameters<typeof runKindeAccountErasureAppStep>[2]} intent
+ */
+export async function verifyKindeAccountErasureAppComplete(appDb, recoveryDb, intent) {
+  if (!appDb || !recoveryDb || appDb === recoveryDb) throw new Error('kinde-erasure-application-unavailable');
+  const scope = [intent.uid, intent.receiptHash, intent.authEpoch];
+  const observed = await appDb.withSession('first-primary').prepare(`
     SELECT r.uid, s.status, s.consent_revision, s.fence_epoch, s.erased_before_revision,
       CASE WHEN s.uid IS NULL AND (
         ${HEALTH_TABLES.map(name => `EXISTS (SELECT 1 FROM ${name} WHERE uid = r.uid)`).join(' OR ')}

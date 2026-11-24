@@ -134,3 +134,96 @@ CREATE TRIGGER kinde_account_erasure_disallow_reactivation
 BEFORE UPDATE ON auth_principals
 WHEN NEW.status = 'active' AND EXISTS (SELECT 1 FROM kinde_account_erasure_requests WHERE uid = OLD.uid)
 BEGIN SELECT RAISE(ABORT, 'kinde-account-erasure-request-retained'); END;
+
+CREATE TABLE kinde_account_erasure_provider_progress (
+  uid TEXT PRIMARY KEY REFERENCES kinde_account_erasure_requests(uid) ON DELETE RESTRICT,
+  lease_epoch INTEGER NOT NULL DEFAULT 0 CHECK (lease_epoch >= 0),
+  lease_token TEXT CHECK (lease_token IS NULL OR (length(lease_token) = 64 AND lease_token NOT GLOB '*[^0-9a-f]*')),
+  lease_until_ms INTEGER NOT NULL DEFAULT 0 CHECK (lease_until_ms >= 0),
+  present_at_ms INTEGER CHECK (present_at_ms > 0),
+  delete_started_at_ms INTEGER CHECK (
+    delete_started_at_ms IS NULL OR (present_at_ms IS NOT NULL AND delete_started_at_ms >= present_at_ms)
+  ),
+  delete_acknowledged_at_ms INTEGER CHECK (
+    delete_acknowledged_at_ms IS NULL
+      OR (delete_started_at_ms IS NOT NULL AND delete_acknowledged_at_ms >= delete_started_at_ms)
+  )
+) STRICT;
+
+CREATE TRIGGER kinde_account_erasure_provider_initial
+BEFORE INSERT ON kinde_account_erasure_provider_progress
+WHEN NEW.lease_epoch != 0 OR NEW.lease_token IS NOT NULL OR NEW.lease_until_ms != 0
+  OR NEW.present_at_ms IS NOT NULL OR NEW.delete_started_at_ms IS NOT NULL OR NEW.delete_acknowledged_at_ms IS NOT NULL
+  OR EXISTS (SELECT 1 FROM kinde_account_erasure_provider_progress WHERE uid = NEW.uid)
+BEGIN SELECT RAISE(ABORT, 'kinde-account-erasure-provider-fenced'); END;
+
+CREATE TRIGGER kinde_account_erasure_provider_no_delete
+BEFORE DELETE ON kinde_account_erasure_provider_progress
+BEGIN SELECT RAISE(ABORT, 'kinde-account-erasure-provider-immutable'); END;
+
+CREATE TRIGGER kinde_account_erasure_provider_monotone
+BEFORE UPDATE ON kinde_account_erasure_provider_progress
+WHEN NEW.uid != OLD.uid
+  OR NEW.lease_epoch < OLD.lease_epoch OR NEW.lease_epoch > OLD.lease_epoch + 1
+  OR (NEW.lease_epoch = OLD.lease_epoch AND NEW.lease_token IS NOT OLD.lease_token)
+  OR (OLD.present_at_ms IS NOT NULL AND NEW.present_at_ms IS NOT OLD.present_at_ms)
+  OR (OLD.delete_started_at_ms IS NOT NULL AND NEW.delete_started_at_ms IS NOT OLD.delete_started_at_ms)
+  OR (OLD.delete_acknowledged_at_ms IS NOT NULL AND NEW.delete_acknowledged_at_ms IS NOT OLD.delete_acknowledged_at_ms)
+BEGIN SELECT RAISE(ABORT, 'kinde-account-erasure-provider-fenced'); END;
+
+-- This record is written only after a full-profile DELETE acknowledgement
+-- and a separate exact-ID lookup have both been verified.
+CREATE TABLE kinde_account_erasure_completions (
+  uid TEXT PRIMARY KEY REFERENCES kinde_account_erasure_requests(uid) ON DELETE RESTRICT,
+  completed_at_ms INTEGER NOT NULL CHECK (completed_at_ms > 0),
+  lease_epoch INTEGER NOT NULL CHECK (lease_epoch >= 1),
+  lease_token TEXT NOT NULL CHECK (length(lease_token) = 64 AND lease_token NOT GLOB '*[^0-9a-f]*')
+) STRICT;
+
+CREATE TRIGGER kinde_account_erasure_completion_fence
+BEFORE INSERT ON kinde_account_erasure_completions
+WHEN NEW.completed_at_ms IS NOT
+    (CAST(strftime('%s','now') AS INTEGER) * 1000 + CAST(substr(strftime('%f','now'),4,3) AS INTEGER))
+  OR EXISTS (SELECT 1 FROM kinde_account_erasure_completions WHERE uid = NEW.uid)
+  OR NOT EXISTS (
+    SELECT 1 FROM kinde_account_erasure_provider_progress x
+    JOIN kinde_account_erasure_requests r ON r.uid = x.uid
+    JOIN auth_principals p ON p.uid = r.uid
+    WHERE r.uid = NEW.uid AND p.status = 'disabled' AND p.auth_epoch = r.prior_auth_epoch + 1
+      AND x.lease_epoch = NEW.lease_epoch AND x.lease_token = NEW.lease_token
+      AND x.lease_until_ms > NEW.completed_at_ms AND x.delete_acknowledged_at_ms <= NEW.completed_at_ms
+  )
+  OR EXISTS (SELECT 1 FROM auth_sessions WHERE uid = NEW.uid)
+  OR EXISTS (SELECT 1 FROM kinde_deletion_oauth_attempts WHERE uid = NEW.uid)
+  OR EXISTS (SELECT 1 FROM cloud_account_keys WHERE uid = NEW.uid)
+  OR EXISTS (SELECT 1 FROM sync_documents WHERE uid = NEW.uid)
+  OR EXISTS (SELECT 1 FROM sync_receipts WHERE uid = NEW.uid)
+  OR EXISTS (SELECT 1 FROM sync_replicas WHERE uid = NEW.uid)
+  OR EXISTS (SELECT 1 FROM sync_replica_mutations WHERE uid = NEW.uid)
+  OR EXISTS (
+    SELECT 1 FROM sync_subjects s WHERE s.uid = NEW.uid AND NOT EXISTS (
+      SELECT 1 FROM health_erasure_finalizations f
+      WHERE f.uid = s.uid AND s.status = 'withdrawn'
+        AND f.erased_before_revision = s.consent_revision AND s.erased_before_revision = s.consent_revision
+        AND s.fence_epoch = f.fence_epoch + 1
+    )
+  )
+BEGIN SELECT RAISE(ABORT, 'kinde-account-erasure-completion-fenced'); END;
+
+CREATE TRIGGER kinde_account_erasure_complete
+AFTER INSERT ON kinde_account_erasure_completions
+BEGIN
+  UPDATE auth_principals SET status = 'deleted'
+  WHERE uid = NEW.uid AND status = 'disabled';
+  SELECT CASE WHEN changes() != 1 THEN RAISE(ABORT, 'kinde-account-erasure-completion-fenced') END;
+  DELETE FROM kinde_erasure_targets WHERE uid = NEW.uid;
+  SELECT CASE WHEN changes() != 1 THEN RAISE(ABORT, 'kinde-account-erasure-completion-fenced') END;
+END;
+
+CREATE TRIGGER kinde_account_erasure_completion_immutable_update
+BEFORE UPDATE ON kinde_account_erasure_completions
+BEGIN SELECT RAISE(ABORT, 'kinde-account-erasure-completion-immutable'); END;
+
+CREATE TRIGGER kinde_account_erasure_completion_immutable_delete
+BEFORE DELETE ON kinde_account_erasure_completions
+BEGIN SELECT RAISE(ABORT, 'kinde-account-erasure-completion-immutable'); END;
