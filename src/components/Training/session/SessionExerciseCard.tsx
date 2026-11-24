@@ -7,9 +7,9 @@ import type { SessionExerciseHistoryEntry } from './SessionExercisePanels';
 import { BufferedTextarea } from '../../UI/BufferedInput';
 import SessionCardioFields from './SessionCardioFields';
 import SessionExerciseToolbar from './SessionExerciseToolbar';
-import { BufferedWorkoutScope } from '../../UI/bufferedWorkoutScope';
+import { BufferedWorkoutScope, DurableWorkoutEditScope } from '../../UI/bufferedWorkoutScope';
 import { sessionSetHasMeaningfulData } from '../../../lib/workoutSetData';
-import { captureSession, isCurrentSession } from '../../../lib/sync/session';
+import { captureCurrentSessionCheck } from '../../../lib/sync/session';
 import type { Exercise, SessionExercise, SessionExerciseSet } from '../../../types';
 
 interface SessionExerciseCardProps {
@@ -72,6 +72,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
     // existing accordion key for older in-memory snapshots lacking one.
     const exerciseInstanceId = exItem.id || `${exItem.exId}_${exIndex}`;
     const workoutId = React.useContext(BufferedWorkoutScope);
+    const captureEdit = React.useContext(DurableWorkoutEditScope) ?? captureCurrentSessionCheck;
     const lastNote = pastWorkouts[0]?.note?.trim() || '';
 
     const [isNextNoteOpen, setIsNextNoteOpen] = React.useState(Boolean(exItem.sessionNote?.trim()));
@@ -90,16 +91,17 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
         const isFilled = sessionSetHasMeaningfulData(lastSet);
 
         if (isFilled) {
-            const session = captureSession();
+            const isCurrent = captureEdit();
+            if (!isCurrent) return;
             const confirmed = await useDialogStore.getState().showConfirm(
                 "La serie contiene dei dati. Vuoi davvero rimuoverla?"
             );
-            if (!confirmed || !isCurrentSession(session)) return;
+            if (!confirmed || !isCurrent()) return;
         }
 
         if (!lastSet.id) return;
         onRemoveSet(exIndex, lastIndex, lastSet.id, exItem.id, workoutId, lastSet);
-    }, [exItem.sets, exItem.id, onRemoveSet, onRemoveLastSet, exIndex, workoutId]);
+    }, [exItem.sets, exItem.id, onRemoveSet, onRemoveLastSet, exIndex, workoutId, captureEdit]);
 
     return (
         <div className="section-divider session-exercise-card-content">

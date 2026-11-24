@@ -4,7 +4,7 @@ import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { assertBufferedDraftUnchanged, readBufferedDraftSnapshot, writeBufferedDraft } from '../../lib/sync/bufferedDraftEpoch';
 import { requiredUpdateRecoveryRegistry } from '../../lib/sync/requiredUpdateRecovery';
 import { useAppStore } from '../../store/useAppStore';
-import { BufferedWorkoutScope } from './bufferedWorkoutScope';
+import { BufferedWorkoutScope, DurableWorkoutEditScope } from './bufferedWorkoutScope';
 import {
     BufferedWriterConsumedError, clearBufferedWriterIntent, createBufferedWriterIntentName,
     readBufferedWriterEvidence, writeBufferedWriterIntent,
@@ -328,7 +328,7 @@ function useBufferedEditorDraft(
     return { localValue, handleChange, flush, setFocused, editSession };
 }
 
-export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputProps>(
+const LegacyBufferedInput = React.forwardRef<HTMLInputElement, BufferedInputProps>(
     ({ id, recoveryId, value, onChange, onBlur, onFocus, onKeyDown, type, inputMode, ...props }, ref) => {
         const workoutId = React.useContext(BufferedWorkoutScope);
         const { localValue, handleChange, flush, setFocused, editSession } = useBufferedEditorDraft(
@@ -385,6 +385,21 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
     }
 );
 
+export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputProps>((props, ref) => {
+    const capture = React.useContext(DurableWorkoutEditScope);
+    if (!capture) return <LegacyBufferedInput {...props} ref={ref} />;
+    const { recoveryId: _id, value, onChange, onKeyDown, onBlur, ...attributes } = props;
+    return <input {...attributes} ref={ref} value={value ?? ''}
+        onChange={event => {
+            if (capture()?.()) onChange(normalizeInputValue(event.target.value, attributes.type, attributes.inputMode));
+        }} onBlur={event => { if (capture()?.()) onBlur?.(event); }}
+        onKeyDown={event => {
+            if (!capture()?.()) return;
+            if (event.key === 'Enter') event.currentTarget.blur();
+            onKeyDown?.(event);
+        }} />;
+});
+
 BufferedInput.displayName = 'BufferedInput';
 
 interface BufferedTextareaProps extends Omit<React.TextareaHTMLAttributes<HTMLTextAreaElement>, 'value' | 'onChange'> {
@@ -392,7 +407,7 @@ interface BufferedTextareaProps extends Omit<React.TextareaHTMLAttributes<HTMLTe
     onChange: (value: string) => void;
 }
 
-export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTextareaProps>(
+const LegacyBufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTextareaProps>(
     ({ id, value, onChange, onBlur, onFocus, ...props }, ref) => {
         const workoutId = React.useContext(BufferedWorkoutScope);
         const { localValue, handleChange, flush, setFocused, editSession } = useBufferedEditorDraft(
@@ -429,5 +444,14 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
         );
     }
 );
+
+export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTextareaProps>((props, ref) => {
+    const capture = React.useContext(DurableWorkoutEditScope);
+    if (!capture) return <LegacyBufferedTextarea {...props} ref={ref} />;
+    const { value, onChange, onBlur, ...attributes } = props;
+    return <textarea {...attributes} ref={ref} value={value ?? ''}
+        onChange={event => { if (capture()?.()) onChange(event.target.value); }}
+        onBlur={event => { if (capture()?.()) onBlur?.(event); }} />;
+});
 
 BufferedTextarea.displayName = 'BufferedTextarea';

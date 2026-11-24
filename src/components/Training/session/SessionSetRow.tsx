@@ -3,10 +3,10 @@ import { Trash2 } from 'lucide-react';
 import { SessionSetOptionsMenu } from './SessionSetOptionsMenu';
 import { SessionSetPrimaryFields } from './SessionSetPrimaryFields';
 import { SessionSetAdvancedSegments } from './SessionSetAdvancedSegments';
-import { BufferedWorkoutScope } from '../../UI/bufferedWorkoutScope';
+import { BufferedWorkoutScope, DurableWorkoutEditScope } from '../../UI/bufferedWorkoutScope';
 import { useDialogStore } from '../../../store/useDialogStore';
 import { sessionSetHasMeaningfulData } from '../../../lib/workoutSetData';
-import { captureSession, isCurrentSession } from '../../../lib/sync/session';
+import { captureCurrentSessionCheck } from '../../../lib/sync/session';
 import type { SessionSetRowProps } from './sessionSetRowTypes';
 export type { SessionSetRowProps } from './sessionSetRowTypes';
 
@@ -29,14 +29,16 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
     // Keep isolated component fixtures without an instance ID compatible.
     const recoveryPrefix = exerciseInstanceId ? `${exerciseInstanceId}-` : '';
     const workoutId = React.useContext(BufferedWorkoutScope);
+    const captureEdit = React.useContext(DurableWorkoutEditScope) ?? captureCurrentSessionCheck;
 
     const handleRemoveSetSafely = async () => {
         if (sessionSetHasMeaningfulData(s)) {
-            const session = captureSession();
+            const isCurrent = captureEdit();
+            if (!isCurrent) return;
             const confirmed = await useDialogStore.getState().showConfirm(
                 'La serie contiene dei dati. Vuoi davvero rimuoverla?'
             );
-            if (!confirmed || !isCurrentSession(session)) return;
+            if (!confirmed || !isCurrent()) return;
         }
         onRemoveSet(exIndex, sIndex, s.id, exerciseInstanceId, workoutId, s);
         if (isOpenMenu) onToggleMenu(s.id);

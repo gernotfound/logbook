@@ -21,7 +21,7 @@ const adaptiveSurfaceFiles = [
   'src/components/Nutrition/NutritionSupplementsForm.tsx',
   'src/components/Nutrition/SupplementCard.tsx',
   'src/components/Nutrition/SupplementEditorForm.tsx',
-  'src/components/Training/ActiveWorkoutSession.tsx',
+  'src/components/Training/WorkoutSessionEditor.tsx',
   'src/components/Training/ExerciseSearchDropdown.tsx',
   'src/components/Training/ExerciseSearchOption.tsx',
   'src/components/Training/exercises/ExerciseEditorForm.tsx',

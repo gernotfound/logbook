@@ -4,9 +4,9 @@ import path from 'path';
 
 describe('React identity and memoization regressions', () => {
     describe('Scope 3: Memoization Referential Identity Verification', () => {
-        it('verifies EMPTY_HISTORY_ARRAY in TrainingSession preserves strict reference equality (===) for multiple exercises without history', async () => {
+        it('verifies WorkoutSessionEditor preserves one empty history reference for exercises without history', async () => {
             const activeSessionFile = fs.readFileSync(
-                path.resolve(__dirname, '../../../src/components/Training/ActiveWorkoutSession.tsx'),
+                path.resolve(__dirname, '../../../src/components/Training/WorkoutSessionEditor.tsx'),
                 'utf-8'
             );
 

@@ -1,10 +1,9 @@
 import React from 'react';
 import { Pencil } from 'lucide-react';
-import WorkoutTimer from './WorkoutTimer';
 
 interface SessionHeaderProps {
     isEditingHistory?: boolean;
-    isActive?: boolean;
+    restTimer?: React.ReactNode;
     routineName?: string;
     date?: string;
     onCancelHistory: () => void;
@@ -15,7 +14,7 @@ interface SessionHeaderProps {
 
 const SessionHeader: React.FC<SessionHeaderProps> = ({
     isEditingHistory,
-    isActive = true,
+    restTimer,
     routineName,
     date,
     onCancelHistory,
@@ -61,7 +60,7 @@ const SessionHeader: React.FC<SessionHeaderProps> = ({
 
             {!isEditingHistory && (
                 <div className="workout-sticky-timer">
-                    <WorkoutTimer isActive={isActive} />
+                    {restTimer}
                     <div
                         className="workout-exercise-progress"
                         role="progressbar"
