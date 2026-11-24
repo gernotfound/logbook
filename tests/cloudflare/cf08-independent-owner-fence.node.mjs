@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
-import { RECOVERY_MIGRATIONS, verifyLocalRecoveryTarget, verifyRecoveryLedger, verifyRecoverySnapshot } from '../../scripts/verify-cloudflare-recovery-d1-schema.mjs';
+import { RECOVERY_MIGRATIONS, verifyLocalRecoveryTarget, verifyRecoveryDenialUpgradeSql, verifyRecoveryLedger, verifyRecoverySnapshot } from '../../scripts/verify-cloudflare-recovery-d1-schema.mjs';
 import { applyCurrentD1RecoverySchema, applyCurrentD1Schema } from './current-d1-schema.mjs';
 import { runOneHealthErasureStep } from '../../cloudflare/jobs/health-erasure-worker.mjs';
 import { inspectRestoredD1Census } from '../../cloudflare/recovery/restore-census.mjs';
@@ -453,19 +453,23 @@ void test('recovery operator pins isolation and additive migration set', () => {
   const config = JSON.parse(readFileSync(
     new URL('../../cloudflare/api/wrangler.isolated.jsonc', import.meta.url), 'utf8'));
   assert.doesNotThrow(() => verifyLocalRecoveryTarget(config, RECOVERY_MIGRATIONS));
-  assert.throws(() => verifyLocalRecoveryTarget(config, [...RECOVERY_MIGRATIONS, '0005_unknown.sql']));
+  assert.throws(() => verifyLocalRecoveryTarget(config, [...RECOVERY_MIGRATIONS, '0006_unknown.sql']));
   assert.throws(() => verifyLocalRecoveryTarget({
     ...config, d1_databases: [{ ...config.d1_databases[0] }, {
       ...config.d1_databases[1], database_id: config.d1_databases[0].database_id,
     }],
   }, RECOVERY_MIGRATIONS));
+  const sql = readFileSync(new URL('../../cloudflare/recovery/migrations/0005_account_erasure_denials.sql', import.meta.url), 'utf8');
+  assert.doesNotThrow(() => verifyRecoveryDenialUpgradeSql(sql));
+  assert.throws(() => verifyRecoveryDenialUpgradeSql(sql + '\nDELETE FROM recovery_owner_fences;'), /unreviewed SQL/);
 });
 
 void test('recovery operator accepts only contiguous known migrations', () => {
   const rows = RECOVERY_MIGRATIONS.map((name, i) => ({ id: i + 1, name }));
   assert.equal(verifyRecoveryLedger(rows.slice(0, 2), 'before'), 2);
   assert.equal(verifyRecoveryLedger(rows.slice(0, 3), 'before'), 3);
-  assert.equal(verifyRecoveryLedger(rows, 'after'), 4);
+  assert.equal(verifyRecoveryLedger(rows.slice(0, 4), 'before'), 4);
+  assert.equal(verifyRecoveryLedger(rows, 'after'), 5);
   assert.throws(() => verifyRecoveryLedger(rows.slice(0, 2), 'after'));
   assert.throws(() => verifyRecoveryLedger([{ ...rows[0], name: 'bad.sql' }, rows[1]], 'before'));
   assert.throws(() => verifyRecoveryLedger([rows[0], rows[2]], 'before'));
@@ -487,4 +491,18 @@ void test('recovery operator fails closed for opened, populated or wrong-jurisdi
     { bookmark: '' },
   ]) assert.throws(() => verifyRecoverySnapshot({ ...original, ...change }));
   assert.throws(() => verifyRecoverySnapshot({ ...original, phase: 'after' }));
+  const upgraded = RECOVERY_MIGRATIONS.map((name, i) => ({ id: i + 1, name }));
+  assert.throws(() => verifyRecoverySnapshot({ ...original, ledger: upgraded,
+    control: [{ ...control[0], account_denials: 1 }] }), /existing account erasure denials/);
+  const sqlite = new DatabaseSync(':memory:');
+  try {
+    applyCurrentD1RecoverySchema(sqlite);
+    const schema = sqlite.prepare('SELECT name,type,sql FROM sqlite_master').all();
+    const snapshot = { ...original, ledger: upgraded, phase: 'after', schema,
+      control: [{ ...control[0], account_denials: 0 }] };
+    assert.equal(verifyRecoverySnapshot(snapshot).applied, 5);
+    assert.throws(() => verifyRecoverySnapshot({ ...snapshot,
+      schema: schema.filter(item => item.name !== 'recovery_account_erasure_deny_no_delete'),
+    }), /missing recovery schema object/);
+  } finally { sqlite.close(); }
 });

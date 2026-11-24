@@ -4,7 +4,9 @@ import { createHash } from 'node:crypto';
 import { applyCurrentD1Schema } from './current-d1-schema.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
-import { createKindeIdentityProofVerifier, createKindeLoginProofVerifier } from '../../cloudflare/auth/kinde-login-proof.mjs';
+import {
+  createKindeDeletionReauthVerifier, createKindeIdentityProofVerifier, createKindeLoginProofVerifier,
+} from '../../cloudflare/auth/kinde-login-proof.mjs';
 import { createKindePrincipalProvisioner, KindePrincipalProvisionError } from '../../cloudflare/auth/kinde-principal-provisioner.mjs';
 
 const issuer = 'https://synthetic-kinde.example';
@@ -22,6 +24,7 @@ async function fixture() {
   const config = { issuer, clientId, apiAudience };
   const verify = createKindeLoginProofVerifier(config, localKeys);
   const verifyIdentity = createKindeIdentityProofVerifier(config, localKeys);
+  const verifyDeletion = createKindeDeletionReauthVerifier(config, localKeys);
   async function tokens({
     accessClaims = {}, idClaims = {}, signingKey = privateKey,
     accessIssuer = issuer, idIssuer = issuer,
@@ -50,9 +53,47 @@ async function fixture() {
   );
   // Simulate only a trusted callback: the saved nonce is never read from the token payload.
   const provision = (db, proof) => rawProvision(db, proof, nonce);
-  return { verify, verifyIdentity, tokens, provision, rawProvision };
+  return { verify, verifyIdentity, verifyDeletion, tokens, provision, rawProvision };
 }
 
+void test('deletion reauthentication returns only the signed time and the already requested owner', async () => {
+  const { verifyDeletion, tokens } = await fixture();
+  const expectedUid = 'k_' + createHash('sha256')
+    .update('thelogbook:kinde-owner:v1\0' + issuer + '\0' + sub).digest('base64url');
+  const authenticatedAtMs = Math.floor(Date.now() / 1000) * 1000 - 3000;
+  const attempt = { expectedUid, startedAtMs: authenticatedAtMs };
+  const valid = await tokens({ idClaims: { auth_time: authenticatedAtMs / 1000 } });
+  assert.deepEqual(await verifyDeletion(valid, attempt), { uid: expectedUid, authenticatedAtMs });
+
+  // Signed ownership still lets the same owner request deletion when the
+  // provider no longer marks their email as verified.
+  const unverifiedEmail = await tokens({
+    idClaims: { auth_time: authenticatedAtMs / 1000, email_verified: false },
+  });
+  assert.deepEqual(await verifyDeletion(unverifiedEmail, attempt), { uid: expectedUid, authenticatedAtMs });
+  await assert.rejects(verifyDeletion(valid, { ...attempt, startedAtMs: authenticatedAtMs + 1 }),
+    { phase: 'deletion-reauthentication' });
+  await assert.rejects(verifyDeletion(valid, { ...attempt, expectedUid: 'k_' + 'a'.repeat(43) }),
+    { phase: 'deletion-reauthentication' });
+  await assert.rejects(verifyDeletion({ ...valid, expectedNonce: 'A'.repeat(43) }, attempt),
+    { phase: 'id-claims' });
+});
+
+void test('a fresh token issued on an older or future SSO time cannot authorize account deletion', async (t) => {
+  const { verify, verifyDeletion, tokens } = await fixture();
+  const expectedUid = 'k_' + createHash('sha256')
+    .update('thelogbook:kinde-owner:v1\0' + issuer + '\0' + sub).digest('base64url');
+  const fixedTime = Date.now();
+  t.mock.method(Date, 'now', () => fixedTime);
+  const now = Math.floor(fixedTime / 1000);
+  const stale = await tokens({ idClaims: { auth_time: now - 301 } });
+  assert.equal((await verify(stale)).emailVerified, true);
+  await assert.rejects(verifyDeletion(stale, { expectedUid, startedAtMs: (now - 302) * 1000 }),
+    { phase: 'deletion-reauthentication' });
+  const future = await tokens({ idIssuedBefore: 0, idClaims: { auth_time: now + 3 } });
+  await assert.rejects(verifyDeletion(future, { expectedUid, startedAtMs: now * 1000 }),
+    { phase: 'deletion-reauthentication' });
+});
 
 void test('trusted login proof failure phases never include JWT contents or user claims', async () => {
   const { verify, tokens } = await fixture();

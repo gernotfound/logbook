@@ -1,7 +1,6 @@
 import { createKindeLoginProofVerifier, KindeLoginProofError } from './kinde-login-proof.mjs';
 import { D1_NOW_MS } from '../sql/d1-time.mjs';
-
-const UID_CONTEXT = 'thelogbook:kinde-owner:v1\0';
+import { deriveKindeOwnerId } from './kinde-owner-id.mjs';
 
 export class KindePrincipalProvisionError extends Error {
   constructor(phase = 'principal-storage') {
@@ -45,12 +44,7 @@ export function createKindePrincipalProvisioner(configuration, keySet) {
       );
     }
     try {
-      const bytes = new TextEncoder().encode(
-        UID_CONTEXT + identity.issuer + '\0' + identity.subject,
-      );
-      const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
-      const uid = 'k_' + btoa(String.fromCharCode(...digest))
-        .replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+      const uid = await deriveKindeOwnerId(identity.issuer, identity.subject);
       // The read follows the insert on one primary-started D1 session.
       // An ambiguous/failed write never returns a UID or an auth success.
       const session = db.withSession('first-primary');

@@ -1,9 +1,11 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { createKindeCodeExchangeAccessTokenVerifier, KindeAccessTokenError } from './kinde-token-verifier.mjs';
+import { deriveKindeOwnerId } from './kinde-owner-id.mjs';
 
 const MAX_ID_TOKEN_BYTES = 8192;
 const MAX_ID_TOKEN_AGE_SECONDS = 3600;
 const CLOCK_TOLERANCE_SECONDS = 5;
+const MAX_DELETION_REAUTH_AGE_MS = 5 * 60 * 1000;
 const COMPACT_JWS = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 const OAUTH_NONCE = /^[A-Za-z0-9_-]{43}$/;
 
@@ -61,7 +63,7 @@ async function sha256AtHash(accessToken) {
  * @param {{issuer: string, apiAudience: string, clientId: string}} configuration
  * @param {(header: import('jose').JWSHeaderParameters, token: import('jose').FlattenedJWSInput) => Promise<CryptoKey | Uint8Array>} [keySet]
  */
-export function createKindeIdentityProofVerifier(configuration, keySet) {
+function createSignedKindeProofVerifier(configuration, keySet) {
   const { issuer, apiAudience, clientId } = configuration ?? {};
   if (typeof issuer !== 'string' || typeof clientId !== 'string'
     || clientId.length < 8 || clientId.length > 256 || /\s/.test(clientId)) {
@@ -131,12 +133,53 @@ export function createKindeIdentityProofVerifier(configuration, keySet) {
         throw new KindeLoginProofError('token-binding');
       }
       return Object.freeze({
-        issuer: access.issuer, subject: access.subject, emailVerified: payload.email_verified,
+        identity: Object.freeze({
+          issuer: access.issuer, subject: access.subject, emailVerified: payload.email_verified,
+        }),
+        authenticatedAtSeconds: payload.auth_time,
       });
     } catch (error) {
       if (error instanceof KindeLoginProofError) throw error;
       throw new KindeLoginProofError('id-claims');
     }
+  };
+}
+
+/** @param {Parameters<typeof createSignedKindeProofVerifier>} args */
+export function createKindeIdentityProofVerifier(...args) {
+  const verify = createSignedKindeProofVerifier(...args);
+  /** @param {Parameters<typeof verify>[0]} proof */
+  return async (proof) => (await verify(proof)).identity;
+}
+
+/**
+ * Candidate proof for an already consumed, server-owned deletion attempt.
+ * Its nonce, owner and start time must come from the trusted attempt record.
+ * A freshly issued token on an old SSO session does not prove a fresh login.
+ * A same-owner reauthentication only authorizes the deletion request path.
+ * It never creates an ordinary D1 session or a fitness authorization.
+ *
+ * @param {Parameters<typeof createSignedKindeProofVerifier>} args
+ */
+export function createKindeDeletionReauthVerifier(...args) {
+  const verify = createSignedKindeProofVerifier(...args);
+  /**
+   * @param {Parameters<typeof verify>[0]} proof
+   * @param {{ expectedUid: string, startedAtMs: number }} attempt
+   */
+  return async function verifyDeletionReauthentication(proof, { expectedUid, startedAtMs }) {
+    const { identity, authenticatedAtSeconds } = await verify(proof);
+    const uid = await deriveKindeOwnerId(identity.issuer, identity.subject);
+    const authenticatedAtMs = authenticatedAtSeconds * 1000;
+    const now = Date.now();
+    // auth_time has whole-second resolution. A second that began before
+    // the attempt cannot prove which event happened first.
+    if (uid !== expectedUid || !Number.isSafeInteger(startedAtMs) || startedAtMs <= 0
+      || authenticatedAtMs < startedAtMs || authenticatedAtMs > now
+      || now - authenticatedAtMs > MAX_DELETION_REAUTH_AGE_MS) {
+      throw new KindeLoginProofError('deletion-reauthentication');
+    }
+    return Object.freeze({ uid, authenticatedAtMs });
   };
 }
 
