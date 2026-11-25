@@ -1,6 +1,6 @@
 # CF-06 — candidato Worker di cancellazione sanitaria
 
-> CF-06 #1404/#1405: moduli candidati account deletion e inattività integrati, con ingresso account application-only candidato, non distribuito/schedulato. Migrazioni 0012–0014 applicative e 0005 recovery ancora separate dalla distribuzione del codice. Il runner account deve provare cleanup owner-scoped (incluso marker attività), floor indipendente e Kinde-last con ACK/readback esatti. Vedere [runbook](../../docs/operations/cloudflare-workers-migration.md).
+> CF-06 #1404/#1405: moduli candidati account deletion e inattività integrati, con ingresso account application-only candidato, non distribuito/schedulato. Migrazioni 0012–0015 applicative e 0005 recovery ancora separate dalla distribuzione del codice. Il runner account deve provare cleanup owner-scoped (incluso marker attività), floor indipendente e Kinde-last con ACK/readback esatti. Vedere [runbook](../../docs/operations/cloudflare-workers-migration.md).
 
 **Stato:** configurazione candidata **non distribuita e non schedulata**.
 Questo manifesto prepara il Worker `health-erasure-worker.mjs` ai test di
@@ -29,12 +29,15 @@ cron, account deletion o inattività.
   modificare implicitamente il manifesto isolato. I test sintetici che
   chiamano `runOneHealthErasureStep` non eludono questo gate di runtime.
 - Con il processore esplicitamente abilitato, `CF06_ERASURE_RUN_MODE` seleziona
-  un solo percorso per invocazione: `health` (anche se omesso) oppure
-  `account-application`. Altri valori mantengono la pausa prima di leggere D1.
+  un solo percorso per invocazione: `health` (anche se omesso),
+  `account-application` oppure `alternating-application`. Altri valori mantengono la pausa prima di leggere D1.
   La modalità account invoca il checkpoint persistente 0014 per un solo
   intento durevole, senza scanner, dipendenze Management o prova terminale
-  account. Nessuna modalità è configurata nel manifesto. L'alternanza equa
-  fra pipeline e il budget del futuro cron restano da collaudare.
+  account. Nessuna modalità è configurata nel manifesto. La modalità alternata assegna un solo turno tramite incremento atomico
+  0015 prima di ogni passo: dispari salute, pari account. Un ACK di
+  assegnazione perso non autorizza lavoro, ma il turno seguente può
+  avanzare l'altra pipeline. Non è una fence owner né un ACK erasure.
+  Backoff per owner e budget del futuro cron restano da collaudare.
 - Un tick sanitario prova al massimo una riconciliazione del
   cutoff e un passo con lease D1, prima della fase finale atomica. Il Worker
   deve fallire senza dichiarare una cancellazione riuscita se il registro

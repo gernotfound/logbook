@@ -396,7 +396,7 @@ void test('application erasure drains only the requesting owner’s sessions and
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_erasure_targets').get().n, 1);
 });
 
-void test('application readiness for a health owner requires the real SQL erasure proof and the independent terminal floor', async (t) => {
+void test('alternating lanes advance a health account only with the real SQL erasure proof and independent terminal floor', async (t) => {
   const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
   const recovery = openRecoveryFixture(t);
   const proof = deletionRequestProof(attempt);
@@ -412,12 +412,23 @@ void test('application readiness for a health owner requires the real SQL erasur
   assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'progress', removed: 2 });
   assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'health-pending' });
 
-  const env = { DB: db, RECOVERY_DB: recovery.db, CF06_ERASURE_RUN_ENABLED: 'enabled' };
+  const env = { DB: db, RECOVERY_DB: recovery.db, CF06_ERASURE_RUN_ENABLED: 'enabled',
+    CF06_ERASURE_RUN_MODE: 'alternating-application' };
   assert.deepEqual(await healthErasureWorker.scheduled(null, env), { outcome: 'awaiting-keys' });
+  assert.deepEqual(await healthErasureWorker.scheduled(null, env), {
+    outcome: 'checkpointed', result: { outcome: 'health-pending' },
+  });
   sqlite.exec('UPDATE health_erasure_jobs SET lease_until_ms=1');
   assert.deepEqual(await healthErasureWorker.scheduled(null, env), { outcome: 'complete', keyDisposition: 'never-issued' });
-  assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'application-complete' });
+  assert.deepEqual(await healthErasureWorker.scheduled(null, env), {
+    outcome: 'checkpointed', result: { outcome: 'idle' },
+  });
+  assert.deepEqual(await healthErasureWorker.scheduled(null, env), { outcome: 'idle' });
+  assert.deepEqual(await healthErasureWorker.scheduled(null, env), {
+    outcome: 'checkpointed', result: { outcome: 'application-complete' },
+  });
   assert.equal(recovery.sqlite.prepare('SELECT finalized FROM recovery_erasure_cutoffs').get().finalized, 1);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_completions').get().n, 0);
 });
 
 void test('account erasure recovers a committed consent whose independent floor is still pending', async (t) => {
@@ -581,6 +592,55 @@ void test('scheduled account application mode resumes durable intents without Ma
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_erasure_targets').get().n, 1);
   await assert.rejects(healthErasureWorker.scheduled({}, { ...env, RECOVERY_DB: db }),
     /kinde-erasure-scheduler-unavailable/);
+});
+
+void test('alternating scheduled mode persists one lane per tick and survives lost assignment or a blocked health lane', async (t) => {
+  const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
+  const recovery = openRecoveryFixture(t);
+  await write(db, identity);
+  assert.ok(await recordKindeAccountErasureIntent(db, deletionRequestProof(attempt)));
+  const env = {
+    CF06_ERASURE_RUN_ENABLED: 'enabled',
+    CF06_ERASURE_RUN_MODE: 'alternating-application',
+    DB: db, RECOVERY_DB: recovery.db,
+  };
+  const turn = sqlite.prepare('SELECT turn FROM erasure_dispatch_control WHERE singleton=1');
+  const requests = sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_requests');
+  assert.equal(turn.get().turn, 0);
+  assert.deepEqual(await healthErasureWorker.scheduled({}, { ...env, CF06_ERASURE_RUN_ENABLED: 'disabled' }), { outcome: 'paused' });
+  assert.equal(turn.get().turn, 0);
+  await assert.rejects(healthErasureWorker.scheduled({}, { ...env, RECOVERY_DB: db }), /erasure-dispatch-unavailable/);
+  assert.equal(turn.get().turn, 0);
+  const lost = d1For(sqlite, { afterFirst(sql) {
+    if (sql.includes('UPDATE erasure_dispatch_control')) throw new Error('lost-dispatch-reply');
+  } });
+  await assert.rejects(healthErasureWorker.scheduled({}, { ...env, DB: lost }), /lost-dispatch-reply/);
+  assert.equal(turn.get().turn, 1);
+  assert.equal(requests.get().n, 0);
+  assert.deepEqual(await healthErasureWorker.scheduled({}, env), {
+    outcome: 'checkpointed', result: { outcome: 'accepted' },
+  });
+  assert.equal(requests.get().n, 1);
+  assert.equal(turn.get().turn, 2);
+
+  // A failed health turn must not prevent the subsequent account turn.
+  const failingRecovery = { withSession() { throw new Error('synthetic-recovery-failure'); } };
+  await assert.rejects(healthErasureWorker.scheduled({}, { ...env, RECOVERY_DB: failingRecovery }), /synthetic-recovery-failure/);
+  assert.equal(turn.get().turn, 3);
+  assert.deepEqual(await healthErasureWorker.scheduled({}, env), {
+    outcome: 'checkpointed', result: { outcome: 'idle' },
+  });
+  const simultaneous = await Promise.all([
+    healthErasureWorker.scheduled({}, env), healthErasureWorker.scheduled({}, env),
+  ]);
+  assert.deepEqual(simultaneous, [
+    { outcome: 'idle' }, { outcome: 'checkpointed', result: { outcome: 'progress', removed: 2 } },
+  ]);
+  assert.equal(turn.get().turn, 6);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_completions').get().n, 0);
+  assert.throws(() => sqlite.exec('UPDATE erasure_dispatch_control SET turn=0'), /dispatch-fenced/);
+  assert.throws(() => sqlite.exec('DELETE FROM erasure_dispatch_control'), /dispatch-immutable/);
+  assert.throws(() => sqlite.exec('INSERT OR REPLACE INTO erasure_dispatch_control VALUES (1, 0)'), /dispatch-immutable/);
 });
 
 function controlSchedulerClock(t, sqlite) {
