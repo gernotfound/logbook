@@ -380,6 +380,48 @@ export function captureKindeCandidateSessionFence({
 }
 
 /**
+ * Explicit candidate foreground request; never called by login, refresh or
+ * sync. The caller must pin the observed session and a foreground action.
+ * A successful receipt proves only the server marker, not a fitness grant.
+ */
+export async function reportKindeCandidateForegroundActivity({
+    expectedCsrfToken, stillCurrent, send = fetch, browserCookies = () => document.cookie,
+}: {
+    expectedCsrfToken: string; stillCurrent: () => boolean;
+    send?: typeof fetch; browserCookies?: () => string;
+}): Promise<'recorded' | 'observed'> {
+    const fence = captureKindeCandidateSessionFence({ stillCurrent, browserCookies });
+    const current = () => fence.stillCurrent() && fence.csrfToken === expectedCsrfToken
+        && document.visibilityState === 'visible' && navigator.onLine !== false;
+    assertCurrent(current);
+    const signal = AbortSignal.timeout(5000);
+    let response: Response;
+    try {
+        response = await send('/v1/account/activity', {
+            method: 'POST', credentials: 'same-origin', mode: 'same-origin',
+            cache: 'no-store', redirect: 'error',
+            headers: {
+                Accept: 'application/json', 'Content-Type': 'application/json',
+                'X-CSRF-Token': fence.csrfToken,
+            },
+            body: '{}', signal,
+        });
+    } catch { throw new KindeCandidateBoundaryError(); }
+    assertCurrent(current);
+    if (signal.aborted || response.status !== 200 || response.redirected
+        || ['opaque', 'opaqueredirect', 'error'].includes(response.type)) {
+        throw new KindeCandidateBoundaryError(response.status);
+    }
+    const receipt = await readKindeCandidateJson(response, signal);
+    assertCurrent(current);
+    if (signal.aborted || !record(receipt) || !exactKeys(receipt, ['outcome'])
+        || (receipt.outcome !== 'recorded' && receipt.outcome !== 'observed')) {
+        throw new KindeCandidateBoundaryError();
+    }
+    return receipt.outcome;
+}
+
+/**
  * Candidate-only D1 session logout, NOT Kinde identity-provider SSO logout or
  * device-vault cleanup. A lost 200 or a concurrent new login must never be
  * misreported as a completed remote logout: require a fresh, unambiguous 401
