@@ -42,6 +42,15 @@ cron, account deletion o inattività.
   deriva il pin dal registro corrente e non entra nelle lane di erasure.
   Il pin mancante o malformato mantiene la pausa prima di accedere ai binding;
   un pin obsoleto fallisce chiuso. Nessuna variabile o cron è attivata.
+  Il test sintetico CF-06 inietta un errore D1 persistente dopo ciascuna
+  delle 19 operazioni della fixture di enqueue (entrambe le D1): nessun tick
+  fallito restituisce conferma, la decisione già committata non si duplica e
+  il lease/cursore si riconciliano dopo il recupero. Il conteggio riguarda le
+  chiamate della fixture, **non** le righe fatturate o la CPU Cloudflare:
+  preflight quote Free e collaudo su ambiente isolato restano obbligatori.
+  Cloudflare [conferma che sul piano Free la quota giornaliera D1 causa
+  errori nelle query](https://developers.cloudflare.com/changelog/post/2026-09-01-d1-free-tier-limit-enforcement/),
+  non una ricevuta differita.
   La modalità account invoca il checkpoint persistente 0014 per un solo
   intento durevole, senza scanner, dipendenze Management o prova terminale
   account. Nessuna modalità è configurata nel manifesto. La modalità alternata assegna un solo turno tramite incremento atomico
