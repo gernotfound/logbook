@@ -66,7 +66,7 @@ async function seed() {
         documents: [{ path: '', revision: null, document: null }],
     };
     const control: CloudReplicaControlSnapshot = {
-        revision: 0, fenceEpoch: 5, consentRevision: 1,
+        uid, revision: 0, fenceEpoch: 5, consentRevision: 1,
         replicas: { s00: {
             ...replica, lastSeq: 0, status: 'active', checkpointClock: {},
         } },

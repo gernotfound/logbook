@@ -17,6 +17,42 @@ beforeEach(() => resetRetirementFixture(catalogSource.read));
 afterEach(cleanupRetirementFixture);
 
 describe('candidate D1 durable expired-replica retirement', () => {
+    it('never stages an expired lease using an ownerless or foreign control', async () => {
+        const { target, control, intent } = await stagedRetirement();
+        const sealed = await get(storage);
+        for (const untrusted of [{ ...control, uid: undefined }, { ...control, uid: 'another-owner' }]) {
+            await expect(stageCloudflareReplicaRetirement(owner, untrusted, target, () => true))
+                .rejects.toThrow('non ritirabile');
+            expect(await get(storage)).toBe(sealed);
+        }
+        expect((await readLocal(owner))?.cloudflareReplicaRetirement).toEqual(intent);
+    });
+
+    it('never rebases or clears an expired retirement from foreign/ownerless primary controls', async () => {
+        const { target, intent } = await stagedRetirement();
+        const sealed = await get(storage);
+        const remote = remoteRetirement(target);
+        remote.replayStoredRetirement.mockRejectedValue(new CloudReplicaTransportError(409));
+        remote.retirementMutationOutcome.mockResolvedValue({ outcome: 'not-committed', currentRevision: 2 });
+        const active = { uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
+            replicas: { s02: { ...target, status: 'active' as const, lastSeq: 8, checkpointClock: {} } } };
+        for (const untrusted of [{ ...active, uid: undefined }, { ...active, uid: 'another-owner' }]) {
+            remote.control.mockResolvedValueOnce(untrusted);
+            await expect(resumeCloudflareReplicaRetirement(owner, remote, 'session-csrf', () => true))
+                .resolves.toBe('reconciliation-required');
+            expect(await get(storage)).toBe(sealed);
+            expect((await readLocal(owner))?.cloudflareReplicaRetirement).toEqual(intent);
+        }
+        remote.replayStoredRetirement.mockReset().mockImplementation(remoteRetirement(target).replayStoredRetirement);
+        const retired = { uid, revision: 1, fenceEpoch: 5, consentRevision: 1,
+            replicas: { s02: { ...target, status: 'retired' as const, lastSeq: 8, checkpointClock: {} } } };
+        for (const untrusted of [{ ...retired, uid: undefined }, { ...retired, uid: 'another-owner' }]) {
+            remote.control.mockResolvedValueOnce(untrusted);
+            await expect(resumeCloudflareReplicaRetirement(owner, remote, 'session-csrf', () => true))
+                .resolves.toBe('reconciliation-required');
+            expect(await get(storage)).toBe(sealed);
+        }
+    });
     it('stages encrypted intent before network and clears only that intent after stable remote proof', async () => {
         await commitLocal(owner, data(171), data(170));
         const beforeJournal = (await readLocal(owner))!.pending;
@@ -49,10 +85,10 @@ describe('candidate D1 durable expired-replica retirement', () => {
         remote.retirementMutationOutcome.mockResolvedValueOnce({
             outcome: 'not-committed', currentRevision: 2,
         });
-        const active = { revision: 2, fenceEpoch: 5, consentRevision: 1,
+        const active = { uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
             replicas: { s02: { ...target, status: 'active' as const,
                 lastSeq: 8, checkpointClock: { s00: 4 } } } };
-        const retired = { revision: 3, fenceEpoch: 5, consentRevision: 1,
+        const retired = { uid, revision: 3, fenceEpoch: 5, consentRevision: 1,
             replicas: { s02: { ...target, status: 'retired' as const,
                 lastSeq: 8, checkpointClock: { s00: 4 } } } };
         remote.control.mockResolvedValueOnce(active).mockResolvedValueOnce(active)
@@ -110,10 +146,10 @@ describe('candidate D1 durable expired-replica retirement', () => {
         remote.retirementMutationOutcome.mockResolvedValue({
             outcome: 'not-committed', currentRevision: 2,
         });
-        const renewed = { revision: 2, fenceEpoch: 5, consentRevision: 1,
+        const renewed = { uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
             replicas: { s02: { ...target, leaseUntilMs: Date.now() + 86400000,
                 status: 'active' as const, lastSeq: 9, checkpointClock: { s00: 4 } } } };
-        const reused = { revision: 2, fenceEpoch: 5, consentRevision: 1,
+        const reused = { uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
             replicas: { s02: { ...target, replicaId: 'replacement-device', generation: 2,
                 status: 'active' as const, lastSeq: 8, checkpointClock: { s00: 4 } } } };
         remote.control.mockResolvedValueOnce(renewed).mockResolvedValueOnce(reused);
@@ -134,7 +170,7 @@ describe('candidate D1 durable expired-replica retirement', () => {
         remote.retirementMutationOutcome.mockResolvedValueOnce({
             outcome: 'not-committed', currentRevision: 2,
         });
-        const control = { revision: 2, fenceEpoch: 5, consentRevision: 1,
+        const control = { uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
             replicas: { s02: { ...target, status: 'active' as const, lastSeq: 8,
                 checkpointClock: { s00: 4 } } } };
         remote.control.mockResolvedValueOnce(control)
@@ -152,7 +188,7 @@ describe('candidate D1 durable expired-replica retirement', () => {
         remote.retirementMutationOutcome.mockResolvedValueOnce({
             outcome: 'not-committed', currentRevision: 2,
         });
-        const control = { revision: 2, fenceEpoch: 5, consentRevision: 1,
+        const control = { uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
             replicas: { s02: { ...target, status: 'active' as const, lastSeq: 8,
                 checkpointClock: { s00: 4 } } } };
         remote.control.mockResolvedValueOnce(control).mockImplementationOnce(async () => {
@@ -172,7 +208,7 @@ describe('candidate D1 durable expired-replica retirement', () => {
         const now = Date.now();
         const target = { slot: 's02', replicaId: 'current-local-writer',
             generation: 1, checkpointAtMs: now - 86400000, leaseUntilMs: now - 600000 };
-        const control = { revision: 0, fenceEpoch: 5, consentRevision: 1,
+        const control = { uid, revision: 0, fenceEpoch: 5, consentRevision: 1,
             replicas: { s02: { ...target, status: 'active' as const, lastSeq: 0,
                 checkpointClock: {} } } };
         await adoptReplicaCheckpoint(owner, {
