@@ -26,7 +26,7 @@ cron, account deletion o inattività.
   quando nessuna riga è eleggibile. Il candidato dry-run 0016 mantiene
   cursor/lease in D1, resetta su cambio policy o recovery, non espone UID
   e non esegue enqueue. Non riusare il suo checkpoint per cancellazioni.
-  `recordKindeInactivityErasureIntent` collega atomicamente l'enqueue al controllo, al marker attività, all'epoch e al target; non accoda con sessione corrente e blocca il principal senza inventare una riautenticazione. Lo scanner distruttivo non è montato. La futura
+  `recordKindeInactivityErasureIntent` collega atomicamente l'enqueue al controllo, al marker attività, all'epoch e al target; non accoda con sessione corrente e blocca il principal senza inventare una riautenticazione. Il candidato `scanKindeInactivityEnqueueStep` legge una pagina bounded e prova al massimo una decisione per invocazione; non avanza oltre candidati non processati, ricontrolla policy e pin recovery e non restituisce cursore dopo un esito ambiguo. Il cursore separato porta entrambe le generazioni. Manca lo scheduler durevole dedicato (mai riusare 0016); nessun ingresso scheduled, cleanup o Management. La futura
   abilitazione richiede revisione e autorizzazione specifica, senza
   modificare implicitamente il manifesto isolato. I test sintetici che
   chiamano `runOneHealthErasureStep` non eludono questo gate di runtime.

@@ -7,6 +7,7 @@ import { consumeKindeDeletionAttempt, saveKindeDeletionAttempt } from '../../clo
 import { deriveKindeOwnerId } from '../../cloudflare/auth/kinde-owner-id.mjs';
 import { recordKindeForegroundActivity } from '../../cloudflare/auth/kinde-foreground-activity.mjs';
 import { recordKindeInactivityErasureIntent } from '../../cloudflare/jobs/kinde-inactivity-enqueue.mjs';
+import { scanKindeInactivityEnqueueStep } from '../../cloudflare/jobs/kinde-inactivity-enqueue-scan.mjs';
 import { readKindeInactivityCandidates } from '../../cloudflare/jobs/kinde-inactivity-candidates.mjs';
 import { earliestKindeInactivityErasureAt } from '../../cloudflare/jobs/kinde-inactivity-time.mjs';
 import healthErasureWorker from '../../cloudflare/jobs/health-erasure-worker.mjs';
@@ -1172,4 +1173,93 @@ void test('inactivity cannot create a new independent denial from a stale recove
   assert.equal(recovery.sqlite.prepare('SELECT COUNT(*) AS n FROM recovery_account_erasure_denials').get().n, 0);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_requests').get().n, 0);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_erasure_targets').get().n, 1);
+});
+
+void test('the enqueue scanner processes one owner per step and keeps the unprocessed page suffix', async (t) => {
+  const { db, sqlite, identity, write, attempt } = await deletionAttemptFixture(t);
+  const recovery = openRecoveryFixture(t);
+  const clock = new DatabaseSync(':memory:');
+  t.after(() => clock.close());
+  const fmt = clock.prepare('SELECT strftime(?, ?) AS value');
+  let now = Date.now();
+  sqlite.function('strftime', (format, date) => fmt.get(format, date === 'now' ? new Date(now).toISOString() : date).value);
+  const secondSubject = 'kp_second-synthetic-scanner-user';
+  const secondUid = await deriveKindeOwnerId(issuer, secondSubject);
+  const secondHash = 'f'.repeat(64);
+  sqlite.prepare("INSERT INTO auth_principals VALUES (?, 'active', ?, 1)").run(secondUid, now - 1000);
+  sqlite.prepare('INSERT INTO auth_sessions VALUES (?, ?, 1, ?, ?, ?, ?, NULL)')
+    .run(secondHash, secondUid, 'c'.repeat(64), now - 1000, now + 30_000, now + 60_000);
+  await write(db, identity);
+  await write(db, { uid: secondUid, subject: secondSubject, authEpoch: 1 });
+  for (const [uid, sessionHash] of [[identity.uid, attempt.sessionHash], [secondUid, secondHash]]) {
+    assert.deepEqual(await recordKindeForegroundActivity(db, {
+      uid, sessionHash, fenceEpoch: 1, authenticated: true, csrfVerified: true, rateGatePassed: true,
+    }), { outcome: 'recorded' });
+  }
+  const marker = now;
+  now = earliestKindeInactivityErasureAt(marker);
+  const scan = (cursor = null) => scanKindeInactivityEnqueueStep(db, recovery.db, 2, 2, cursor);
+  const intents = () => sqlite.prepare('SELECT uid FROM kinde_account_erasure_intents ORDER BY uid').all().map(row => row.uid);
+  await assert.rejects(scan(), /enqueue-scanner-unavailable/);
+  sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=2");
+  const [firstUid, lastUid] = [identity.uid, secondUid].sort();
+  const first = await scan();
+  assert.deepEqual(first, { decision: 'recorded', nextCursor: {
+    policyGeneration: 2, recoveryGeneration: 2, after: { uid: firstUid, lastRecordedAtMs: marker },
+  } });
+  assert.deepEqual(intents(), [firstUid]);
+  await assert.rejects(scan({ ...first.nextCursor, policyGeneration: 1 }), /enqueue-scanner-unavailable/);
+  await assert.rejects(scanKindeInactivityEnqueueStep(db, recovery.db, 2, 4), /independent-recovery-fence-unavailable/);
+  assert.deepEqual(intents(), [firstUid]);
+  assert.deepEqual(await scan(first.nextCursor), { decision: 'recorded', nextCursor: null });
+  assert.deepEqual(intents(), [firstUid, lastUid]);
+  assert.deepEqual(await scan(), { decision: 'none', nextCursor: null });
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_requests').get().n, 0);
+  assert.equal(recovery.sqlite.prepare('SELECT COUNT(*) AS n FROM recovery_account_erasure_denials').get().n, 0);
+});
+
+void test('enqueue scanning does not report progress on a policy change or an ambiguous decision', async (t) => {
+  const { db, sqlite, identity, write, attempt } = await deletionAttemptFixture(t);
+  const recovery = openRecoveryFixture(t);
+  const clock = new DatabaseSync(':memory:');
+  t.after(() => clock.close());
+  const fmt = clock.prepare('SELECT strftime(?, ?) AS value');
+  let now = Date.now();
+  sqlite.function('strftime', (format, date) => fmt.get(format, date === 'now' ? new Date(now).toISOString() : date).value);
+  await write(db, identity);
+  assert.deepEqual(await recordKindeForegroundActivity(db, {
+    uid: identity.uid, sessionHash: attempt.sessionHash, fenceEpoch: 1,
+    authenticated: true, csrfVerified: true, rateGatePassed: true,
+  }), { outcome: 'recorded' });
+  now = earliestKindeInactivityErasureAt(now);
+  sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=2");
+  const liveHash = 'f'.repeat(64);
+  const concurrentVisit = d1For(sqlite, { beforeWrite(sql) {
+    if (sql.includes('INSERT INTO kinde_account_erasure_intents')) {
+      sqlite.prepare('INSERT INTO auth_sessions VALUES (?, ?, 1, ?, ?, ?, ?, NULL)')
+        .run(liveHash, identity.uid, 'c'.repeat(64), now, now + 60_000, now + 120_000);
+    }
+  } });
+  assert.deepEqual(await scanKindeInactivityEnqueueStep(concurrentVisit, recovery.db, 2, 2),
+    { decision: 'not-recorded', nextCursor: null });
+  assert.equal(sqlite.prepare('SELECT status FROM auth_principals').get().status, 'active');
+  now += 120_001;
+  const paused = d1For(sqlite, { beforeWrite(sql) {
+    if (sql.includes('INSERT INTO kinde_account_erasure_intents')) {
+      sqlite.exec("UPDATE kinde_inactivity_control SET mode='paused', generation=3");
+    }
+  } });
+  await assert.rejects(scanKindeInactivityEnqueueStep(paused, recovery.db, 2, 2), /enqueue-scanner-unavailable/);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_intents').get().n, 0);
+  sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=4");
+  const hidden = d1For(sqlite, { readFirst(sql, row) {
+    return sql.includes('FROM kinde_account_erasure_intents') ? null : row;
+  } });
+  await assert.rejects(scanKindeInactivityEnqueueStep(hidden, recovery.db, 4, 2), /decision-unavailable/);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_intents').get().n, 1);
+  assert.equal(sqlite.prepare('SELECT status FROM auth_principals').get().status, 'disabled');
+  assert.deepEqual(await scanKindeInactivityEnqueueStep(db, recovery.db, 4, 2),
+    { decision: 'none', nextCursor: null });
+  assert.deepEqual(await runOneKindeAccountErasureStep(db, recovery.db),
+    { nextCursor: identity.uid, result: { outcome: 'accepted' } });
 });
