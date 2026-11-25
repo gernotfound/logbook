@@ -102,7 +102,7 @@ La disponibilità del codice candidato non implica accessibilità pubblica. Il p
 
 1. Completare i percorsi ancora mancanti (catalogo globale, lifecycle account, diritti e UX), senza riscrivere gli editor candidati già integrati, preservando owner/session fence, bozza e journal cifrato durevole; regressioni su `local-pending` e ACK effettivo.
 2. Provare su dispositivi e provider isolati Auth, consenso, sessioni, D1/ADK, recovery offline, perdita di ricevuta, più schede e più device; non abilitare anticipatamente il pubblico.
-3. Il censimento diagnostico confronta i conteggi di decisioni e blocchi indipendenti con entrambe le letture complete. Su SQLite il censimento accetta 512 proprietari coperti e si blocca al 513º. Restano da dimostrare recupero esterno della KEK indipendente, backup/restore, revoca, cancellazione terminale e anti-resurrection.
+3. Il censimento diagnostico confronta i conteggi di decisioni e blocchi indipendenti con entrambe le letture complete e ricontrolla `mode`/`generation` dopo i digest asincroni degli intenti account: un unseal/reseal durante la verifica viene rifiutato. Su SQLite il censimento accetta 512 proprietari coperti e si blocca al 513º. Restano da dimostrare recupero esterno della KEK indipendente, backup/restore, revoca, cancellazione terminale e anti-resurrection.
 4. Aggiornare lo schema isolato con prove, attestare riautenticazione Kinde, enqueue atomico con marker/generazione correnti, runner e Kinde-last; validare quote, antiabuso, privacy e Safari/iOS. Tracking e cron reali richiedono autorizzazione.
 5. Rimuovere i chiamanti Firebase/Vercel solo a parità funzionale verificata. CF-09 e GO del proprietario restano separati dalla CI verde.
 
