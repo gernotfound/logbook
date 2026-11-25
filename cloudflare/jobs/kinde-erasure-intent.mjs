@@ -7,6 +7,22 @@ const HASH = /^[a-f0-9]{64}$/;
 export const INTENT_COLUMNS = 'uid, auth_epoch, receipt_hash, reauthenticated_at_ms, confirmed_at_ms, inactivity_generation, inactivity_recorded_at_ms, inactivity_eligible_at_ms';
 export const QUALIFIED_INTENT_COLUMNS = INTENT_COLUMNS.split(', ').map(column => 'i.' + column).join(', ');
 
+/**
+ * Bind a new automatic decision to the recovery generation explicitly
+ * authorized outside the restorable application database. The receipt is
+ * also part of the independent intent digest; no second source of truth.
+ * @param {string} uid
+ * @param {number} authEpoch
+ * @param {InactivityEvidence} evidence
+ * @param {number} recoveryGeneration
+ */
+export async function inactivityReceiptHash(uid, authEpoch, evidence, recoveryGeneration) {
+  const bytes = new TextEncoder().encode(JSON.stringify(['thelogbook:inactivity-decision:v2',
+    uid, authEpoch, evidence.generation, evidence.lastRecordedAtMs, evidence.eligibleAtMs, recoveryGeneration]));
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
 // Bind the exact immutable decision at each irreversible boundary.
 export const INTENT_SCOPE = `i.uid = ? AND i.auth_epoch = ? AND i.receipt_hash = ?
   AND i.reauthenticated_at_ms IS ? AND i.confirmed_at_ms = ?

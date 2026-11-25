@@ -1034,26 +1034,26 @@ void test('inactivity enqueue fences fresh activity and live sessions, survives 
   now = due;
   const { candidates: [first] } = await readKindeInactivityCandidates(db);
   assert.ok(first);
-  await assert.rejects(recordKindeInactivityErasureIntent(db, { ...first, eligibleAtMs: due - 1 }), /invalid-kinde-inactivity-decision/);
+  await assert.rejects(recordKindeInactivityErasureIntent(db, recovery.db, { ...first, eligibleAtMs: due - 1 }, 2), /invalid-kinde-inactivity-decision/);
   sqlite.exec("UPDATE kinde_inactivity_control SET mode='paused', generation=3");
-  assert.equal(await recordKindeInactivityErasureIntent(db, first), null);
+  assert.equal(await recordKindeInactivityErasureIntent(db, recovery.db, first, 2), null);
   sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=4");
   const { candidates: [second] } = await readKindeInactivityCandidates(db);
   assert.ok(second);
   const liveHash = 'f'.repeat(64);
   sqlite.prepare('INSERT INTO auth_sessions VALUES (?, ?, 1, ?, ?, ?, ?, NULL)')
     .run(liveHash, identity.uid, 'c'.repeat(64), now, now + 60_000, now + 120_000);
-  assert.equal(await recordKindeInactivityErasureIntent(db, second), null);
+  assert.equal(await recordKindeInactivityErasureIntent(db, recovery.db, second, 2), null);
   assert.deepEqual(await recordKindeForegroundActivity(db, { ...claims, sessionHash: liveHash }), { outcome: 'recorded' });
   now += 120_001;
-  assert.equal(await recordKindeInactivityErasureIntent(db, second), null);
+  assert.equal(await recordKindeInactivityErasureIntent(db, recovery.db, second, 2), null);
   now = earliestKindeInactivityErasureAt(due);
   const { candidates: [current] } = await readKindeInactivityCandidates(db);
   assert.ok(current);
   const lostAck = d1For(sqlite, { afterWrite(sql) {
     if (sql.includes('INSERT INTO kinde_account_erasure_intents')) throw Error('synthetic lost write reply');
   } });
-  const intent = await recordKindeInactivityErasureIntent(lostAck, current);
+  const intent = await recordKindeInactivityErasureIntent(lostAck, recovery.db, current, 2);
   assert.equal(intent.authenticatedAtMs, null);
   assert.deepEqual(intent.inactivity, { generation: 4, lastRecordedAtMs: due, eligibleAtMs: now });
   assert.equal(sqlite.prepare('SELECT status FROM auth_principals WHERE uid=?').get(identity.uid).status, 'disabled');
@@ -1061,8 +1061,17 @@ void test('inactivity enqueue fences fresh activity and live sessions, survives 
   assert.throws(() => sqlite.prepare("UPDATE auth_principals SET status='active', auth_epoch=2 WHERE uid=?").run(identity.uid),
     /kinde-account-erasure-request-retained/);
   sqlite.exec("UPDATE kinde_inactivity_control SET mode='paused', generation=5");
-  assert.deepEqual(await recordKindeInactivityErasureIntent(db, current), intent);
+  assert.deepEqual(await recordKindeInactivityErasureIntent(db, recovery.db, current, 2), intent);
   assert.equal(await acceptKindeAccountErasure(db, recovery.db, { ...intent, inactivity: { ...intent.inactivity, generation: 5 } }), false);
+  const beforeRequest = d1For(sqlite, { beforeWrite(sql) {
+    if (sql.includes('INSERT INTO kinde_account_erasure_requests')) throw Error('synthetic unavailable application write');
+  } });
+  await assert.rejects(acceptKindeAccountErasure(beforeRequest, recovery.db, intent), /kinde-erasure-request-unavailable/);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_requests').get().n, 0);
+  assert.equal(recovery.sqlite.prepare('SELECT COUNT(*) AS n FROM recovery_account_erasure_denials').get().n, 1);
+  recovery.sqlite.exec("UPDATE recovery_control SET mode='sealed', generation=3");
+  recovery.sqlite.exec("UPDATE recovery_control SET mode='open', generation=4");
+  // The old intent may resume only because its exact irreversible deny exists.
   assert.deepEqual(await runOneKindeAccountErasureStep(db, recovery.db), {
     nextCursor: identity.uid, result: { outcome: 'accepted' },
   });
@@ -1071,4 +1080,48 @@ void test('inactivity enqueue fences fresh activity and live sessions, survives 
   assert.equal((await runKindeAccountErasureAppStep(db, recovery.db, intent)).outcome, 'progress');
   assert.equal((await runKindeAccountErasureAppStep(db, recovery.db, intent)).outcome, 'progress');
   assert.equal((await runKindeAccountErasureAppStep(db, recovery.db, intent)).outcome, 'application-complete');
+});
+
+void test('inactivity cannot create a new independent denial from a stale recovery generation', async (t) => {
+  const { db, sqlite, identity, write, attempt } = await deletionAttemptFixture(t);
+  const recovery = openRecoveryFixture(t);
+  const clock = new DatabaseSync(':memory:');
+  t.after(() => clock.close());
+  let now = Date.now();
+  const fmt = clock.prepare('SELECT strftime(?, ?) AS value');
+  sqlite.function('strftime', (format, date) => fmt.get(format, date === 'now' ? new Date(now).toISOString() : date).value);
+  await write(db, identity);
+  assert.deepEqual(await recordKindeForegroundActivity(db, {
+    uid: identity.uid, fenceEpoch: 1, sessionHash: attempt.sessionHash,
+    authenticated: true, csrfVerified: true, rateGatePassed: true,
+  }), { outcome: 'recorded' });
+  now = earliestKindeInactivityErasureAt(now);
+  sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=2");
+  const { candidates: [candidate] } = await readKindeInactivityCandidates(db);
+  assert.ok(candidate);
+  const reopen = () => {
+    recovery.sqlite.exec("UPDATE recovery_control SET mode='sealed', generation=generation+1");
+    recovery.sqlite.exec("UPDATE recovery_control SET mode='open', generation=generation+1");
+  };
+  await assert.rejects(recordKindeInactivityErasureIntent(db, recovery.db, candidate, null), /invalid-kinde-inactivity-decision/);
+  await assert.rejects(recordKindeInactivityErasureIntent(db, db, candidate, 2), /invalid-kinde-inactivity-decision/);
+  reopen();
+  await assert.rejects(recordKindeInactivityErasureIntent(db, recovery.db, candidate, 2), /kinde-inactivity-decision-unavailable/);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_intents').get().n, 0);
+  assert.equal(sqlite.prepare('SELECT status FROM auth_principals WHERE uid=?').get(identity.uid).status, 'active');
+
+  // Synthetic fault: authorization changes after the application commit.
+  // Even a committed freeze may not authorize a new deny in generation 6.
+  const interrupted = d1For(sqlite, { afterWrite(sql) {
+    if (sql.includes('INSERT INTO kinde_account_erasure_intents')) reopen();
+  } });
+  await assert.rejects(recordKindeInactivityErasureIntent(interrupted, recovery.db, candidate, 4), /kinde-inactivity-decision-unavailable/);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_intents').get().n, 1);
+  assert.equal(sqlite.prepare('SELECT status FROM auth_principals WHERE uid=?').get(identity.uid).status, 'disabled');
+  assert.deepEqual(await runOneKindeAccountErasureStep(db, recovery.db), {
+    nextCursor: identity.uid, result: { outcome: 'blocked' },
+  });
+  assert.equal(recovery.sqlite.prepare('SELECT COUNT(*) AS n FROM recovery_account_erasure_denials').get().n, 0);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_requests').get().n, 0);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_erasure_targets').get().n, 1);
 });
