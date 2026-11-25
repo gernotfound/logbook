@@ -6,6 +6,9 @@ import { readKindeCandidateIdentity } from '../../lib/auth/kindeCandidateIdentit
 import { readKindeCandidateAccess } from '../../lib/auth/kindeCandidateClient';
 import { inspectKindeCandidateReplicaRegistry } from '../../lib/sync/kindeCandidateReplicaRegistry';
 import { retireKindeCandidateReplica, recoverKindeCandidateReplicaRetirement } from '../../lib/sync/kindeCandidateReplicaRetirementBridge';
+import {
+    inspectKindeCandidatePendingReplicaMutation, cancelKindeCandidatePendingReplicaMutation,
+} from '../../lib/sync/kindeCandidateReplicaCancellationBridge';
 import { prepareKindeCandidateOwner } from '../../lib/sync/kindeCandidateOwnerBootstrap';
 
 vi.mock('../../lib/sync/kindeCandidateReplicaRegistry', () => ({
@@ -13,6 +16,9 @@ vi.mock('../../lib/sync/kindeCandidateReplicaRegistry', () => ({
 }));
 vi.mock('../../lib/sync/kindeCandidateReplicaRetirementBridge', () => ({
     retireKindeCandidateReplica: vi.fn(), recoverKindeCandidateReplicaRetirement: vi.fn(),
+}));
+vi.mock('../../lib/sync/kindeCandidateReplicaCancellationBridge', () => ({
+    inspectKindeCandidatePendingReplicaMutation: vi.fn(), cancelKindeCandidatePendingReplicaMutation: vi.fn(),
 }));
 
 const registry = {
@@ -32,6 +38,8 @@ function authenticated() {
     vi.mocked(inspectKindeCandidateReplicaRegistry).mockResolvedValue(registry);
     vi.mocked(retireKindeCandidateReplica).mockResolvedValue('retired');
     vi.mocked(recoverKindeCandidateReplicaRetirement).mockResolvedValue('idle');
+    vi.mocked(inspectKindeCandidatePendingReplicaMutation).mockResolvedValue(null);
+    vi.mocked(cancelKindeCandidatePendingReplicaMutation).mockResolvedValue('cancelled');
 }
 
 describe('candidate-only replica registry presentation', () => {
@@ -105,12 +113,74 @@ describe('candidate-only replica registry presentation', () => {
         expect(retireKindeCandidateReplica).toHaveBeenCalledTimes(1);
     });
 
+    it('inspects the sealed claim before requiring confirmation of its exact mutation ID', async () => {
+        authenticated();
+        vi.mocked(inspectKindeCandidatePendingReplicaMutation).mockResolvedValue({
+            kind: 'claim', mutationId: 'claim-123', slot: null, generation: null, cancellationRequested: false,
+        });
+        render(<KindeAccountEntry candidateMode="preparation" />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Esamina una richiesta da annullare' }));
+        await screen.findByText(/Riferimento operazione:/);
+        expect(screen.getByText('claim-123')).toBeTruthy();
+        const action = screen.getByRole('button', { name: 'Conferma annullamento richiesta' });
+        expect((action as HTMLButtonElement).disabled).toBe(true);
+        expect(cancelKindeCandidatePendingReplicaMutation).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole('checkbox', { name: /Confermo di voler annullare/ }));
+        fireEvent.click(action);
+        await screen.findByText(/Il server ha provato che la richiesta non è stata eseguita/);
+        expect(cancelKindeCandidatePendingReplicaMutation).toHaveBeenCalledWith({
+            expected: { uid: principal.uid, fenceEpoch: 1, healthConsentRevision: 1 },
+            mutationId: 'claim-123', stillCurrent: expect.any(Function),
+        });
+        expect(screen.queryByText('claim-123')).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Conferma annullamento richiesta' })).toBeNull();
+    });
+
+    it('preserves uncertainty on a lost cancellation reply and offers explicit reinspection', async () => {
+        authenticated();
+        vi.mocked(inspectKindeCandidatePendingReplicaMutation).mockResolvedValue({
+            kind: 'retirement', mutationId: 'retire-123', slot: 's04', generation: 2,
+            cancellationRequested: true,
+        });
+        vi.mocked(cancelKindeCandidatePendingReplicaMutation).mockRejectedValueOnce(new Error('lost response'));
+        render(<KindeAccountEntry candidateMode="preparation" />);
+        const inspect = await screen.findByRole('button', { name: 'Esamina una richiesta da annullare' });
+        fireEvent.click(inspect);
+        await screen.findByText(/Annullamento già richiesto/);
+        fireEvent.click(screen.getByRole('checkbox', { name: /Confermo di voler annullare/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'Conferma annullamento richiesta' }));
+        await screen.findByText(/Esito dell’annullamento sconosciuto/);
+        expect(cancelKindeCandidatePendingReplicaMutation).toHaveBeenCalledTimes(1);
+        fireEvent.click(inspect);
+        await screen.findByText(/Annullamento già richiesto/);
+        expect(inspectKindeCandidatePendingReplicaMutation).toHaveBeenCalledTimes(2);
+        expect(cancelKindeCandidatePendingReplicaMutation).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not interpret an already committed membership mutation as a successful cancellation', async () => {
+        authenticated();
+        vi.mocked(inspectKindeCandidatePendingReplicaMutation).mockResolvedValue({
+            kind: 'retirement', mutationId: 'retire-123', slot: 's04', generation: 2,
+            cancellationRequested: false,
+        });
+        vi.mocked(cancelKindeCandidatePendingReplicaMutation).mockResolvedValue('committed');
+        render(<KindeAccountEntry candidateMode="preparation" />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Esamina una richiesta da annullare' }));
+        await screen.findByText(/Riferimento operazione:/);
+        fireEvent.click(screen.getByRole('checkbox', { name: /Confermo di voler annullare/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'Conferma annullamento richiesta' }));
+        await screen.findByText(/La richiesta originale risulta già eseguita/);
+        expect(screen.queryByText(/Il server ha provato che la richiesta non è stata eseguita/)).toBeNull();
+    });
+
     it('never exposes the retirement action to the public identity-only entry', async () => {
         authenticated();
         render(<KindeAccountEntry identityOnly />);
         await screen.findByText(/Sessione Kinde verificata/);
         expect(screen.queryByRole('button', { name: /ritiro/i })).toBeNull();
+        expect(screen.queryByRole('button', { name: /annullare/i })).toBeNull();
         expect(retireKindeCandidateReplica).not.toHaveBeenCalled();
+        expect(inspectKindeCandidatePendingReplicaMutation).not.toHaveBeenCalled();
     });
 
     it('fails without showing a stale registry after a rotated cookie', async () => {

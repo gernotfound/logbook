@@ -25,6 +25,8 @@ type CandidatePreparationResult = Awaited<ReturnType<typeof prepareKindeCandidat
 type CandidateReplicaRegistryResult = Awaited<ReturnType<typeof import('../../lib/sync/kindeCandidateReplicaRegistry').inspectKindeCandidateReplicaRegistry>>;
 type CandidateRetirementWitness = import('../../lib/sync/kindeCandidateReplicaRetirementBridge').CandidateReplicaRetirementWitness;
 type CandidateRetirementOutcome = Awaited<ReturnType<typeof import('../../lib/sync/kindeCandidateReplicaRetirementBridge').retireKindeCandidateReplica>>;
+type CandidatePendingMutation = Awaited<ReturnType<typeof import('../../lib/sync/kindeCandidateReplicaCancellationBridge').inspectKindeCandidatePendingReplicaMutation>>;
+type CandidateCancellationOutcome = Awaited<ReturnType<typeof import('../../lib/sync/kindeCandidateReplicaCancellationBridge').cancelKindeCandidatePendingReplicaMutation>>;
 type CandidateRestoreResult = Awaited<ReturnType<typeof import('../../lib/auth/kindeCandidateRestore').restoreKindeCandidateBackup>>;
 
 // Read only the local CSRF-cookie witness. Network refresh is triggered only
@@ -345,6 +347,36 @@ export function useKindeAccountSession({
         }
     };
 
+    /** Read or cancel only an already sealed membership intent in the isolated candidate. */
+    async function manageCandidateReplicaCancellation(): Promise<CandidatePendingMutation>;
+    async function manageCandidateReplicaCancellation(mutationId: string): Promise<CandidateCancellationOutcome>;
+    async function manageCandidateReplicaCancellation(mutationId?: string): Promise<CandidatePendingMutation | CandidateCancellationOutcome> {
+        if (identityOnly || !candidatePreparationEnabled || !canAct()
+            || view.phase !== 'consent-confirmed' || !view.principal.emailVerified
+            || view.principal.healthConsentRevision < 1) throw new KindeCandidateBoundaryError();
+        const session = observed.current;
+        if (!session?.csrfToken || !session.stillCurrent()) throw new KindeCandidateBoundaryError();
+        const current = () => viewIsCurrent() && session.stillCurrent();
+        const expected = {
+            uid: view.principal.uid, fenceEpoch: view.principal.fenceEpoch,
+            healthConsentRevision: view.principal.healthConsentRevision,
+        };
+        busyRef.current = true;
+        setBusy(true);
+        try {
+            const bridge = await import('../../lib/sync/kindeCandidateReplicaCancellationBridge');
+            if (!current()) throw new KindeCandidateBoundaryError();
+            const result = mutationId === undefined
+                ? await bridge.inspectKindeCandidatePendingReplicaMutation({ expected, stillCurrent: current })
+                : await bridge.cancelKindeCandidatePendingReplicaMutation({ expected, stillCurrent: current, mutationId });
+            if (!current()) throw new KindeCandidateBoundaryError();
+            return result;
+        } finally {
+            busyRef.current = false;
+            if (mounted.current) setBusy(false);
+        }
+    }
+
     /**
      * Candidate-only explicit export. Unlock an already provisioned device
      * vault for this operation, then release the exact grant even on failure.
@@ -568,7 +600,8 @@ export function useKindeAccountSession({
 
     return {
         view, busy, reportInteraction, signIn, enterGuest, acceptConsent, logout, prepareCandidateArchive,
-        inspectCandidateReplicas, manageCandidateReplicaRetirement, prepareCandidateBackup,
+        inspectCandidateReplicas, manageCandidateReplicaRetirement, manageCandidateReplicaCancellation,
+        prepareCandidateBackup,
         restoreCandidateBackup,
         withdrawCandidateConsent, reconcileCandidateWithdrawal, prepareCandidateRightsJson,
         retry: async () => { if (canAct()) await refresh(); },
