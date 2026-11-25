@@ -555,6 +555,68 @@ void test('an expired failed owner yields to waiting owners and retries without 
   } finally { clock.close(); registry.close(); f.sqlite.close(); }
 });
 
+void test('a failed reserved cutoff retry does not block another independently fenced health job', async () => {
+  const f = fixture();
+  const registry = new DatabaseSync(':memory:');
+  const clock = new DatabaseSync(':memory:');
+  try {
+    applyCurrentD1RecoverySchema(registry);
+    registry.exec("UPDATE recovery_control SET mode='open', generation=2 WHERE singleton=1");
+    const recovery = new D1Sqlite(registry);
+    const env = { DB: f.db, RECOVERY_DB: recovery, CF06_ERASURE_RUN_ENABLED: 'enabled' };
+    const tick = () => erasureWorker.scheduled({}, env);
+    await ownerWithWrappedKey(f, 'owner-a');
+    await enrollIndependentOwner(recovery, 'owner-a');
+    await armIndependentHealthWithdrawal(recovery,
+      await recordVerifiedInitialConsent(f.db, recovery, 'owner-a'));
+    withdraw(f, 'owner-a');
+    assert.deepEqual(await tick(), { outcome: 'awaiting-keys' });
+    expire(f, 'owner-a');
+    registry.exec(`CREATE TRIGGER synthetic_terminal_failure BEFORE UPDATE ON recovery_owner_fences
+      WHEN OLD.uid = 'owner-a' AND NEW.erased_before_revision > 0
+      BEGIN SELECT RAISE(ABORT, 'synthetic-terminal-failure'); END`);
+    await assert.rejects(tick(), /independent-recovery-fence-unavailable/);
+    assert.equal(count(f, 'health_erasure_finalizations', 'owner-a'), 1);
+    assert.equal(count(f, 'cloud_account_keys', 'owner-a'), 0);
+    const cutoff = () => registry.prepare("SELECT finalized, next_check_ms FROM recovery_erasure_cutoffs WHERE uid='owner-a'").get();
+    assert.equal(cutoff().finalized, 0);
+
+    await ownerWithWrappedKey(f, 'owner-b');
+    insertDocuments(f, 'owner-b', 5);
+    await enrollIndependentOwner(recovery, 'owner-b');
+    await armIndependentHealthWithdrawal(recovery,
+      await recordVerifiedInitialConsent(f.db, recovery, 'owner-b'));
+    withdraw(f, 'owner-b');
+    // The retry still fails, but the independent B fence authorizes its
+    // own bounded data step. The invocation must not claim success.
+    await assert.rejects(tick(), /independent-recovery-fence-unavailable/);
+    assert.equal(cutoff().finalized, 0);
+    assert.ok(cutoff().next_check_ms > 0);
+    assert.equal(count(f, 'sync_documents', 'owner-b'), 1);
+    assert.equal(count(f, 'cloud_account_keys', 'owner-b'), 1);
+    assert.equal(count(f, 'health_erasure_finalizations', 'owner-b'), 0);
+
+    const previousLease = job(f, 'owner-b').lease_epoch;
+    expire(f, 'owner-b');
+    registry.exec("UPDATE recovery_control SET mode='sealed', generation=3 WHERE singleton=1");
+    await assert.rejects(tick(), /independent-recovery-fence-unavailable/);
+    assert.equal(job(f, 'owner-b').lease_epoch, previousLease);
+    assert.equal(count(f, 'sync_documents', 'owner-b'), 1);
+
+    registry.exec("UPDATE recovery_control SET mode='open', generation=4 WHERE singleton=1");
+    registry.exec('DROP TRIGGER synthetic_terminal_failure');
+    const deadline = cutoff().next_check_ms;
+    const formatTime = clock.prepare('SELECT strftime(?, ?) AS value');
+    registry.function('strftime', (format, date) =>
+      formatTime.get(format, date === 'now' ? new Date(deadline).toISOString() : date).value);
+    assert.deepEqual(await tick(), { outcome: 'progress', phase: 'data', removed: 1, table: 'sync_documents' });
+    assert.equal(cutoff().finalized, 1);
+    assert.equal(count(f, 'health_erasure_finalizations', 'owner-a'), 1);
+    assert.equal(count(f, 'cloud_account_keys', 'owner-b'), 1);
+    assert.equal(count(f, 'health_erasure_finalizations', 'owner-b'), 0);
+  } finally { clock.close(); registry.close(); f.sqlite.close(); }
+});
+
 void test('scheduler has no public fetch endpoint and handles only one bounded step per tick', async () => {
   assert.equal(typeof erasureWorker.fetch, 'undefined');
   const f = fixture();

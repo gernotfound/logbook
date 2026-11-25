@@ -190,7 +190,11 @@ conferma di cancellazione. Il runner corrente ordina le richieste eleggibili
 per il massimo fra timestamp di richiesta e scadenza del lease precedente,
 poi richiesta e UID. Un errore di un owner dopo il claim non monopolizza
 la coda: il suo retry rientra al termine del lease, senza modificare le
-condizioni autorizzative o produrre una ricevuta.
+condizioni autorizzative o produrre una ricevuta. La riconciliazione di un
+cutoff già prenotato può fallire senza bloccare il passo di un altro owner,
+che richiede la propria fence indipendente; il tick resta fallito, senza
+attribuire una ricevuta al cutoff. Gate globale o prenotazione non provati
+interrompono il tick prima di qualsiasi passo.
 
 ## Matrice sintetica delle autorizzazioni
 

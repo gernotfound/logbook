@@ -53,11 +53,18 @@ export async function reconcileNextIndependentErasure(appDb, fenceDb) {
     )
     RETURNING uid, consent_revision, fence_epoch
   `).bind(RECHECK_MS).first();
-  if (!due) return;
-  const committed = await appDb.withSession('first-primary').prepare(`
-    SELECT uid FROM health_erasure_finalizations
-    WHERE uid = ? AND consent_revision = ? AND fence_epoch = ?
-  `).bind(due.uid, due.consent_revision, due.fence_epoch).first();
-  if (committed?.uid !== due.uid) return;
-  await recordVerifiedTerminalErasure(appDb, fenceDb, due.uid, due);
+  if (!due) return 'idle';
+  // Only failures after reserving this specific retry are isolated. A failed
+  // gate or ambiguous reservation still rejects the invocation immediately.
+  try {
+    const committed = await appDb.withSession('first-primary').prepare(`
+      SELECT uid FROM health_erasure_finalizations
+      WHERE uid = ? AND consent_revision = ? AND fence_epoch = ?
+    `).bind(due.uid, due.consent_revision, due.fence_epoch).first();
+    if (committed?.uid !== due.uid) return 'pending';
+    await recordVerifiedTerminalErasure(appDb, fenceDb, due.uid, due);
+    return 'reconciled';
+  } catch {
+    return 'blocked';
+  }
 }
