@@ -7,6 +7,8 @@ import {
 
 import { ACCOUNT_AUTH_CLEANUP_TABLES, HEALTH_CHILD_TABLES } from './erasure-tables.mjs';
 
+import { INTENT_SCOPE, intentScopeArgs } from './kinde-erasure-intent.mjs';
+
 const CHUNK_SIZE = 16;
 const JOB_SOURCE = `
   FROM kinde_account_erasure_requests r
@@ -14,7 +16,7 @@ const JOB_SOURCE = `
   JOIN auth_principals p ON p.uid = r.uid
 `;
 const SCOPE = `
-  WHERE r.uid = ? AND r.receipt_hash = ? AND i.auth_epoch = ?
+  WHERE ${INTENT_SCOPE}
     AND p.status = 'disabled' AND p.auth_epoch = r.prior_auth_epoch + 1
 `;
 
@@ -38,7 +40,7 @@ function deleteSessionRowsSql({ name, key }) {
 export async function runKindeAccountErasureAppStep(appDb, recoveryDb, intent) {
   if (!appDb || !recoveryDb || appDb === recoveryDb) throw new Error('kinde-erasure-application-unavailable');
   await requireIndependentAccountErasureDenial(recoveryDb, intent);
-  const scope = [intent.uid, intent.receiptHash, intent.authEpoch];
+  const scope = intentScopeArgs(intent);
   const primary = appDb.withSession('first-primary');
   const accepted = await primary.prepare(`SELECT r.uid ${JOB_SOURCE} ${SCOPE}`).bind(...scope).first();
   if (accepted?.uid !== intent.uid) return { outcome: 'contended' };
@@ -64,7 +66,7 @@ export async function runKindeAccountErasureAppStep(appDb, recoveryDb, intent) {
  */
 export async function verifyKindeAccountErasureAppComplete(appDb, recoveryDb, intent) {
   if (!appDb || !recoveryDb || appDb === recoveryDb) throw new Error('kinde-erasure-application-unavailable');
-  const scope = [intent.uid, intent.receiptHash, intent.authEpoch];
+  const scope = intentScopeArgs(intent);
   const observed = await appDb.withSession('first-primary').prepare(`
     SELECT r.uid, s.status, s.consent_revision, s.fence_epoch, s.erased_before_revision,
       CASE WHEN s.uid IS NULL AND (

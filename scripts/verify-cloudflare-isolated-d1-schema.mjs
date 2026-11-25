@@ -19,17 +19,17 @@ export const MIGRATIONS = Object.freeze(`
 0009_require_cloud_key_for_replica_writes.sql
 0010_atomic_health_erasure_finalization.sql
 0011_integer_cloud_key_clock.sql
-0012_kinde_account_erasure.sql
-0013_kinde_activity_observations.sql
+0012_kinde_erasure_decisions.sql
+0013_kinde_activity_and_inactivity.sql
 0014_kinde_account_erasure_scheduler.sql
 `.trim().split('\n'));
 const DATABASE = 'thelogbook-cf02-eu-isolated-20261113';
 const DATABASE_ID = '9aa51833-8adc-495f-bdfc-93b5542e8023';
 const BASE = 'https://api.cloudflare.com/client/v4';
-const ACCOUNT_ERASURE_MIGRATION = '0012_kinde_account_erasure.sql';
-const ACCOUNT_ERASURE_MIGRATION_SHA256 = '868f9d1ce014d991b4dcd3e2c20651cec4c16b8b18b505dc193a14d8ceceb20a';
-const ACTIVITY_MIGRATION = '0013_kinde_activity_observations.sql';
-const ACTIVITY_MIGRATION_SHA256 = 'c25ee9935192d80ac5f0644058696baebf33c9040878e01cbd9b0332e1b10be7';
+const ACCOUNT_ERASURE_MIGRATION = '0012_kinde_erasure_decisions.sql';
+const ACCOUNT_ERASURE_MIGRATION_SHA256 = 'adb6a52afbdc62bd7c35afcf38e18f5e434d1c86eb75726ea07a4680914643a4';
+const ACTIVITY_MIGRATION = '0013_kinde_activity_and_inactivity.sql';
+const ACTIVITY_MIGRATION_SHA256 = '23b2f31acbd65eaad3d24f6a6fe0ffb68e754341d570d3fe34c2dea8b23913b7';
 const SCHEDULER_MIGRATION = '0014_kinde_account_erasure_scheduler.sql';
 const SCHEDULER_MIGRATION_SHA256 = '5f6a1a906794a0df57dc6877a6819546e410aeea2f42b6e9b7dd9e3fa766ccfd';
 const MIGRATION_DIR = new URL('../cloudflare/api/migrations/', import.meta.url);
@@ -214,13 +214,14 @@ export async function verifyRemoteIsolatedD1({
       "'sync_writable_cloud_key',",
       "'health_erasure_finalizations',",
       "'health_erasure_finalization_fence',",
-      "'kinde_account_erasure_completion_fence',",
+      "'kinde_account_erasure_activity_terminal_fence', 'kinde_account_erasure_completion_fence',",
       "'kinde_account_erasure_freeze',",
       ...Object.values(ACCOUNT_ERASURE_TABLES).map(name => "'" + name + "',"),
       "'kinde_account_activity', 'kinde_account_activity_by_last_seen',",
       "'kinde_account_activity_insert_fence', 'kinde_account_activity_update_fence',",
       "'kinde_inactivity_control', 'kinde_inactivity_control_generation',",
-      "'kinde_inactivity_control_no_delete', 'kinde_inactivity_control_no_replace',",
+      "'kinde_inactivity_control_no_delete', 'kinde_inactivity_control_no_replace',
+      'kinde_inactivity_intent_fence', 'kinde_inactivity_intent_freeze',",
       "'kinde_account_erasure_scheduler', 'kinde_account_erasure_scheduler_no_delete',",
       "'kinde_account_erasure_scheduler_no_replace', 'kinde_account_erasure_scheduler_transition',",
       "'auth_sessions_owner_token') ORDER BY name",
@@ -234,6 +235,7 @@ export async function verifyRemoteIsolatedD1({
       ['kinde_account_activity_by_last_seen', 'index'],
       ['kinde_account_activity_insert_fence', 'trigger'],
       ['kinde_account_activity_update_fence', 'trigger'],
+      ['kinde_account_erasure_activity_terminal_fence', 'trigger'],
       ['kinde_account_erasure_completion_fence', 'trigger'],
       ['kinde_account_erasure_completions', 'table'],
       ['kinde_account_erasure_freeze', 'trigger'],
@@ -250,6 +252,8 @@ export async function verifyRemoteIsolatedD1({
       ['kinde_inactivity_control_generation', 'trigger'],
       ['kinde_inactivity_control_no_delete', 'trigger'],
       ['kinde_inactivity_control_no_replace', 'trigger'],
+      ['kinde_inactivity_intent_fence', 'trigger'],
+      ['kinde_inactivity_intent_freeze', 'trigger'],
       ['sync_writable_cloud_key', 'view'],
     ], 'final D1 schema objects missing');
     const controls = unpackQuery(await call('/query',

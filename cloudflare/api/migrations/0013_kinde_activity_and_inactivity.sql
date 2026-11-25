@@ -46,3 +46,40 @@ CREATE TRIGGER kinde_inactivity_control_generation
 BEFORE UPDATE ON kinde_inactivity_control
 WHEN NEW.singleton != OLD.singleton OR NEW.generation != OLD.generation + 1
 BEGIN SELECT RAISE(ABORT, 'kinde-inactivity-control-regression'); END;
+
+-- Revalidate the observation at the atomic decision boundary. The trusted
+-- caller computes the exact calendar deadline; this trigger fences the
+-- marker and policy generation and conservatively excludes live sessions.
+CREATE TRIGGER kinde_inactivity_intent_fence
+BEFORE INSERT ON kinde_account_erasure_intents
+WHEN NEW.reauthenticated_at_ms IS NULL AND (
+  NEW.confirmed_at_ms IS NOT
+    (CAST(strftime('%s','now') AS INTEGER) * 1000 + CAST(substr(strftime('%f','now'),4,3) AS INTEGER))
+  OR NOT EXISTS (
+    SELECT 1 FROM kinde_account_activity a CROSS JOIN kinde_inactivity_control c
+    WHERE a.uid = NEW.uid AND a.last_recorded_at_ms = NEW.inactivity_recorded_at_ms
+      AND c.singleton = 1 AND c.mode = 'enabled' AND c.generation = NEW.inactivity_generation
+  )
+  OR EXISTS (
+    SELECT 1 FROM auth_sessions t WHERE t.uid = NEW.uid AND t.auth_epoch = NEW.auth_epoch
+      AND t.revoked_at_ms IS NULL AND t.issued_at_ms <= NEW.confirmed_at_ms
+      AND t.idle_expires_at_ms > NEW.confirmed_at_ms AND t.absolute_expires_at_ms > NEW.confirmed_at_ms
+  )
+)
+BEGIN SELECT RAISE(ABORT, 'kinde-inactivity-intent-fenced'); END;
+
+CREATE TRIGGER kinde_inactivity_intent_freeze
+AFTER INSERT ON kinde_account_erasure_intents
+WHEN NEW.reauthenticated_at_ms IS NULL
+BEGIN
+  UPDATE auth_principals SET status = 'disabled'
+  WHERE uid = NEW.uid AND status = 'active' AND auth_epoch = NEW.auth_epoch;
+  SELECT CASE WHEN changes() != 1 THEN RAISE(ABORT, 'kinde-inactivity-intent-fenced') END;
+END;
+
+-- The cleanup runner already drains the marker; the terminal transaction
+-- must independently reject any residual marker.
+CREATE TRIGGER kinde_account_erasure_activity_terminal_fence
+BEFORE INSERT ON kinde_account_erasure_completions
+WHEN EXISTS (SELECT 1 FROM kinde_account_activity WHERE uid = NEW.uid)
+BEGIN SELECT RAISE(ABORT, 'kinde-account-erasure-completion-fenced'); END;

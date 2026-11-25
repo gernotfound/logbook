@@ -1,5 +1,6 @@
 import { inspectRestoredOwnerCoverage } from './restore-preflight.mjs';
 import { digestForIntent } from './account-erasure-denials.mjs';
+import { QUALIFIED_INTENT_COLUMNS, intentFromRow } from '../jobs/kinde-erasure-intent.mjs';
 
 // Operator-only diagnostic. Never mount this as an HTTP authorization endpoint.
 // Bound the full-table reads so a large or ambiguous source fails closed instead
@@ -16,8 +17,7 @@ const INDEPENDENT_SQL = `SELECT uid, status, consent_revision, fence_epoch,
   ORDER BY uid LIMIT ?`;
 // The account census is independent of consent: a denied identity may never
 // have created a sync_subjects row. Read only proof metadata, not credentials.
-const ACCOUNT_SQL = `SELECT i.uid, i.auth_epoch, i.receipt_hash,
-  i.reauthenticated_at_ms, i.confirmed_at_ms, p.status AS principal_status,
+const ACCOUNT_SQL = `SELECT ${QUALIFIED_INTENT_COLUMNS}, p.status AS principal_status,
   p.auth_epoch AS principal_epoch, r.uid AS request_uid, r.prior_auth_epoch,
   r.receipt_hash AS request_hash, r.reauthenticated_at_ms AS request_auth_ms,
   r.requested_at_ms, c.uid AS completion_uid, c.completed_at_ms,
@@ -118,10 +118,9 @@ async function inspectAccountCoverage({ intents, denials }) {
     requireEvidence(typeof row.uid === 'string' && /^k_[A-Za-z0-9_-]{43}$/.test(row.uid)
       && row.uid > previous && deny?.uid === row.uid, 'account-erasure-coverage-mismatch');
     previous = row.uid;
-    const digest = await digestForIntent({
-      uid: row.uid, authEpoch: row.auth_epoch, receiptHash: row.receipt_hash,
-      authenticatedAtMs: row.reauthenticated_at_ms, confirmedAtMs: row.confirmed_at_ms,
-    });
+    const intent = intentFromRow(row);
+    requireEvidence(intent, 'account-erasure-intent-invalid');
+    const digest = await digestForIntent(intent);
     requireEvidence(deny.intent_digest === digest, 'account-erasure-denial-mismatch');
     requireEvidence(row.request_uid === row.uid
       && row.request_hash === row.receipt_hash && row.request_auth_ms === row.reauthenticated_at_ms

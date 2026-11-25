@@ -4,6 +4,8 @@ import { runKindeAccountErasureAppStep, verifyKindeAccountErasureAppComplete } f
 import { createKindeErasureManagement } from './kinde-erasure-management.mjs';
 import { KINDE_ERASURE_TARGET_FORMAT } from './kinde-erasure-target.mjs';
 
+import { INTENT_SCOPE, intentScopeArgs } from './kinde-erasure-intent.mjs';
+
 const LEASE_MS = 30_000;
 
 const LIVE_LEASE = `
@@ -18,11 +20,10 @@ async function readCompletion(db, intent) {
     JOIN kinde_account_erasure_requests r ON r.uid = c.uid
     JOIN kinde_account_erasure_intents i ON i.uid = r.uid
     JOIN auth_principals p ON p.uid = r.uid
-    WHERE c.uid = ? AND r.receipt_hash = ? AND i.auth_epoch = ?
-      AND i.reauthenticated_at_ms = ? AND i.confirmed_at_ms = ?
+    WHERE ${INTENT_SCOPE}
       AND p.status = 'deleted' AND p.auth_epoch = r.prior_auth_epoch + 1
       AND NOT EXISTS (SELECT 1 FROM kinde_erasure_targets t WHERE t.uid = c.uid)
-  `).bind(intent.uid, intent.receiptHash, intent.authEpoch, intent.authenticatedAtMs, intent.confirmedAtMs).first();
+  `).bind(...intentScopeArgs(intent)).first();
   return Number.isSafeInteger(row?.completed_at_ms) && row.completed_at_ms > 0 ? row.completed_at_ms : null;
 }
 

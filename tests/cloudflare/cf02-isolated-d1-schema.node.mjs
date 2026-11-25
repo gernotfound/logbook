@@ -20,6 +20,7 @@ const schema = [
   { name: 'kinde_account_activity_by_last_seen', type: 'index' },
   { name: 'kinde_account_activity_insert_fence', type: 'trigger' },
   { name: 'kinde_account_activity_update_fence', type: 'trigger' },
+  { name: 'kinde_account_erasure_activity_terminal_fence', type: 'trigger' },
   { name: 'kinde_account_erasure_completion_fence', type: 'trigger' },
   { name: 'kinde_account_erasure_completions', type: 'table' },
   { name: 'kinde_account_erasure_freeze', type: 'trigger' },
@@ -36,6 +37,8 @@ const schema = [
   { name: 'kinde_inactivity_control_generation', type: 'trigger' },
   { name: 'kinde_inactivity_control_no_delete', type: 'trigger' },
   { name: 'kinde_inactivity_control_no_replace', type: 'trigger' },
+  { name: 'kinde_inactivity_intent_fence', type: 'trigger' },
+  { name: 'kinde_inactivity_intent_freeze', type: 'trigger' },
   { name: 'sync_writable_cloud_key', type: 'view', sql: `accepted_at_ms <= ${D1_NOW_MS}` },
 ];
 
@@ -127,7 +130,7 @@ void test('the known contiguous migration prefixes may resume; completion requir
   assert.equal(verifyMigrationLedger(ledger(13), 'before'), 13);
   assert.equal(verifyMigrationLedger(ledger(14), 'after'), 14);
   for (const entries of [
-    ledger(7), [...ledger(8), { id: 10, name: MIGRATIONS[8] }],
+    ledger(7), [...ledger(11), { id: 12, name: '0012_kinde_account_erasure.sql' }], [...ledger(8), { id: 10, name: MIGRATIONS[8] }],
     [...ledger(8), { id: 9, name: '0009_other.sql' }],
     [...ledger(10), { id: 11, name: '0011_unknown.sql' }],
     ledger(8).map((row, i) => i === 0 ? { ...row, id: 0 } : row),
@@ -188,10 +191,10 @@ void test('explicit 0014 test upgrade preserves identities across the 0012–001
 });
 
 void test('0014 test upgrade rejects altered SQL, mismatched ledger, health data and changed identity counts', async () => {
-  const sql = readFileSync(new URL('../../cloudflare/api/migrations/0012_kinde_account_erasure.sql', import.meta.url), 'utf8');
+  const sql = readFileSync(new URL('../../cloudflare/api/migrations/0012_kinde_erasure_decisions.sql', import.meta.url), 'utf8');
   assert.doesNotThrow(() => verifyExistingTestUpgradeSql(sql));
   assert.throws(() => verifyExistingTestUpgradeSql(sql + '\nDELETE FROM auth_sessions;'), /unreviewed SQL/);
-  const activitySql = readFileSync(new URL('../../cloudflare/api/migrations/0013_kinde_activity_observations.sql', import.meta.url), 'utf8');
+  const activitySql = readFileSync(new URL('../../cloudflare/api/migrations/0013_kinde_activity_and_inactivity.sql', import.meta.url), 'utf8');
   assert.doesNotThrow(() => verifyInactivityMigrationSql(activitySql));
   assert.throws(() => verifyInactivityMigrationSql(activitySql + '\nDELETE FROM auth_sessions;'), /unreviewed inactivity SQL/);
   const schedulerSql = readFileSync(new URL('../../cloudflare/api/migrations/0014_kinde_account_erasure_scheduler.sql', import.meta.url), 'utf8');

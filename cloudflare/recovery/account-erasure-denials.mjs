@@ -1,7 +1,9 @@
 import { IndependentFenceUnavailableError, requireIndependentOwnerFence } from './independent-owner-fence.mjs';
 
+import { INTENT_SCOPE, intentScopeArgs, validErasureIntent } from '../jobs/kinde-erasure-intent.mjs';
+
 const UID = /^k_[A-Za-z0-9_-]{43}$/;
-const HASH = /^[a-f0-9]{64}$/;
+
 const INTENT_CONTEXT = 'thelogbook:kinde-erasure-intent:v1';
 
 /**
@@ -25,17 +27,15 @@ export async function requireIndependentAccountAccess(recoveryDb, uid) {
   throw new IndependentFenceUnavailableError();
 }
 
-/** @param {{ uid: string, authEpoch: number, receiptHash: string, authenticatedAtMs: number, confirmedAtMs: number }} intent */
+/** @param {import('../jobs/kinde-erasure-intent.mjs').ErasureIntent} intent */
 export async function digestForIntent(intent) {
   const { uid, authEpoch, receiptHash, authenticatedAtMs, confirmedAtMs } = intent;
-  if (!UID.test(uid) || !HASH.test(receiptHash) || !Number.isSafeInteger(authEpoch) || authEpoch < 1
-    || !Number.isSafeInteger(authenticatedAtMs) || authenticatedAtMs < 1
-    || !Number.isSafeInteger(confirmedAtMs) || confirmedAtMs < authenticatedAtMs
-    || confirmedAtMs - authenticatedAtMs > 300_000) throw new IndependentFenceUnavailableError();
-
-  const bytes = new TextEncoder().encode(JSON.stringify(
-    [INTENT_CONTEXT, uid, authEpoch, receiptHash, authenticatedAtMs, confirmedAtMs],
-  ));
+  if (!validErasureIntent(intent)) throw new IndependentFenceUnavailableError();
+  const fields = intent.inactivity
+    ? ['thelogbook:kinde-inactivity-intent:v1', uid, authEpoch, receiptHash, confirmedAtMs,
+      intent.inactivity.generation, intent.inactivity.lastRecordedAtMs, intent.inactivity.eligibleAtMs]
+    : [INTENT_CONTEXT, uid, authEpoch, receiptHash, authenticatedAtMs, confirmedAtMs];
+  const bytes = new TextEncoder().encode(JSON.stringify(fields));
   const hashed = await crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(hashed), byte => byte.toString(16).padStart(2, '0')).join('');
 }
@@ -97,7 +97,7 @@ export async function requireIndependentAccountErasureDenial(recoveryDb, intent)
  */
 export async function reconcileAccountErasureHealthFence(appDb, recoveryDb, intent) {
   if (!appDb || !recoveryDb || appDb === recoveryDb) throw new IndependentFenceUnavailableError();
-  const { uid, authEpoch, receiptHash, authenticatedAtMs, confirmedAtMs } = intent;
+  const { uid } = intent;
   const digest = await digestForIntent(intent);
   try {
     const subject = await appDb.withSession('first-primary').prepare(`
@@ -108,13 +108,12 @@ export async function reconcileAccountErasureHealthFence(appDb, recoveryDb, inte
       JOIN sync_subjects s ON s.uid = r.uid
       JOIN health_consent_acceptances c ON c.uid = s.uid
       JOIN health_erasure_jobs j ON j.uid = s.uid AND j.consent_revision = s.consent_revision
-      WHERE r.uid = ? AND i.auth_epoch = ? AND r.receipt_hash = ?
-        AND i.reauthenticated_at_ms = ? AND i.confirmed_at_ms = ?
+      WHERE ${INTENT_SCOPE}
         AND p.status = 'disabled' AND p.auth_epoch = r.prior_auth_epoch + 1
         AND s.status = 'withdrawn' AND s.consent_revision = 1 AND s.erased_before_revision = 0
         AND c.consent_revision = 1 AND c.over_18_confirmed = 1
         AND j.fence_epoch = s.fence_epoch AND j.status IN ('pending', 'processing')
-    `).bind(uid, authEpoch, receiptHash, authenticatedAtMs, confirmedAtMs).first();
+    `).bind(...intentScopeArgs(intent)).first();
     if (subject?.uid !== uid || !Number.isSafeInteger(subject.fence_epoch) || subject.fence_epoch < 1) {
       throw new IndependentFenceUnavailableError();
     }

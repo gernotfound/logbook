@@ -2,8 +2,10 @@ import { acceptKindeAccountErasure } from './kinde-account-erasure-requests.mjs'
 import { runKindeAccountErasureAppStep } from './kinde-account-erasure-app-step.mjs';
 import { runKindeAccountErasureProviderStep } from './kinde-account-erasure-provider-step.mjs';
 
+import { QUALIFIED_INTENT_COLUMNS, intentFromRow } from './kinde-erasure-intent.mjs';
+
 const UID = /^k_[A-Za-z0-9_-]{43}$/;
-const HASH = /^[a-f0-9]{64}$/;
+
 
 /**
  * Candidate-only dispatcher: one intent row per tick, including terminal
@@ -23,7 +25,7 @@ export async function runOneKindeAccountErasureStep(db, recoveryDb, after = null
     throw new TypeError('invalid-kinde-erasure-runner-cursor');
   }
   const row = await db.withSession('first-primary').prepare(`
-    SELECT i.uid, i.auth_epoch, i.receipt_hash, i.reauthenticated_at_ms, i.confirmed_at_ms,
+    SELECT ${QUALIFIED_INTENT_COLUMNS},
       CASE WHEN r.uid IS NULL THEN 0 ELSE 1 END AS accepted,
       CASE WHEN c.uid IS NULL THEN 0 ELSE 1 END AS recorded
     FROM kinde_account_erasure_intents i
@@ -33,24 +35,14 @@ export async function runOneKindeAccountErasureStep(db, recoveryDb, after = null
     ORDER BY i.uid LIMIT 1
   `).bind(after ?? '').first();
   if (row === null) return { nextCursor: null, result: { outcome: 'idle' } };
-  if (typeof row?.uid !== 'string' || !UID.test(row.uid) || row.uid <= (after ?? '')
-    || typeof row.receipt_hash !== 'string' || !HASH.test(row.receipt_hash)
-    || !Number.isSafeInteger(row.auth_epoch) || row.auth_epoch < 1 || row.auth_epoch >= Number.MAX_SAFE_INTEGER
-    || !Number.isSafeInteger(row.reauthenticated_at_ms) || row.reauthenticated_at_ms <= 0
-    || row.reauthenticated_at_ms % 1000 !== 0
-    || !Number.isSafeInteger(row.confirmed_at_ms) || row.confirmed_at_ms < row.reauthenticated_at_ms
-    || row.confirmed_at_ms - row.reauthenticated_at_ms > 300000
-    || ![0, 1].includes(row.accepted) || ![0, 1].includes(row.recorded)
+  const intent = intentFromRow(row);
+  if (!intent || intent.uid <= (after ?? '') || ![0, 1].includes(row.accepted) || ![0, 1].includes(row.recorded)
     || (row.recorded === 1 && row.accepted !== 1)) {
     throw new Error('kinde-erasure-runner-unavailable');
   }
   const nextCursor = row.uid;
   // A recorded terminal row is skipped, not exposed as a fresh receipt.
   if (row.recorded === 1) return { nextCursor, result: { outcome: 'already-recorded' } };
-  const intent = {
-    uid: row.uid, authEpoch: row.auth_epoch, receiptHash: row.receipt_hash,
-    authenticatedAtMs: row.reauthenticated_at_ms, confirmedAtMs: row.confirmed_at_ms,
-  };
   try {
     if (row.accepted === 0) {
       const accepted = await acceptKindeAccountErasure(db, recoveryDb, intent);

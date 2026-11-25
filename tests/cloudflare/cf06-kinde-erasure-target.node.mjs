@@ -5,6 +5,10 @@ import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import { consumeKindeDeletionAttempt, saveKindeDeletionAttempt } from '../../cloudflare/auth/kinde-deletion-attempts.mjs';
 import { deriveKindeOwnerId } from '../../cloudflare/auth/kinde-owner-id.mjs';
+import { recordKindeForegroundActivity } from '../../cloudflare/auth/kinde-foreground-activity.mjs';
+import { recordKindeInactivityErasureIntent } from '../../cloudflare/jobs/kinde-inactivity-enqueue.mjs';
+import { readKindeInactivityCandidates } from '../../cloudflare/jobs/kinde-inactivity-candidates.mjs';
+import { earliestKindeInactivityErasureAt } from '../../cloudflare/jobs/kinde-inactivity-time.mjs';
 import healthErasureWorker from '../../cloudflare/jobs/health-erasure-worker.mjs';
 import { runKindeAccountErasureAppStep } from '../../cloudflare/jobs/kinde-account-erasure-app-step.mjs';
 import { runKindeAccountErasureProviderStep } from '../../cloudflare/jobs/kinde-account-erasure-provider-step.mjs';
@@ -37,6 +41,7 @@ function d1For(sqlite, { beforeWrite = () => {}, afterWrite = () => {}, afterFir
             afterFirst(sql, args);
             return row;
           },
+          async all() { return { success: true, results: statement.all(...args) }; },
           async run() {
             beforeWrite(sql, args);
             const { changes } = statement.run(...args);
@@ -180,7 +185,7 @@ void test('the candidate schema adds empty erasure tables to populated 0011 with
   const oldPrincipals = principals.all();
   const oldSessions = sessions.all();
 
-  sqlite.exec(readFileSync(new URL('0012_kinde_account_erasure.sql', migrations), 'utf8'));
+  sqlite.exec(readFileSync(new URL('0012_kinde_erasure_decisions.sql', migrations), 'utf8'));
 
   assert.deepEqual(principals.all(), oldPrincipals);
   assert.deepEqual(sessions.all(), oldSessions);
@@ -796,4 +801,62 @@ void test('a missing endpoint, foreign result or incomplete exact listing never 
     });
     assert.equal(await readPresence(target), 'unconfirmed');
   }
+});
+
+void test('inactivity enqueue fences fresh activity and live sessions, survives a lost reply and uses the common dispatcher', async (t) => {
+  const { db, sqlite, identity, write, attempt } = await deletionAttemptFixture(t);
+  const recovery = openRecoveryFixture(t);
+  const clock = new DatabaseSync(':memory:');
+  t.after(() => clock.close());
+  let now = Date.now();
+  const fmt = clock.prepare('SELECT strftime(?, ?) AS value');
+  sqlite.function('strftime', (format, date) => fmt.get(format, date === 'now' ? new Date(now).toISOString() : date).value);
+  await write(db, identity);
+  const claims = { uid: identity.uid, fenceEpoch: 1, sessionHash: attempt.sessionHash,
+    authenticated: true, csrfVerified: true, rateGatePassed: true };
+  assert.deepEqual(await recordKindeForegroundActivity(db, claims), { outcome: 'recorded' });
+  const due = earliestKindeInactivityErasureAt(now);
+  now = due - 1;
+  sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=2");
+  assert.deepEqual((await readKindeInactivityCandidates(db)).candidates, []);
+  now = due;
+  const { candidates: [first] } = await readKindeInactivityCandidates(db);
+  assert.ok(first);
+  await assert.rejects(recordKindeInactivityErasureIntent(db, { ...first, eligibleAtMs: due - 1 }), /invalid-kinde-inactivity-decision/);
+  sqlite.exec("UPDATE kinde_inactivity_control SET mode='paused', generation=3");
+  assert.equal(await recordKindeInactivityErasureIntent(db, first), null);
+  sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=4");
+  const { candidates: [second] } = await readKindeInactivityCandidates(db);
+  assert.ok(second);
+  const liveHash = 'f'.repeat(64);
+  sqlite.prepare('INSERT INTO auth_sessions VALUES (?, ?, 1, ?, ?, ?, ?, NULL)')
+    .run(liveHash, identity.uid, 'c'.repeat(64), now, now + 60_000, now + 120_000);
+  assert.equal(await recordKindeInactivityErasureIntent(db, second), null);
+  assert.deepEqual(await recordKindeForegroundActivity(db, { ...claims, sessionHash: liveHash }), { outcome: 'recorded' });
+  now += 120_001;
+  assert.equal(await recordKindeInactivityErasureIntent(db, second), null);
+  now = earliestKindeInactivityErasureAt(due);
+  const { candidates: [current] } = await readKindeInactivityCandidates(db);
+  assert.ok(current);
+  const lostAck = d1For(sqlite, { afterWrite(sql) {
+    if (sql.includes('INSERT INTO kinde_account_erasure_intents')) throw Error('synthetic lost write reply');
+  } });
+  const intent = await recordKindeInactivityErasureIntent(lostAck, current);
+  assert.equal(intent.authenticatedAtMs, null);
+  assert.deepEqual(intent.inactivity, { generation: 4, lastRecordedAtMs: due, eligibleAtMs: now });
+  assert.equal(sqlite.prepare('SELECT status FROM auth_principals WHERE uid=?').get(identity.uid).status, 'disabled');
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_requests').get().n, 0);
+  assert.throws(() => sqlite.prepare("UPDATE auth_principals SET status='active', auth_epoch=2 WHERE uid=?").run(identity.uid),
+    /kinde-account-erasure-request-retained/);
+  sqlite.exec("UPDATE kinde_inactivity_control SET mode='paused', generation=5");
+  assert.deepEqual(await recordKindeInactivityErasureIntent(db, current), intent);
+  assert.equal(await acceptKindeAccountErasure(db, recovery.db, { ...intent, inactivity: { ...intent.inactivity, generation: 5 } }), false);
+  assert.deepEqual(await runOneKindeAccountErasureStep(db, recovery.db), {
+    nextCursor: identity.uid, result: { outcome: 'accepted' },
+  });
+  await assert.rejects(requireIndependentAccountAccess(recovery.db, identity.uid), /independent-recovery-fence-unavailable/);
+  assert.equal(sqlite.prepare('SELECT reauthenticated_at_ms FROM kinde_account_erasure_requests').get().reauthenticated_at_ms, null);
+  assert.equal((await runKindeAccountErasureAppStep(db, recovery.db, intent)).outcome, 'progress');
+  assert.equal((await runKindeAccountErasureAppStep(db, recovery.db, intent)).outcome, 'progress');
+  assert.equal((await runKindeAccountErasureAppStep(db, recovery.db, intent)).outcome, 'application-complete');
 });
