@@ -78,7 +78,7 @@
       "health-metadata",
       "health-chunk",
       "health-chunk",
-      "Replica mutation receipt/clock; same erasure and replay constraints.",
+      "Replica mutation receipt/clock and explicit retirement mode; same erasure and replay constraints.",
       "Reject stale generations under independent cutoff."
     ],
     "health_consent_acceptances": [

@@ -73,3 +73,57 @@ void test('lost acknowledgement of replica registration is recovered from durabl
   assert.equal(persisted.replica_id, originalRequest.candidateReplicaId);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 1);
 }));
+
+void test('explicit retirement is exact, session-fenced and replayable without deleting data or sessions', () => withFixture(async db => {
+  assert.equal((await call(db, 'commit', attempt('batch-explicit-retire-01'))).status, 200);
+  const control = (await call(db, 'control', {})).body;
+  const { lastSeq, checkpointAtMs, leaseUntilMs } = control.replicas.s00;
+  const input = { ...retire('explicit-retirement-01', 1), confirmation: { lastSeq, checkpointAtMs, leaseUntilMs } };
+  assert.equal((await call(db, 'replica/retire', retire('automatic-retirement-1', 1))).status, 409);
+  assert.equal((await call(db, 'replica/retire', { ...input, confirmation: true })).status, 400);
+  assert.equal((await call(db, 'replica/retire', { ...input, confirmation: { ...input.confirmation, lastSeq: lastSeq + 1 } })).status, 409);
+  assert.equal((await call(db, 'replica/retire', { ...input, expectedRevision: 0 })).status, 409);
+  assert.equal((await call(db, 'replica/retire', input, { env: makeEnv(db, { csrfVerified: false }) })).status, 403);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 0);
+
+  // Simulate a stale control at the SQL boundary, independently of the
+  // Worker's snapshot/revision check. An exact witness is required in D1.
+  const original = db.batch.bind(db);
+  db.batch = async statements => {
+    if (statements[0]?.sql.includes('INSERT INTO sync_replica_mutations')) {
+      db.sqlite.prepare("UPDATE sync_replicas SET lease_until_ms=lease_until_ms+1 WHERE uid=? AND slot='s00'").run(owner);
+    }
+    return original(statements);
+  };
+  assert.equal((await call(db, 'replica/retire', input)).status, 409);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 0);
+  assert.equal(db.sqlite.prepare("SELECT status FROM sync_replicas WHERE uid=? AND slot='s00'").get(owner).status, 'active');
+  db.batch = original;
+  const latest = (await call(db, 'control', {})).body.replicas.s00;
+  const confirmed = { ...input, confirmation: { lastSeq: latest.lastSeq, checkpointAtMs: latest.checkpointAtMs, leaseUntilMs: latest.leaseUntilMs } };
+  db.batch = async statements => {
+    const result = await original(statements);
+    if (statements[0]?.sql.includes('INSERT INTO sync_replica_mutations')) {
+      throw new Error('synthetic explicit retirement response lost after commit');
+    }
+    return result;
+  };
+  const removed = await call(db, 'replica/retire', confirmed);
+  db.batch = original;
+  assert.equal(removed.status, 200);
+  assert.equal(removed.body.replayed, true);
+  assert.equal(removed.body.action, 'retire');
+  assert.equal(removed.body.baseSeq, lastSeq);
+  assert.equal(removed.body.revision, 2);
+  assert.equal(db.sqlite.prepare('SELECT retirement_mode FROM sync_replica_mutations').get().retirement_mode, 'explicit');
+  assert.equal((await call(db, 'replica/retire', confirmed)).body.replayed, true);
+  assert.deepEqual(await call(db, 'replica/status', confirmed), { status: 200, body: { outcome: 'committed', currentRevision: 2 } });
+  assert.deepEqual(await call(db, 'replica/retire', input), { status: 409, body: { error: 'mutation-id-conflict' } });
+  assert.equal((await call(db, 'commit', attempt('batch-after-retire-001', 2, 2))).status, 409);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_documents').get().n, 1);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts').get().n, 1);
+  assert.equal((await call(db, 'control', {})).status, 200);
+  const next = await call(db, 'replica/claim', claim('claim-after-retire-001', 2, 'new-active-device', { s00: 1 }));
+  assert.equal(next.status, 200);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 2);
+}));

@@ -88,7 +88,7 @@ Una tombstone terminale conta come `fields` persistito: un documento business vu
 
 Protocol 3 chiude il limite storico di M4 con un registro per-account in `users/{uid}/sync_control/state`:
 
-- 16 coordinate actor `s00`…`s15`; nel candidato D1 SYNC-7 il cap di membership valide è 5, indipendente dalla dimensione del clock. I record scaduti/ritirati e le ricevute mantengono la storia; la sola scadenza usata per il cap non autorizza causal GC;
+- 16 coordinate actor `s00`…`s15`; nel candidato D1 SYNC-7 il cap di membership valide è 5, indipendente dalla dimensione del clock. I record scaduti/ritirati e le ricevute mantengono la storia; la sola scadenza usata per il cap non autorizza causal GC. La 0019 candidata consente il ritiro esplicito della precisa incarnazione con prova CAS e conferma di sequenza/checkpoint/lease; non autorizza ACK, purge o recupero implicito del journal del dispositivo ritirato;
 - `replicaId` e `generation` identificano l'incarnazione corrente dello slot;
 - `lastSeq` è monotona e non riparte da zero quando uno slot viene riusato;
 - `checkpointClock` deriva da una scansione cloud `all` completa;

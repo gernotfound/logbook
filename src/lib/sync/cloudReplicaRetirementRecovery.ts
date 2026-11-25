@@ -15,6 +15,19 @@ import { validateLocalEnvelope } from './localEnvelopeValidation';
 type Guard = () => boolean;
 type Transport = Pick<ReturnType<typeof createCloudflareReplicaTransport>, 'replayStoredRetirement' | 'retirementMutationOutcome' | 'control'>;
 const SKEW_MS = 5 * 60 * 1000;
+type Confirmation = CloudflareReplicaRetirementIntent['confirmation'];
+type Entry = CloudReplicaControlSnapshot['replicas'][string];
+
+function mayRetire(entry: Entry, confirmation: Confirmation): boolean {
+    return Number.isSafeInteger(entry.leaseUntilMs) && (confirmation === undefined
+        ? entry.leaseUntilMs + SKEW_MS < Date.now()
+        : entry.lastSeq === confirmation.lastSeq && entry.checkpointAtMs === confirmation.checkpointAtMs
+          && entry.leaseUntilMs === confirmation.leaseUntilMs);
+}
+
+function controlOwnerMatches(control: CloudReplicaControlSnapshot, owner: string, confirmation: Confirmation): boolean {
+    return confirmation === undefined || control.uid === owner.slice(5);
+}
 
 function current(guard: Guard): void {
     if (!guard()) throw new Error('Retirement D1 invalidato dalla sessione: journal preservato.');
@@ -35,14 +48,16 @@ function sameReplica(a: Pick<ReplicaIdentity, 'slot' | 'replicaId' | 'generation
 
 /**
  * The request, including the original mutationId, is committed in the
- * owner-encrypted IndexedDB vault BEFORE any network call. An expired lease
- * only permits retiring a membership; it cannot prove causal GC safety.
+ * owner-encrypted IndexedDB vault BEFORE any network call. Without a witness
+ * only expired leases are eligible. Explicit removal pins what was confirmed;
+ * neither path proves causal GC safety or knowledge of another local journal.
  */
 export async function stageCloudflareReplicaRetirement(
     ownerInput: string,
     control: CloudReplicaControlSnapshot,
     replica: Pick<ReplicaIdentity, 'slot' | 'replicaId' | 'generation'>,
     guard: Guard,
+    confirmation?: Confirmation,
 ): Promise<CloudflareReplicaRetirementIntent> {
     const owner = account(ownerInput);
     current(guard);
@@ -51,29 +66,27 @@ export async function stageCloudflareReplicaRetirement(
         || !Number.isSafeInteger(control.fenceEpoch) || control.fenceEpoch < 1
         || !Number.isSafeInteger(control.consentRevision) || control.consentRevision < 1
         || !entry || entry.status !== 'active' || !sameReplica({ ...entry, slot: replica.slot }, replica)
-        || !Number.isSafeInteger(entry.leaseUntilMs)
-        || entry.leaseUntilMs + SKEW_MS >= Date.now()) {
+        || !controlOwnerMatches(control, owner, confirmation)
+        || !mayRetire(entry, confirmation)) {
         throw new Error('Replica D1 non ritirabile: rileggere il registro senza modificare il journal.');
     }
 
-    const mutationId = crypto.randomUUID();
+    const intent = parseCloudflareReplicaRetirementIntent({
+        mutationId: crypto.randomUUID(), expectedRevision: control.revision,
+        expectedFenceEpoch: control.fenceEpoch, consentRevision: control.consentRevision,
+        replica: { slot: replica.slot, replicaId: replica.replicaId, generation: replica.generation },
+        ...(confirmation === undefined ? {} : { confirmation: { ...confirmation } }),
+    }, control.consentRevision);
     let staged: CloudflareReplicaRetirementIntent | undefined;
     await updateArchiveRecord<unknown>(owner, raw => {
         current(guard);
         const local = validateLocalEnvelope(raw, owner);
         if (!local || local.cloudIntegrityFence || local.cloudflareDelivery
             || local.cloudflareReplicaClaim || local.cloudflareReplicaRetirement
-            || local.consentRevision !== control.consentRevision
-            || (local.replica !== null && sameReplica(local.replica, replica))) {
+            || local.consentRevision !== intent.consentRevision
+            || (local.replica !== null && sameReplica(local.replica, intent.replica))) {
             throw new Error('Retirement D1 non installabile: archivio, consenso o sync non coerenti.');
         }
-        const intent = parseCloudflareReplicaRetirementIntent({
-            mutationId, expectedRevision: control.revision,
-            expectedFenceEpoch: control.fenceEpoch,
-            consentRevision: control.consentRevision,
-            replica: { slot: replica.slot, replicaId: replica.replicaId,
-                generation: replica.generation },
-        }, local.consentRevision);
         staged = intent;
         return { ...local, cloudflareReplicaRetirement: intent, revision: local.revision + 1 };
     });
@@ -86,8 +99,9 @@ export async function stageCloudflareReplicaRetirement(
  * A 409 is not evidence that the original retirement failed. Only a single
  * primary D1 read proving the original mutation absent AFTER its expected
  * CAS revision has been surpassed may authorize a new retirement request.
- * Membership is checked twice; a renewed/retired/reused target is never
- * acted on. The new mutation replaces the sealed intent BEFORE any retry.
+ * Membership is checked twice; an expired target must still be expired and
+ * an explicitly confirmed target must retain its exact witness. The new
+ * mutation replaces the sealed intent BEFORE any retry.
  */
 async function rebaseUncommittedRetirement(
     owner: string,
@@ -109,8 +123,8 @@ async function rebaseUncommittedRetirement(
         || control.consentRevision !== intent.consentRevision
         || !target || target.status !== 'active'
         || !sameReplica({ ...target, slot: intent.replica.slot }, intent.replica)
-        || !Number.isSafeInteger(target.leaseUntilMs)
-        || target.leaseUntilMs + SKEW_MS >= Date.now()) {
+        || !controlOwnerMatches(control, owner, intent.confirmation)
+        || !mayRetire(target, intent.confirmation)) {
         return 'reconciliation-required';
     }
 
@@ -128,7 +142,7 @@ async function rebaseUncommittedRetirement(
             || saved.cloudflareReplicaClaim || saved.consentRevision !== intent.consentRevision
             || !equal(saved.cloudflareReplicaRetirement, intent)
             || (saved.replica !== null && sameReplica(saved.replica, intent.replica))
-            || target.leaseUntilMs + SKEW_MS >= Date.now()) {
+            || !mayRetire(target, intent.confirmation)) {
             throw new Error('Rebase retirement D1 concorrente o non autorizzato: intent e journal preservati.');
         }
         return { ...saved, cloudflareReplicaRetirement: replacement, revision: saved.revision + 1 };
@@ -185,6 +199,9 @@ export async function resumeCloudflareReplicaRetirement(
     if (receipt.action !== 'retire' || receipt.mutationId !== intent.mutationId
         || receipt.revision !== intent.expectedRevision + 1
         || !sameReplica(receipt.replica, intent.replica)
+        || (intent.confirmation !== undefined && (receipt.baseSeq !== intent.confirmation.lastSeq
+            || receipt.replica.checkpointAtMs !== intent.confirmation.checkpointAtMs
+            || receipt.replica.leaseUntilMs !== intent.confirmation.leaseUntilMs))
         || !Number.isSafeInteger(receipt.currentRevision)
         || receipt.currentRevision < receipt.revision) return 'reconciliation-required';
 
@@ -201,6 +218,7 @@ export async function resumeCloudflareReplicaRetirement(
     if (control.revision < receipt.currentRevision
         || control.fenceEpoch !== intent.expectedFenceEpoch
         || control.consentRevision !== intent.consentRevision
+        || !controlOwnerMatches(control, owner, intent.confirmation)
         || (!exactRetirement && !superseded)) {
         return 'reconciliation-required';
     }

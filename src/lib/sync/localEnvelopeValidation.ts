@@ -34,7 +34,7 @@ interface LocalEnvelopeV5 {
     cloudflareDelivery?: CloudflareDeliveryIntent;
     // Candidate only. An immutable membership request, not an acknowledged replica.
     cloudflareReplicaClaim?: CloudflareReplicaClaimIntent;
-    // Candidate only: immutable expired-replica retirement request (not an ACK).
+    // Candidate only: immutable replica retirement request (not an ACK).
     cloudflareReplicaRetirement?: CloudflareReplicaRetirementIntent;
     revision: number;
     // Persistent owner-scoped barrier for unverified cloud snapshots.

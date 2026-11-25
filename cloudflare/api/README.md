@@ -1,6 +1,6 @@
 # CF-01/02 — isolated encrypted D1 replica candidate
 
-**SYNC-7 candidate:** migration 0018 enforces at most five live replica memberships per owner (active lease including skew) in SQL insert/update. Protocol 3 retains all 16 actor slots and immutable mutation receipts. Renewal does not consume another place; no automatic active eviction. `409 replica-capacity` is a typed refusal, not non-commit proof, and does not clear local intent/journal. Explicit device retirement, settings UI and remote verification remain open.
+**SYNC-7 candidate:** migration 0018 enforces at most five live replica memberships per owner (active lease including skew) in SQL insert/update. Protocol 3 retains all 16 actor slots and immutable mutation receipts. Renewal does not consume another place; no automatic active eviction. `409 replica-capacity` is a typed refusal, not non-commit proof, and does not clear local intent/journal. Migration 0019 adds explicit retirement with exact incarnation and confirmed last sequence, lease and checkpoint timestamps, using the same owner/session/consent/epoch/revision CAS and immutable receipt. Automatic expired retirement remains unchanged. Settings UI, device return recovery and remote verification remain open.
 
 ## CF-05 rights-only encrypted document read (candidate, not publicly deployed)
 

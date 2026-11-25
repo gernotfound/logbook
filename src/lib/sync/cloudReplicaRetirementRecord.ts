@@ -23,7 +23,9 @@ export function parseCloudflareReplicaRetirementIntent(
 ): CloudflareReplicaRetirementIntent {
     if (!record(raw)
         || Object.keys(raw).sort().join(',') !==
-          'consentRevision,expectedFenceEpoch,expectedRevision,mutationId,replica'
+          (Object.hasOwn(raw, 'confirmation')
+              ? 'confirmation,consentRevision,expectedFenceEpoch,expectedRevision,mutationId,replica'
+              : 'consentRevision,expectedFenceEpoch,expectedRevision,mutationId,replica')
         || typeof raw.mutationId !== 'string' || !ID.test(raw.mutationId)
         || !safe(raw.expectedRevision, 0) || !safe(raw.expectedFenceEpoch, 1)
         || !safe(raw.consentRevision, 1)
@@ -35,7 +37,17 @@ export function parseCloudflareReplicaRetirementIntent(
         || raw.replica.replicaId.trim() !== raw.replica.replicaId
         || raw.replica.replicaId.length > 128 || !safe(raw.replica.generation, 1)) invalid();
 
+    let confirmed: CloudflareReplicaRetirementIntent['confirmation'];
+    if (Object.hasOwn(raw, 'confirmation')) {
+        const confirmation = raw.confirmation;
+        if (!record(confirmation) || Object.keys(confirmation).sort().join(',') !== 'checkpointAtMs,lastSeq,leaseUntilMs'
+            || !safe(confirmation.lastSeq, 0) || !safe(confirmation.checkpointAtMs, 1)
+            || !safe(confirmation.leaseUntilMs, 1)) invalid();
+        confirmed = { lastSeq: confirmation.lastSeq, checkpointAtMs: confirmation.checkpointAtMs,
+            leaseUntilMs: confirmation.leaseUntilMs };
+    }
     return {
+        ...(confirmed === undefined ? {} : { confirmation: confirmed }),
         mutationId: raw.mutationId,
         expectedRevision: raw.expectedRevision,
         expectedFenceEpoch: raw.expectedFenceEpoch,
