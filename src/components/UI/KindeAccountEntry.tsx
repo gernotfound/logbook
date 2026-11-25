@@ -62,6 +62,7 @@ type EntryProps = {
     // Only isolated candidate entry points may enable this; the public provider
     // continues observing Kinde identity without enabling fitness or D1.
     candidateMode?: 'preparation' | 'fitness';
+    candidateActivityEnabled?: boolean;
     // A second opt-in isolates destructive withdrawal and post-revocation rights.
     candidateLifecycleEnabled?: boolean;
     onLocalGuest?: (stillCurrent: () => boolean) => Promise<void>;
@@ -143,9 +144,9 @@ function KindeInstallEntry() {
 
 /** Identity-only runtime and the isolated candidate share the same presentation. */
 function KindeAccountEntryView({
-    identityOnly = false, candidateMode,
+    identityOnly = false, candidateMode, candidateActivityEnabled = false,
     candidateLifecycleEnabled = false, onLocalGuest, session,
-}: Pick<EntryProps, 'identityOnly' | 'candidateMode' | 'candidateLifecycleEnabled' | 'onLocalGuest'> & { session: Session }) {
+}: Pick<EntryProps, 'identityOnly' | 'candidateMode' | 'candidateActivityEnabled' | 'candidateLifecycleEnabled' | 'onLocalGuest'> & { session: Session }) {
     const { view, busy, retry, signIn, enterGuest, acceptConsent, logout } = session;
     const { phase } = view;
     const candidateEnabled = !identityOnly && candidateMode !== undefined;
@@ -166,6 +167,11 @@ function KindeAccountEntryView({
 
     return (
         <main id={identityOnly ? 'auth-kinde-entry' : undefined}
+            onClickCapture={candidateEnabled && candidateActivityEnabled ? event => {
+                // Keyboard activation also produces a click. Never inspect the
+                // clicked content or treat focus/network availability as use.
+                if (event.isTrusted) void session.reportInteraction();
+            } : undefined}
             className="auth-login-card ui-login-box-1" aria-labelledby={titleId}>
             {identityOnly
                 ? <h2 id={titleId}>Accesso con Kinde</h2>
@@ -257,15 +263,15 @@ function KindeAccountEntryView({
 }
 
 function StandaloneKindeAccountEntry({
-    guestArchivePresent = false, identityOnly = false, candidateMode,
+    guestArchivePresent = false, identityOnly = false, candidateMode, candidateActivityEnabled,
     candidateLifecycleEnabled = false, onLocalGuest,
 }: EntryProps) {
     const session = useKindeAccountSession({
         guestArchivePresent, identityOnly, candidatePreparationEnabled: !identityOnly && candidateMode !== undefined,
-        candidateLifecycleEnabled,
+        candidateLifecycleEnabled, candidateActivityEnabled,
     });
     return <KindeAccountEntryView session={session} identityOnly={identityOnly}
-        candidateMode={candidateMode}
+        candidateMode={candidateMode} candidateActivityEnabled={candidateActivityEnabled}
         candidateLifecycleEnabled={candidateLifecycleEnabled} onLocalGuest={onLocalGuest} />;
 }
 

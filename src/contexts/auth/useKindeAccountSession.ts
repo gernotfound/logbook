@@ -3,6 +3,7 @@ import {
     captureKindeCandidatePresenceFence, KindeCandidateBoundaryError, readKindeCandidateAccess,
     revokeKindeCandidateSession, submitKindeHostedSignIn,
 } from '../../lib/auth/kindeCandidateClient';
+import { createKindeCandidateActivityReporter } from '../../lib/auth/kindeCandidateActivityReporter';
 import { readKindeCandidateIdentity } from '../../lib/auth/kindeCandidateIdentity';
 import { acceptKindeCandidateInitialConsent } from '../../lib/auth/kindeCandidateConsent';
 import type { prepareKindeCandidateOwner } from '../../lib/sync/kindeCandidateOwnerBootstrap';
@@ -29,10 +30,10 @@ const COOKIE_CHECK_MS = 1000;
 
 export function useKindeAccountSession({
     guestArchivePresent, identityOnly, candidatePreparationEnabled = false,
-    candidateLifecycleEnabled = false,
+    candidateLifecycleEnabled = false, candidateActivityEnabled = false,
 }: {
     guestArchivePresent: boolean; identityOnly: boolean;
-    candidatePreparationEnabled?: boolean; candidateLifecycleEnabled?: boolean;
+    candidatePreparationEnabled?: boolean; candidateLifecycleEnabled?: boolean; candidateActivityEnabled?: boolean;
 }) {
     const [view, setView] = useState<View>({
         phase: guestArchivePresent ? 'guest-blocked' : 'checking', generation: 0,
@@ -43,7 +44,14 @@ export function useKindeAccountSession({
     const busyRef = useRef(false);
     const generation = useRef(0);
     const observed = useRef<PresenceFence | null>(null);
+    const activity = useRef<{
+        uid: string; epoch: number; csrf: string;
+        report: ReturnType<typeof createKindeCandidateActivityReporter>;
+    } | null>(null);
     const publish = useCallback((next: View) => {
+        if (next.phase === 'signed-out' || next.phase === 'guest-blocked') {
+            activity.current = null;
+        }
         published.current = next;
         setView(next);
     }, []);
@@ -59,6 +67,7 @@ export function useKindeAccountSession({
         publish({ phase: 'checking', generation: token });
         try {
             const session = captureKindeCandidatePresenceFence({ stillCurrent: current });
+            if (activity.current && activity.current.csrf !== session.csrfToken) activity.current = null;
             observed.current = session;
             const identity = await readKindeCandidateIdentity({ stillCurrent: session.stillCurrent });
             if (!current()) return;
@@ -69,6 +78,9 @@ export function useKindeAccountSession({
             }
             if (session.csrfToken === null) throw new KindeCandidateBoundaryError();
             const principal = identity.principal;
+            if (activity.current && (activity.current.uid !== principal.uid || activity.current.epoch !== principal.fenceEpoch)) {
+                activity.current = null;
+            }
             if (identity.kind === 'email-unverified' || identityOnly) {
                 publish({
                     phase: identity.kind === 'email-unverified' ? 'email-unverified' : 'identity-verified',
@@ -106,6 +118,7 @@ export function useKindeAccountSession({
             if (mounted.current && generation.current === token) void refresh();
         });
         return () => {
+            activity.current = null;
             mounted.current = false;
             generation.current += 1;
             observed.current = null;
@@ -150,6 +163,25 @@ export function useKindeAccountSession({
     // button cannot bind itself to the observation refreshed in the meantime.
     const viewIsCurrent = () => mounted.current && !guestArchivePresent
         && generation.current === view.generation && published.current === view;
+    // The UI calls this only for explicit candidate interactions. A refresh
+    // invalidates the old callback, but retains the cooldown of the same session.
+    const reportInteraction = async () => {
+        const session = observed.current;
+        if (!candidateActivityEnabled || identityOnly || !candidatePreparationEnabled || !viewIsCurrent()
+            || !('principal' in view) || !session?.csrfToken || !session.stillCurrent()) return 'skipped';
+        const { uid, fenceEpoch } = view.principal;
+        try {
+            if (!activity.current || activity.current.csrf !== session.csrfToken
+                || activity.current.uid !== uid || activity.current.epoch !== fenceEpoch) {
+                activity.current = { uid, epoch: fenceEpoch, csrf: session.csrfToken,
+                    report: createKindeCandidateActivityReporter({ expectedCsrfToken: session.csrfToken }) };
+            }
+            return await activity.current.report(() => viewIsCurrent() && session.stillCurrent());
+        } catch {
+            // A missing/changed cookie cannot attest account activity.
+            return 'unavailable';
+        }
+    };
     const canAct = () => viewIsCurrent() && !busyRef.current;
     const failAction = () => {
         if (viewIsCurrent()) publish({ phase: 'unavailable', generation: view.generation, allowLocalGuest: false });
@@ -476,7 +508,7 @@ export function useKindeAccountSession({
     };
 
     return {
-        view, busy, signIn, enterGuest, acceptConsent, logout, prepareCandidateArchive, prepareCandidateBackup,
+        view, busy, reportInteraction, signIn, enterGuest, acceptConsent, logout, prepareCandidateArchive, prepareCandidateBackup,
         restoreCandidateBackup,
         withdrawCandidateConsent, reconcileCandidateWithdrawal, prepareCandidateRightsJson,
         retry: async () => { if (canAct()) await refresh(); },

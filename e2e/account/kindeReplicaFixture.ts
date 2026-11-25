@@ -109,7 +109,7 @@ export async function withKindeReplicaDevices<T>(
         firstCommitStatuses: number[]; allowFirstCommit: () => void;
         beforeFirstDocumentRead: (action: () => Promise<void>) => void;
     }) => Promise<T>,
-    { planningUi = false }: { planningUi?: boolean } = {},
+    { planningUi = false, foregroundActivity = false }: { planningUi?: boolean; foregroundActivity?: boolean } = {},
 ): Promise<T> {
     const client = await buildClient(false);
     const planningClient = planningUi ? await buildClient(true) : null;
@@ -133,7 +133,9 @@ export async function withKindeReplicaDevices<T>(
         // Use Set-Cookie over actual loopback TLS so WebKit and Chromium apply
         // their own host-only Secure/HttpOnly rules. The synthetic sign-in is
         // invoked once per profile and never runs during archive recovery.
-        const env = { ...fixture.env, APP_ORIGIN: ORIGIN };
+        const env = { ...fixture.env, APP_ORIGIN: ORIGIN,
+            ...(foregroundActivity ? { CF06_FOREGROUND_ACTIVITY_ENABLED: 'enabled' } : {}),
+        };
         const listening = server = await startHttpsFixture(async (incoming, outgoing) => {
             const origin = server!.origin;
             const url = new URL(incoming.url ?? '/', origin);
@@ -147,7 +149,7 @@ export async function withKindeReplicaDevices<T>(
                 } else if (url.pathname === '/') {
                     const styles = planningClient?.css ? `<link rel="stylesheet" href="${planningStylePath}">` : '';
                     outgoing.writeHead(200, { 'Content-Type': 'text/html' })
-                        .end(`<!doctype html><title>Kinde replica fixture</title>${styles}`);
+                        .end(`<!doctype html><title>Kinde replica fixture</title>${styles}<body${foregroundActivity ? ' data-candidate-activity' : ''}>`);
                 } else if (url.pathname === modulePath) {
                     outgoing.writeHead(200, { 'Content-Type': 'text/javascript' }).end(client.code);
                 } else if (url.pathname === planningModulePath && planningClient !== null) {
