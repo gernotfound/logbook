@@ -29,7 +29,7 @@ const keyId = 'synthetic-erasure-v1';
 const error = { message: 'kinde-erasure-target-unavailable' };
 const keyFor = (extractable = false) => crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, extractable, ['encrypt', 'decrypt']);
 
-function d1For(sqlite, { beforeWrite = () => {}, afterWrite = () => {}, afterFirst = () => {} } = {}) {
+function d1For(sqlite, { beforeWrite = () => {}, afterWrite = () => {}, afterFirst = () => {}, readFirst = (_sql, row) => row } = {}) {
   return {
     withSession(policy) {
       assert.equal(policy, 'first-primary');
@@ -39,7 +39,7 @@ function d1For(sqlite, { beforeWrite = () => {}, afterWrite = () => {}, afterFir
           async first() {
             const row = statement.get(...args) ?? null;
             afterFirst(sql, args);
-            return row;
+            return readFirst(sql, row);
           },
           async all() { return { success: true, results: statement.all(...args) }; },
           async run() {
@@ -1080,6 +1080,54 @@ void test('inactivity enqueue fences fresh activity and live sessions, survives 
   assert.equal((await runKindeAccountErasureAppStep(db, recovery.db, intent)).outcome, 'progress');
   assert.equal((await runKindeAccountErasureAppStep(db, recovery.db, intent)).outcome, 'progress');
   assert.equal((await runKindeAccountErasureAppStep(db, recovery.db, intent)).outcome, 'application-complete');
+});
+
+void test('a reported intent insertion with a missing primary row is ambiguous and can recover', async t => {
+  for (const origin of ['manual', 'inactivity']) {
+    await t.test(origin, async t => {
+      const { db, sqlite, identity, attempt, write } = await deletionAttemptFixture(t);
+      const recovery = openRecoveryFixture(t);
+      await write(db, identity);
+      const proof = deletionRequestProof(attempt);
+      let record = database => recordKindeAccountErasureIntent(database, proof);
+      if (origin === 'inactivity') {
+        // Seed an observation using the SQL clock, then let the session expire.
+        const clock = new DatabaseSync(':memory:');
+        t.after(() => clock.close());
+        const fmt = clock.prepare('SELECT strftime(?, ?) AS value');
+        let now = Date.now();
+        sqlite.function('strftime', (format, date) => fmt.get(format, date === 'now' ? new Date(now).toISOString() : date).value);
+        await recordKindeForegroundActivity(db, { uid: identity.uid, fenceEpoch: 1, sessionHash: attempt.sessionHash,
+          authenticated: true, csrfVerified: true, rateGatePassed: true });
+        now = earliestKindeInactivityErasureAt(now);
+        sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=2");
+        const { candidates: [candidate] } = await readKindeInactivityCandidates(db);
+        assert.ok(candidate);
+        record = database => recordKindeInactivityErasureIntent(database, recovery.db, candidate, 2);
+      }
+      const hidden = d1For(sqlite, { readFirst(sql, row) {
+        return sql.includes('FROM kinde_account_erasure_intents') ? null : row;
+      } });
+      await assert.rejects(record(hidden), /unavailable/);
+      const stored = sqlite.prepare('SELECT uid, receipt_hash FROM kinde_account_erasure_intents').all();
+      assert.equal(stored.length, 1);
+      const mismatch = d1For(sqlite, { readFirst(sql, row) {
+        return row && sql.includes('FROM kinde_account_erasure_intents')
+          ? { ...row, receipt_hash: '7'.repeat(64) } : row;
+      } });
+      await assert.rejects(record(mismatch), /unavailable/);
+      const retried = await record(db);
+      assert.equal(retried.uid, identity.uid);
+      assert.equal(retried.receiptHash, stored[0].receipt_hash);
+      assert.equal(sqlite.prepare('SELECT count(*) AS n FROM kinde_account_erasure_requests').get().n, 0);
+      const hiddenRequest = d1For(sqlite, { readFirst(sql, row) {
+        return sql.includes('FROM kinde_account_erasure_requests j') ? null : row;
+      } });
+      await assert.rejects(acceptKindeAccountErasure(hiddenRequest, recovery.db, retried), /unavailable/);
+      assert.equal(sqlite.prepare('SELECT count(*) AS n FROM kinde_account_erasure_requests').get().n, 1);
+      assert.equal(await acceptKindeAccountErasure(db, recovery.db, retried), true);
+    });
+  }
 });
 
 void test('inactivity cannot create a new independent denial from a stale recovery generation', async (t) => {

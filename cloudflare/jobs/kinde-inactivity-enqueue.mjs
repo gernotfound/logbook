@@ -30,7 +30,7 @@ export async function recordKindeInactivityErasureIntent(db, recoveryDb, candida
   const receiptHash = await inactivityReceiptHash(uid, authEpoch, candidate, expectedRecoveryGeneration);
   try { await readOpenRecoveryGeneration(recoveryDb, expectedRecoveryGeneration); }
   catch { throw new Error('kinde-inactivity-decision-unavailable'); }
-  let uncertain = false;
+  let confirmedNoChange = false;
   try {
     const result = await db.withSession('first-primary').prepare(`
       INSERT INTO kinde_account_erasure_intents (${INTENT_COLUMNS})
@@ -46,11 +46,13 @@ export async function recordKindeInactivityErasureIntent(db, recoveryDb, candida
           AND t.revoked_at_ms IS NULL AND t.issued_at_ms <= ${D1_NOW_MS}
           AND t.idle_expires_at_ms > ${D1_NOW_MS} AND t.absolute_expires_at_ms > ${D1_NOW_MS})
     `).bind(receiptHash, eligibleAtMs, uid, authEpoch, generation, lastRecordedAtMs, eligibleAtMs).run();
-    uncertain = result?.success !== true || ![0, 1].includes(result.meta?.changes);
-  } catch { uncertain = true; }
+    confirmedNoChange = result?.success === true && result.meta?.changes === 0;
+  } catch { /* Only an exact primary read can recover an ambiguous insert. */ }
   try {
-    const intent = intentFromRow(await readErasureIntent(db, uid, authEpoch, receiptHash));
-    if (intent?.inactivity?.generation === generation && intent.inactivity.lastRecordedAtMs === lastRecordedAtMs
+    const row = await readErasureIntent(db, uid, authEpoch, receiptHash);
+    const intent = intentFromRow(row);
+    if (intent?.uid === uid && intent.authEpoch === authEpoch && intent.receiptHash === receiptHash
+      && intent.inactivity?.generation === generation && intent.inactivity.lastRecordedAtMs === lastRecordedAtMs
       && intent.inactivity.eligibleAtMs === eligibleAtMs) {
       const principal = await db.withSession('first-primary').prepare(`
         SELECT status FROM auth_principals WHERE uid = ? AND auth_epoch >= ?
@@ -61,7 +63,7 @@ export async function recordKindeInactivityErasureIntent(db, recoveryDb, candida
       }
       throw new Error('unproven-freeze');
     }
-    if (!uncertain) {
+    if (confirmedNoChange && row === null) {
       await readOpenRecoveryGeneration(recoveryDb, expectedRecoveryGeneration);
       return null;
     }
