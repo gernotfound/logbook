@@ -1,7 +1,7 @@
 import { D1_NOW_MS } from '../sql/d1-time.mjs';
 import { readOpenRecoveryGeneration } from '../recovery/independent-owner-fence.mjs';
 import { armIndependentAccountErasureDenial, requireIndependentAccountErasureDenial } from '../recovery/account-erasure-denials.mjs';
-import { INTENT_SCOPE, intentScopeArgs, matchesErasureIntent, readErasureIntent } from './kinde-erasure-intent.mjs';
+import { INTENT_SCOPE, intentFromRow, intentScopeArgs, matchesErasureIntent, readErasureIntent } from './kinde-erasure-intent.mjs';
 
 const UID = /^k_[A-Za-z0-9_-]{43}$/;
 const HASH = /^[a-f0-9]{64}$/;
@@ -30,7 +30,7 @@ export async function recordKindeAccountErasureIntent(db, proof) {
     || ![sessionHash, receiptHash].every(value => typeof value === 'string' && HASH.test(value))) {
     throw new TypeError('invalid-kinde-erasure-request');
   }
-  let writeError;
+  let confirmedNoChange = false;
   try {
     const result = await db.withSession('first-primary').prepare(`
       INSERT INTO kinde_account_erasure_intents (${MANUAL_COLUMNS})
@@ -45,20 +45,15 @@ export async function recordKindeAccountErasureIntent(db, proof) {
         AND ? BETWEEN ${D1_NOW_MS} - 300000 AND ${D1_NOW_MS}
         AND NOT EXISTS (SELECT 1 FROM kinde_account_erasure_intents WHERE uid = p.uid)
     `).bind(receiptHash, authenticatedAtMs, sessionHash, uid, authEpoch, authenticatedAtMs).run();
-    if (result?.success !== true || ![0, 1].includes(result.meta?.changes)) {
-      throw new Error('kinde-erasure-request-unavailable');
-    }
-  } catch (error) { writeError = error; }
+    confirmedNoChange = result?.success === true && result.meta?.changes === 0;
+  } catch { /* Recover a lost insert response from the immutable decision below. */ }
 
-  const intent = await readIntent(db, uid, authEpoch, receiptHash);
-  if (intent?.uid === uid && intent.auth_epoch === authEpoch && intent.receipt_hash === receiptHash
-    && intent.reauthenticated_at_ms === authenticatedAtMs
-    && Number.isSafeInteger(intent.confirmed_at_ms) && intent.confirmed_at_ms >= authenticatedAtMs
-    && intent.confirmed_at_ms - authenticatedAtMs <= 300000) {
-    return { uid, authEpoch, receiptHash, authenticatedAtMs, confirmedAtMs: intent.confirmed_at_ms };
-  }
-  if (writeError) throw new Error('kinde-erasure-request-unavailable');
-  return null;
+  const row = await readIntent(db, uid, authEpoch, receiptHash);
+  const intent = intentFromRow(row);
+  if (intent?.uid === uid && intent.authEpoch === authEpoch && intent.receiptHash === receiptHash
+    && intent.authenticatedAtMs === authenticatedAtMs) return intent;
+  if (confirmedNoChange && row === null) return null;
+  throw new Error('kinde-erasure-request-unavailable');
 }
 
 /**
@@ -78,7 +73,7 @@ export async function requestKindeAccountErasure(db, intent, proveIndependentDen
     if (await proveIndependentDenial(intent) !== true) return false;
   } catch { throw new Error('kinde-erasure-request-unavailable'); }
 
-  let writeError;
+  let confirmedNoChange = false;
   try {
     const result = await db.withSession('first-primary').prepare(`
       INSERT INTO kinde_account_erasure_requests
@@ -90,10 +85,8 @@ export async function requestKindeAccountErasure(db, intent, proveIndependentDen
         AND p.auth_epoch < 9007199254740991
         AND NOT EXISTS (SELECT 1 FROM kinde_account_erasure_requests WHERE uid = p.uid)
     `).bind(...intentScopeArgs(intent)).run();
-    if (result?.success !== true || ![0, 1].includes(result.meta?.changes)) {
-      throw new Error('kinde-erasure-request-unavailable');
-    }
-  } catch (error) { writeError = error; }
+    confirmedNoChange = result?.success === true && result.meta?.changes === 0;
+  } catch { /* Acceptance still requires the primary proof below. */ }
 
   try {
     const accepted = await db.withSession('first-primary').prepare(`
@@ -105,7 +98,7 @@ export async function requestKindeAccountErasure(db, intent, proveIndependentDen
         AND NOT EXISTS (SELECT 1 FROM sync_subjects s WHERE s.uid = j.uid AND s.status = 'active')
     `).bind(...intentScopeArgs(intent)).first();
     if (accepted?.uid === uid && accepted.requested_at_ms === confirmedAtMs) return true;
-    if (!writeError) return false;
+    if (confirmedNoChange && accepted === null) return false;
   } catch {
     // Do not expose database errors or treat an unavailable primary as absent.
   }
