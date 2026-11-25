@@ -5,17 +5,9 @@ import {
   recordVerifiedTerminalErasure, requireIndependentOwnerFence,
 } from '../recovery/independent-owner-fence.mjs';
 
+import { ACCOUNT_AUTH_CLEANUP_TABLES, HEALTH_CHILD_TABLES } from './erasure-tables.mjs';
+
 const CHUNK_SIZE = 16;
-const AUTH_TABLES = [
-  { name: 'auth_sessions', key: 'token_hash' },
-  { name: 'kinde_deletion_oauth_attempts', key: 'state_hash' },
-  { name: 'kinde_account_activity', key: 'uid' },
-];
-const HEALTH_TABLES = [
-  'sync_state', 'sync_documents', 'sync_receipts', 'sync_replicas', 'sync_replica_mutations',
-  'health_consent_acceptances', 'health_erasure_jobs', 'health_erasure_finalizations',
-  'cloud_account_keys', 'cloud_key_issuance',
-];
 const JOB_SOURCE = `
   FROM kinde_account_erasure_requests r
   JOIN kinde_account_erasure_intents i ON i.uid = r.uid
@@ -27,7 +19,7 @@ const SCOPE = `
 `;
 
 function deleteSessionRowsSql({ name, key }) {
-  // Identifiers are drawn only from AUTH_TABLES, never from external input.
+  // Identifiers are drawn only from ACCOUNT_AUTH_CLEANUP_TABLES, never from external input.
   return `
     DELETE FROM ${name}
     WHERE uid = ? AND ${key} IN (
@@ -51,7 +43,7 @@ export async function runKindeAccountErasureAppStep(appDb, recoveryDb, intent) {
   const accepted = await primary.prepare(`SELECT r.uid ${JOB_SOURCE} ${SCOPE}`).bind(...scope).first();
   if (accepted?.uid !== intent.uid) return { outcome: 'contended' };
 
-  for (const table of AUTH_TABLES) {
+  for (const table of ACCOUNT_AUTH_CLEANUP_TABLES) {
     const result = await primary.prepare(deleteSessionRowsSql(table)).bind(intent.uid, intent.uid, ...scope).run();
     const removed = result?.meta?.changes;
     if (result?.success !== true || !Number.isSafeInteger(removed) || removed < 0 || removed > CHUNK_SIZE) {
@@ -76,12 +68,12 @@ export async function verifyKindeAccountErasureAppComplete(appDb, recoveryDb, in
   const observed = await appDb.withSession('first-primary').prepare(`
     SELECT r.uid, s.status, s.consent_revision, s.fence_epoch, s.erased_before_revision,
       CASE WHEN s.uid IS NULL AND (
-        ${HEALTH_TABLES.map(name => `EXISTS (SELECT 1 FROM ${name} WHERE uid = r.uid)`).join(' OR ')}
+        ${HEALTH_CHILD_TABLES.map(name => `EXISTS (SELECT 1 FROM ${name} WHERE uid = r.uid)`).join(' OR ')}
       ) THEN 1 ELSE 0 END AS orphan_health_rows
     ${JOB_SOURCE}
     LEFT JOIN sync_subjects s ON s.uid = r.uid
     ${SCOPE}
-      ${AUTH_TABLES.map(({ name }) => `AND NOT EXISTS (SELECT 1 FROM ${name} WHERE uid = r.uid)`).join('\n')}
+      ${ACCOUNT_AUTH_CLEANUP_TABLES.map(({ name }) => `AND NOT EXISTS (SELECT 1 FROM ${name} WHERE uid = r.uid)`).join('\n')}
   `).bind(...scope).first();
   if (observed?.uid !== intent.uid) return { outcome: 'contended' };
   if (observed.orphan_health_rows !== 0) throw new Error('kinde-erasure-application-unavailable');

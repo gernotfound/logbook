@@ -6,18 +6,14 @@ import {
   armIndependentErasureCutoff, reconcileNextIndependentErasure,
 } from '../recovery/terminal-erasure-cutoff.mjs';
 
+import { HEALTH_DATA_CLEANUP_TABLES } from './erasure-tables.mjs';
+
 // Candidate-only D1 erasure worker. No public fetch, route or cron binding.
 // Terminal key erasure requires migration 0010: a single SQL INSERT atomically
 // destroys the wrapped ADK and records the complete, generation-fenced proof.
 const MAX_ROWS_PER_STEP = 4;
 const LEASE_MS = 30_000;
 const SERVER_NOW = D1_NOW_MS;
-const TABLES = Object.freeze([
-  { name: 'sync_documents', key: 'path' },
-  { name: 'sync_receipts', key: 'batch_id' },
-  { name: 'sync_replica_mutations', key: 'mutation_id' },
-  { name: 'sync_replicas', key: 'slot' },
-]);
 
 function newLeaseToken() {
   const bytes = new Uint8Array(32);
@@ -225,7 +221,7 @@ async function finalizeWithIndependentFence(db, recoveryDb, lease) {
       AND j.status = 'processing' AND j.phase = 'awaiting-keys'
       AND s.status = 'withdrawn' AND s.consent_revision = j.consent_revision
       AND s.fence_epoch = j.fence_epoch
-      ${TABLES.map(({ name }) => `AND NOT EXISTS (SELECT 1 FROM ${name} WHERE uid = j.uid)`).join('\n')}
+      ${HEALTH_DATA_CLEANUP_TABLES.map(({ name }) => `AND NOT EXISTS (SELECT 1 FROM ${name} WHERE uid = j.uid)`).join('\n')}
   `).bind(...scope).first();
   if (current?.uid !== candidate.uid) return { outcome: 'contended' };
 
@@ -328,7 +324,7 @@ async function runApplicationHealthErasureStep(db, recoveryDb = null) {
     return recoveryDb ? finalizeWithIndependentFence(db, recoveryDb, lease)
       : finalizeHealthErasureLease(db, lease);
   }
-  for (const table of TABLES) {
+  for (const table of HEALTH_DATA_CLEANUP_TABLES) {
     const result = await primary.prepare(deleteBoundedSql(table))
       .bind(candidate.uid, candidate.uid, ...scope).run();
     const removed = deletedRowCount(result);

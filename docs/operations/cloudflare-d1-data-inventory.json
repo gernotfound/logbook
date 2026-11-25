@@ -1,0 +1,231 @@
+{
+  "schemaVersion": 1,
+  "columns": [
+    "ownerColumn",
+    "dataClass",
+    "healthWithdrawal",
+    "accountErasure",
+    "purposeAndCurrentRetention",
+    "restoreConstraint"
+  ],
+  "application": {
+    "auth_principals": [
+      "uid",
+      "identity",
+      "retain-fenced",
+      "retain-proof",
+      "Session identity and monotonic auth epoch; terminal status deleted, verified_at_ms currently retained; minimization/legal duration unresolved.",
+      "Recheck independent account denial; never reactivate from app restore."
+    ],
+    "auth_sessions": [
+      "uid",
+      "credential-hash",
+      "retain-active-account",
+      "account-chunk",
+      "Session and CSRF token digests with expiry and revocation; bounded owner cleanup. Periodic expired-session retention still to validate.",
+      "Revalidate principal, epoch, expiry and independent deny."
+    ],
+    "auth_oauth_attempts": [
+      "none",
+      "transient-auth",
+      "not-applicable",
+      "expiry-prune",
+      "Unbound login state and server-only PKCE/nonce; consume once, expiry <=10 min, prune 16 at start; idle periodic prune unresolved.",
+      "Expired/replayed state must not be reusable; recovery treatment to validate."
+    ],
+    "sync_subjects": [
+      "uid",
+      "health-control",
+      "retain-fenced",
+      "retain-proof",
+      "Consent generation, fence and erased-before revision; keep terminal withdrawal metadata.",
+      "Compare independent owner floor and cutoff."
+    ],
+    "sync_state": [
+      "uid",
+      "health-control",
+      "retain-proof",
+      "retain-proof",
+      "Sync revision required for terminal proof; no payload.",
+      "Restore requires current floor and revision consistency."
+    ],
+    "sync_documents": [
+      "uid",
+      "health-ciphertext",
+      "health-chunk",
+      "health-chunk",
+      "Encrypted fitness documents; bounded erasure before ADK destruction.",
+      "Never restore data below independent cutoff."
+    ],
+    "sync_replicas": [
+      "uid",
+      "health-metadata",
+      "health-chunk",
+      "health-chunk",
+      "Replica lease, clock and generation metadata; bounded erasure.",
+      "Fence stale replica and consent generations."
+    ],
+    "sync_receipts": [
+      "uid",
+      "health-metadata",
+      "health-chunk",
+      "health-chunk",
+      "Mutation acknowledgement and request digest; erase on withdrawal; pruning must preserve replay contract.",
+      "Reject stale receipts under independent cutoff."
+    ],
+    "sync_replica_mutations": [
+      "uid",
+      "health-metadata",
+      "health-chunk",
+      "health-chunk",
+      "Replica mutation receipt/clock; same erasure and replay constraints.",
+      "Reject stale generations under independent cutoff."
+    ],
+    "health_consent_acceptances": [
+      "uid",
+      "consent-proof",
+      "retain-proof",
+      "retain-proof",
+      "Version, time, adult confirmation; currently retained; legal purpose, minimization and duration not closed.",
+      "Never treat restored proof as active consent without independent floor."
+    ],
+    "health_erasure_jobs": [
+      "uid",
+      "erasure-proof",
+      "retain-proof",
+      "retain-proof",
+      "Durable job and lease, completion evidence; retention review open.",
+      "Reconcile pending or completed generation with independent cutoff."
+    ],
+    "health_erasure_finalizations": [
+      "uid",
+      "erasure-proof",
+      "retain-proof",
+      "retain-proof",
+      "Immutable terminal proof of removal and key disposition; retention review open.",
+      "Validate exact generation and independent cutoff."
+    ],
+    "cloud_key_issuance": [
+      "uid",
+      "key-proof",
+      "retain-proof",
+      "retain-proof",
+      "Issuance timestamp only; required for never-issued/destroyed distinction; retention review open.",
+      "Do not infer recoverability from historical issuance."
+    ],
+    "cloud_account_keys": [
+      "uid",
+      "wrapped-key",
+      "health-terminal",
+      "health-terminal",
+      "Wrapped ADK; delete atomically with terminal erasure under current lease.",
+      "Do not reissue or restore key below independent cutoff."
+    ],
+    "kinde_erasure_targets": [
+      "uid",
+      "encrypted-provider-target",
+      "retain-active-account",
+      "account-terminal",
+      "Encrypted provider subject; retain until acknowledged Kinde deletion and readback, then terminal trigger removes.",
+      "Do not recover target from email or allow a denied owner to log in."
+    ],
+    "kinde_deletion_oauth_attempts": [
+      "uid",
+      "transient-auth",
+      "retain-active-account",
+      "account-chunk",
+      "Five-minute owner/session-bound reauthentication state, consume once, prune at start; account cleanup removes remaining attempts.",
+      "Never redeem expired state or a stale session."
+    ],
+    "kinde_account_erasure_intents": [
+      "uid",
+      "erasure-proof",
+      "not-applicable",
+      "retain-proof",
+      "Immutable user decision and receipt digest; retention review open.",
+      "Exact durable proof, independent deny and no fabricated reauth."
+    ],
+    "kinde_account_erasure_requests": [
+      "uid",
+      "erasure-proof",
+      "not-applicable",
+      "retain-proof",
+      "Accepted decision/frozen epoch; retention review open.",
+      "Reconcile exact independent denial before action."
+    ],
+    "kinde_account_erasure_provider_progress": [
+      "uid",
+      "erasure-proof",
+      "not-applicable",
+      "retain-proof",
+      "Provider lease and acknowledgement times, no plaintext subject or token; retention review open.",
+      "No missing ACK becomes completion."
+    ],
+    "kinde_account_erasure_completions": [
+      "uid",
+      "erasure-proof",
+      "not-applicable",
+      "retain-proof",
+      "Immutable account terminal proof; retention review open.",
+      "Independent deny, current terminal principal and proof required."
+    ],
+    "kinde_account_activity": [
+      "uid",
+      "activity-metadata",
+      "retain-active-account",
+      "account-chunk",
+      "Foreground observations; 12 calendar months inactivity rule; no health payload.",
+      "Old restored activity is not authority for automated erasure; validate recovery/marker before activation."
+    ],
+    "kinde_inactivity_control": [
+      "none",
+      "control",
+      "not-applicable",
+      "control",
+      "Singleton paused/generation; no owner data.",
+      "Never enable on restore without explicit policy validation."
+    ],
+    "kinde_account_erasure_scheduler": [
+      "cursor_uid",
+      "control-with-owner-cursor",
+      "not-applicable",
+      "control",
+      "Singleton traversal cursor and lease; can temporarily reference a completed owner; not a receipt, retention minimization open.",
+      "Restart/replay safely; validate owner and independent deny separately."
+    ]
+  },
+  "recovery": {
+    "recovery_control": [
+      "none",
+      "control",
+      "not-applicable",
+      "control",
+      "Singleton sealed/open and generation; no owner data.",
+      "Restore remains sealed until validated."
+    ],
+    "recovery_owner_fences": [
+      "uid",
+      "anti-resurrection-proof",
+      "retain-fenced",
+      "retain-proof",
+      "Independent owner consent floor and fence; immutable UID, no health plaintext.",
+      "Do not roll back with application D1; fail closed if missing."
+    ],
+    "recovery_erasure_cutoffs": [
+      "uid",
+      "anti-resurrection-proof",
+      "retain-proof",
+      "retain-proof",
+      "Independent generation cutoff and finalization marker; retain to prevent resurrection.",
+      "Verify cutoff against restored app before granting access."
+    ],
+    "recovery_account_erasure_denials": [
+      "uid",
+      "anti-resurrection-proof",
+      "not-applicable",
+      "retain-proof",
+      "Independent owner and decision digest; permanent technical denial currently enforced, legal retention review open.",
+      "No restored application principal can bypass this denial."
+    ]
+  }
+}
