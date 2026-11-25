@@ -58,7 +58,7 @@ jobs:
           node --test tests/cloudflare/cf02-isolated-d1-schema.node.mjs
           node scripts/check-cloudflare-api-isolation.mjs
           node scripts/verify-cloudflare-isolated-d1-schema.mjs before \
-            "${UPGRADE_EXISTING_TEST_DB_0019}" "${RUNNER_TEMP}/logbook-d1-test-counts.json"
+            "${UPGRADE_EXISTING_TEST_DB_0019}" "${RUNNER_TEMP}/logbook-d1-test-snapshot.json"
       - name: Confirm current main lease immediately before schema write
         shell: bash
         run: |
@@ -74,4 +74,4 @@ jobs:
       - name: Independently verify applied ledger and erasure fences
         run: |
           node scripts/verify-cloudflare-isolated-d1-schema.mjs after \
-            "${UPGRADE_EXISTING_TEST_DB_0019}" "${RUNNER_TEMP}/logbook-d1-test-counts.json"
+            "${UPGRADE_EXISTING_TEST_DB_0019}" "${RUNNER_TEMP}/logbook-d1-test-snapshot.json"
