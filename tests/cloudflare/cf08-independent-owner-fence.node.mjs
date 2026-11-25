@@ -468,6 +468,39 @@ void test('operator census detects rollback of an identity-only account decision
   assert.deepEqual(await inspectRestoredD1Census(db, recovery), { outcome: 'consistent-for-diagnostics-only' });
   assert.deepEqual(await inspectRestoredD1Census(new D1Sqlite(restored), recovery),
     { outcome: 'blocked', reason: 'account-erasure-coverage-mismatch' });
+
+  for (const transition of ['unseal', 'unseal-and-reseal']) {
+    if (transition === 'unseal-and-reseal') {
+      ledger.exec("UPDATE recovery_control SET mode='sealed', generation=generation+1");
+    }
+    await t.test(`operator census rechecks seal after async digest: ${transition}`, async () => {
+      const subtle = crypto.subtle;
+      const originalDigest = subtle.digest;
+      let changedDuringDigest = false;
+      // Fault injection wraps the real hash; the registry changes only after
+      // the production SHA-256 completes, not during the SQL snapshot reads.
+      subtle.digest = async function (...args) {
+        const digest = await originalDigest.apply(this, args);
+        if (!changedDuringDigest) {
+          ledger.exec("UPDATE recovery_control SET mode='open', generation=generation+1");
+          if (transition === 'unseal-and-reseal') {
+            ledger.exec("UPDATE recovery_control SET mode='sealed', generation=generation+1");
+          }
+          changedDuringDigest = true;
+        }
+        return digest;
+      };
+      try {
+        assert.deepEqual(await inspectRestoredD1Census(db, recovery), {
+          outcome: 'blocked', reason: transition === 'unseal'
+            ? 'independent-authority-not-sealed' : 'coverage-changed-during-scan',
+        });
+        assert.equal(changedDuringDigest, true);
+      } finally {
+        delete subtle.digest;
+      }
+    });
+  }
 });
 
 void test('operator census rejects switching between registry histories with matching withdrawal fields', async () => {

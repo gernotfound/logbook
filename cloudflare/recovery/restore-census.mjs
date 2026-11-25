@@ -177,6 +177,9 @@ export async function inspectRestoredD1Census(restoredDb, independentDb) {
     const secondRestored = await readRows(restored, RESTORED_SQL, false);
     const secondIndependent = await readRows(independent, INDEPENDENT_SQL, true);
     const secondAccounts = await readAccountSnapshot(restored, independent);
+    // Hash validation is asynchronous: the final seal/generation witness must
+    // follow it, or a registry change during digesting can escape the check.
+    await inspectAccountCoverage(secondAccounts);
     const after = await metadata(restored, independent);
     requireEvidence(secondAccounts.intents.length === after.intentCount
       && secondAccounts.denials.length === after.denialCount, 'account-erasure-coverage-mismatch');
@@ -188,7 +191,6 @@ export async function inspectRestoredD1Census(restoredDb, independentDb) {
       && JSON.stringify(firstAccounts) === JSON.stringify(secondAccounts),
     'coverage-changed-during-scan');
 
-    await inspectAccountCoverage(secondAccounts);
     return inspectRestoredOwnerCoverage(secondRestored, secondIndependent);
   } catch (error) {
     return blocked(error instanceof CensusFailure ? error.reason : 'scan-unavailable');
