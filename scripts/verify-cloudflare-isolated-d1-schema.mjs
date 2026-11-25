@@ -56,6 +56,13 @@ const EXISTING_TEST_TABLES = Object.freeze({
   receipts: 'sync_receipts',
   replica_mutations: 'sync_replica_mutations',
 });
+const EXISTING_TEST_SNAPSHOT_TABLES = Object.freeze({
+  principals: 'auth_principals',
+  sessions: 'auth_sessions',
+  ...EXISTING_TEST_TABLES,
+});
+const MAX_TEST_SNAPSHOT_ROWS_PER_TABLE = 64;
+const MAX_TEST_SNAPSHOT_BYTES_PER_TABLE = 4 * 1024 * 1024;
 const ACCOUNT_ERASURE_TABLES = Object.freeze({
   erasure_targets: 'kinde_erasure_targets',
   deletion_attempts: 'kinde_deletion_oauth_attempts',
@@ -152,6 +159,42 @@ function unpackQuery(body) {
   return body.result[0].results;
 }
 
+async function fingerprintExistingTestRows(query, counts) {
+  const digests = {};
+  for (const [key, table] of Object.entries(EXISTING_TEST_SNAPSHOT_TABLES)) {
+    const expectedCount = counts[key];
+    assert.ok(Number.isSafeInteger(expectedCount) && expectedCount >= 0
+      && expectedCount <= MAX_TEST_SNAPSHOT_ROWS_PER_TABLE, 'existing test snapshot exceeds row bound');
+    // Migration 0019 adds retirement_mode with a database default. Compare the
+    // previous columns so the intentional schema extension cannot masquerade
+    // as a mutation of an existing record.
+    const projection = key === 'replica_mutations'
+      ? 'uid, mutation_id, request_hash, action, expected_revision, committed_revision, consent_revision, fence_epoch, slot, replica_id, generation, last_seq, checkpoint_at_ms, lease_until_ms, checkpoint_clock_json'
+      : '*';
+    const rows = unpackQuery(await query('/query',
+      `SELECT ${projection} FROM ${table} LIMIT ${MAX_TEST_SNAPSHOT_ROWS_PER_TABLE + 1}`));
+    assert.equal(rows.length, expectedCount, 'existing test snapshot row count changed');
+    const canonicalRows = rows.map(row => {
+      assert.ok(row && typeof row === 'object' && !Array.isArray(row),
+        'invalid existing test snapshot row');
+      const fields = Object.keys(row).sort().map(field => {
+        const value = row[field];
+        assert.ok(value === null || typeof value === 'string' || typeof value === 'number',
+          'invalid existing test snapshot value');
+        if (typeof value === 'number') assert.ok(Number.isSafeInteger(value),
+          'invalid existing test snapshot integer');
+        return [field, value];
+      });
+      return JSON.stringify(fields);
+    }).sort();
+    const serialized = JSON.stringify(canonicalRows);
+    assert.ok(Buffer.byteLength(serialized, 'utf8') <= MAX_TEST_SNAPSHOT_BYTES_PER_TABLE,
+      'existing test snapshot exceeds byte bound');
+    digests[key] = createHash('sha256').update(serialized).digest('hex');
+  }
+  return digests;
+}
+
 export async function verifyRemoteIsolatedD1({
   phase,
   account,
@@ -215,8 +258,8 @@ export async function verifyRemoteIsolatedD1({
       'populated test D1 requires a contiguous 0011–0019 prefix');
   }
 
-  // Read only aggregates. The application DB already holds identity sessions
-  // and older replica test records from before consent/ADK became required.
+  // The application DB already holds identity sessions and older replica test
+  // records from before consent/ADK became required.
   const tables = {
     principals: 'auth_principals',
     sessions: 'auth_sessions',
@@ -241,11 +284,13 @@ export async function verifyRemoteIsolatedD1({
   assert.deepEqual(capacity, [{ over_capacity: 0 }], 'existing replica capacity exceeded');
   let inventory;
   if (existingTestDb0019) {
-    inventory = Object.fromEntries(['principals', 'sessions', ...Object.keys(EXISTING_TEST_TABLES)]
+    const existingCounts = Object.fromEntries(['principals', 'sessions', ...Object.keys(EXISTING_TEST_TABLES)]
       .map(key => [key, counts[0]?.[key]]));
-    assert.ok(Object.values(inventory).every(count => Number.isSafeInteger(count) && count >= 0),
+    assert.ok(Object.values(existingCounts).every(count => Number.isSafeInteger(count) && count >= 0),
       'invalid existing test inventory');
-    assert.ok(inventory.principals > 0, 'existing test identities missing');
+    assert.ok(existingCounts.principals > 0, 'existing test identities missing');
+    inventory = { format: 'isolated-d1-snapshot-v1', counts: existingCounts,
+      digests: await fingerprintExistingTestRows(call, existingCounts) };
     if (phase === 'after') assert.deepEqual(inventory, priorInventory, 'existing test inventory changed');
   }
 

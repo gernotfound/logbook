@@ -11,6 +11,34 @@ const config = JSON.parse(readFileSync(new URL('../../cloudflare/api/wrangler.is
 const names = readdirSync(new URL('../../cloudflare/api/migrations/', import.meta.url))
   .filter(n => n.endsWith('.sql')).sort();
 const ledger = (count = 8) => MIGRATIONS.slice(0, count).map((name, i) => ({ id: i + 1, name }));
+const snapshotTables = {
+  auth_principals: 'principals', auth_sessions: 'sessions', sync_subjects: 'subjects',
+  sync_state: 'states', sync_documents: 'documents', sync_replicas: 'replicas',
+  sync_receipts: 'receipts', sync_replica_mutations: 'replica_mutations',
+};
+function syntheticSnapshotRow(key, i) {
+  const uid = 'synthetic-owner-' + i;
+  if (key === 'principals') return { uid, status: 'active', verified_at_ms: null, auth_epoch: 1 };
+  if (key === 'sessions') return {
+    token_hash: i.toString(16).padStart(64, '0'), uid: 'synthetic-owner-0', auth_epoch: 1,
+    csrf_hash: (i + 100).toString(16).padStart(64, '0'), issued_at_ms: 1000,
+    idle_expires_at_ms: 2000, absolute_expires_at_ms: 3000, revoked_at_ms: null,
+  };
+  if (key === 'subjects') return { uid, status: 'active', consent_revision: 1, fence_epoch: 1 };
+  if (key === 'states') return { uid, revision: 1 };
+  if (key === 'documents') return { uid, path: '', envelope_json: '{"ciphertext":"synthetic"}', revision: 1 };
+  if (key === 'replicas') return { uid, slot: 's00', replica_id: 'synthetic-replica', generation: 1,
+    lease_until_ms: 9999999999999, checkpoint_at_ms: 1000, checkpoint_clock_json: '{}',
+    last_seq: 0, status: 'active' };
+  if (key === 'receipts') return { uid, batch_id: 'synthetic-batch-id', request_hash: 'a'.repeat(64),
+    expected_revision: 0, committed_revision: 1, consent_revision: 1, fence_epoch: 1,
+    slot: 's00', replica_id: 'synthetic-replica', generation: 1, last_seq: 1, document_count: 1 };
+  return { uid, mutation_id: 'synthetic-mutation', request_hash: 'a'.repeat(64),
+    action: 'register', expected_revision: 0, committed_revision: 1,
+    consent_revision: 1, fence_epoch: 1, slot: 's00', replica_id: 'synthetic-replica',
+    generation: 1, last_seq: 0, checkpoint_at_ms: 1000, lease_until_ms: 9999999999999,
+    checkpoint_clock_json: '{}' };
+}
 const schema = [
   { name: 'auth_sessions_owner_token', type: 'index' },
   { name: 'cloud_key_first_issuance', type: 'trigger', sql: `accepted_at_ms <= ${D1_NOW_MS}` },
@@ -73,7 +101,7 @@ function syntheticProvider({
   overCapacity = 0,
   modeColumn = [{ name: 'retirement_mode', type: 'TEXT', required: 1, dflt_value: "'expired'" }],
   objects = schema, jurisdiction = 'eu', replication = 'disabled',
-  failedStatus = null,
+  failedStatus = null, snapshotOverrides = {},
 } = {}) {
   const calls = [];
   const request = async (url, options) => {
@@ -86,7 +114,13 @@ function syntheticProvider({
     }
     if (parsed.pathname.endsWith('/query')) {
       const sql = JSON.parse(options.body).sql;
+      const table = sql.match(/^SELECT (?:\*|uid, mutation_id, .+) FROM ([a-z_]+) LIMIT 65$/)?.[1];
+      const snapshotKey = snapshotTables[table];
+      const counts = { principals, sessions, subjects, states, documents, replicas,
+        receipts, replica_mutations: replicaMutations };
       const rows = sql.includes('FROM d1_migrations') ? ledger(migrationCount)
+        : snapshotKey ? (snapshotOverrides[snapshotKey] ?? Array.from(
+          { length: counts[snapshotKey] }, (_, i) => syntheticSnapshotRow(snapshotKey, i)))
         : sql.includes('FROM sqlite_master') ? objects
         : sql.includes('FROM kinde_inactivity_control') ? inactivityControl
         : sql.includes('FROM kinde_account_erasure_scheduler') ? scheduler
@@ -220,7 +254,10 @@ void test('explicit 0019 test upgrade preserves identities across the 0012–001
   const after = syntheticProvider({ migrationCount: 19, ...existing });
   const options = { account: ACCOUNT, token: 'test', existingTestDb0019: true };
   const preflight = await verifyRemoteIsolatedD1({ ...options, phase: 'before', request: before.request });
-  assert.deepEqual(preflight.inventory, { ...existing, replica_mutations: 0 });
+  assert.deepEqual(preflight.inventory.counts, { ...existing, replica_mutations: 0 });
+  assert.equal(preflight.inventory.format, 'isolated-d1-snapshot-v1');
+  assert.equal(Object.keys(preflight.inventory.digests).length, 8);
+  assert.ok(Object.values(preflight.inventory.digests).every(value => /^[a-f0-9]{64}$/.test(value)));
   const verified = await verifyRemoteIsolatedD1({
     ...options, phase: 'after', request: after.request, priorInventory: preflight.inventory,
   });
@@ -283,12 +320,68 @@ void test('0019 test upgrade rejects altered SQL, mismatched ledger, health data
     assertReadOnlyRequests(before.calls);
   }
   const existing = { principals: 3, sessions: 29, subjects: 1, states: 1, documents: 1, replicas: 1, receipts: 1 };
-  const inventory = { ...existing, replica_mutations: 0 };
+  const before = syntheticProvider({ migrationCount: 11, ...existing });
+  const inventory = (await verifyRemoteIsolatedD1({ ...options, phase: 'before', request: before.request })).inventory;
   for (const [override, priorInventory] of [[{}, undefined], [{ sessions: 30 }, inventory], [{ documents: 0 }, inventory]]) {
     const after = syntheticProvider({ migrationCount: 19, ...existing, ...override });
     await assert.rejects(verifyRemoteIsolatedD1({ ...options, phase: 'after', request: after.request, priorInventory }),
       /existing test inventory changed/);
     assertReadOnlyRequests(after.calls);
+  }
+});
+
+void test('0019 upgrade detects unchanged counts with altered sessions or encrypted document bytes', async () => {
+  const existing = { principals: 3, sessions: 29, subjects: 1, states: 1,
+    documents: 1, replicas: 1, receipts: 1 };
+  const options = { account: ACCOUNT, token: 'test', existingTestDb0019: true };
+  const before = syntheticProvider({ migrationCount: 11, ...existing });
+  const inventory = (await verifyRemoteIsolatedD1({ ...options, phase: 'before', request: before.request })).inventory;
+  for (const snapshotOverrides of [
+    { sessions: Array.from({ length: 29 }, (_, i) => ({ ...syntheticSnapshotRow('sessions', i),
+      ...(i === 7 ? { revoked_at_ms: 2000 } : {}) })) },
+    { documents: [{ ...syntheticSnapshotRow('documents', 0), envelope_json: '{"ciphertext":"changed"}' }] },
+  ]) {
+    const after = syntheticProvider({ migrationCount: 19, ...existing, snapshotOverrides });
+    await assert.rejects(verifyRemoteIsolatedD1({ ...options, phase: 'after', request: after.request,
+      priorInventory: inventory }), /existing test inventory changed/);
+    assertReadOnlyRequests(after.calls);
+  }
+});
+
+void test('snapshot digest is order-independent and omits only the reviewed 0019 column extension', async () => {
+  const existing = { principals: 3, sessions: 29, subjects: 1, states: 1,
+    documents: 1, replicas: 1, receipts: 1, replicaMutations: 1 };
+  const options = { account: ACCOUNT, token: 'test', existingTestDb0019: true };
+  const before = syntheticProvider({ migrationCount: 11, ...existing });
+  const inventory = (await verifyRemoteIsolatedD1({ ...options, phase: 'before', request: before.request })).inventory;
+  const after = syntheticProvider({ migrationCount: 19, ...existing, snapshotOverrides: {
+    sessions: Array.from({ length: 29 }, (_, i) => syntheticSnapshotRow('sessions', i)).reverse(),
+  } });
+  const verified = await verifyRemoteIsolatedD1({ ...options, phase: 'after',
+    request: after.request, priorInventory: inventory });
+  assert.deepEqual(verified.inventory, inventory);
+  const mutationQuery = after.calls.find(call => call.sql?.includes('FROM sync_replica_mutations LIMIT 65'));
+  assert.ok(mutationQuery, 'existing mutation rows must be fingerprinted');
+  assert.doesNotMatch(mutationQuery.sql, /retirement_mode/);
+  assert.match(mutationQuery.sql, /checkpoint_clock_json/);
+  assertReadOnlyRequests([...before.calls, ...after.calls]);
+});
+
+void test('0019 upgrade rejects partial, oversized and malformed row snapshots without writes', async () => {
+  const existing = { principals: 3, sessions: 29, subjects: 1, states: 1,
+    documents: 1, replicas: 1, receipts: 1 };
+  const options = { account: ACCOUNT, token: 'test', existingTestDb0019: true, phase: 'before' };
+  for (const override of [
+    { snapshotOverrides: { principals: [syntheticSnapshotRow('principals', 0)] } },
+    { sessions: 65 },
+    { snapshotOverrides: { documents: [{ ...syntheticSnapshotRow('documents', 0),
+      envelope_json: 'a'.repeat(4 * 1024 * 1024) }] } },
+    { snapshotOverrides: { documents: [null] } },
+    { snapshotOverrides: { documents: [{ ...syntheticSnapshotRow('documents', 0), revision: 1.5 }] } },
+  ]) {
+    const provider = syntheticProvider({ migrationCount: 11, ...existing, ...override });
+    await assert.rejects(verifyRemoteIsolatedD1({ ...options, request: provider.request }));
+    assertReadOnlyRequests(provider.calls);
   }
 });
 
