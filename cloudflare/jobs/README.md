@@ -41,7 +41,11 @@ cron, account deletion o inattività.
 - Un tick sanitario prova al massimo una riconciliazione del
   cutoff e un passo con lease D1, prima della fase finale atomica. Il Worker
   deve fallire senza dichiarare una cancellazione riuscita se il registro
-  indipendente non è disponibile.
+  indipendente non è disponibile. L'ordine dei job eleggibili usa il massimo
+  fra richiesta e scadenza del lease: un job già tentato rientra in coda
+  alla scadenza, anche se il passo fallisce. Le richieste già in attesa non
+  vengono monopolizzate dal job più vecchio; il lease autorizzativo resta
+  invariato. Non è un backoff esponenziale né una garanzia contro outage globali.
 - `node scripts/check-cloudflare-erasure-candidate.mjs` verifica il contratto
   del manifesto; `tests/cloudflare/cf06-erasure-worker-config.node.mjs`
   contiene regressioni che rifiutano aperture accidentali.

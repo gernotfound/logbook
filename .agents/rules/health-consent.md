@@ -186,7 +186,11 @@ La migration aggiunge anche vincoli SQL per bloccare la riscrittura
 diretta di documenti/repliche dopo la revoca e la riattivazione di
 consenso finché esiste un job incompleto. Richieste fallite, quote,
 lease scaduti o response-loss restano recuperabili e non causano una
-conferma di cancellazione.
+conferma di cancellazione. Il runner corrente ordina le richieste eleggibili
+per il massimo fra timestamp di richiesta e scadenza del lease precedente,
+poi richiesta e UID. Un errore di un owner dopo il claim non monopolizza
+la coda: il suo retry rientra al termine del lease, senza modificare le
+condizioni autorizzative o produrre una ricevuta.
 
 ## Matrice sintetica delle autorizzazioni
 

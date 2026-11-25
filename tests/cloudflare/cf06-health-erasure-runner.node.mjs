@@ -77,10 +77,10 @@ function seedReplicaHistory(f, uid) {
     VALUES (?,?,?,1,2,1,1,'s00','replica-a',1,1,1)`)
     .run(uid, 'batch-' + 'a'.repeat(20), 'b'.repeat(64));
 }
-function withdraw(f, uid) {
+function withdraw(f, uid, requestedAt = Date.now() - 1000) {
   f.sqlite.prepare(`INSERT INTO health_erasure_jobs
     (uid,consent_revision,fence_epoch,requested_at_ms,status)
-    VALUES (?,1,1,?,'pending')`).run(uid, Date.now() - 1000);
+    VALUES (?,1,1,?,'pending')`).run(uid, requestedAt);
   assert.equal(f.sqlite.prepare('SELECT status FROM sync_subjects WHERE uid=?').get(uid).status, 'withdrawn');
 }
 function count(f, table, uid) {
@@ -495,6 +495,64 @@ void test('keyless never-issued and missing-issued-key jobs remain incomplete, d
         /erasure-progress-fenced/);
     } finally { f.sqlite.close(); }
   }
+});
+
+void test('an expired failed owner yields to waiting owners and retries without losing its request', async () => {
+  const f = fixture();
+  const registry = new DatabaseSync(':memory:');
+  const clock = new DatabaseSync(':memory:');
+  try {
+    applyCurrentD1RecoverySchema(registry);
+    registry.exec("UPDATE recovery_control SET mode='open', generation=2 WHERE singleton=1");
+    const recovery = new D1Sqlite(registry);
+    for (const uid of ['owner-a', 'owner-b']) {
+      await ownerWithWrappedKey(f, uid);
+      insertDocuments(f, uid, 5);
+      await enrollIndependentOwner(recovery, uid);
+      await armIndependentHealthWithdrawal(recovery,
+        await recordVerifiedInitialConsent(f.db, recovery, uid));
+    }
+    let now = Date.now() + 1000;
+    const time = clock.prepare('SELECT strftime(?, ?) AS value');
+    f.sqlite.function('strftime', (format, date) =>
+      time.get(format, date === 'now' ? new Date(now).toISOString() : date).value);
+    withdraw(f, 'owner-a', now - 2000);
+    withdraw(f, 'owner-b', now - 1000);
+    f.sqlite.exec(`CREATE TRIGGER synthetic_owner_failure BEFORE DELETE ON sync_documents
+      WHEN OLD.uid = 'owner-a'
+      BEGIN SELECT RAISE(ABORT, 'synthetic-owner-failure'); END`);
+    const env = { DB: f.db, RECOVERY_DB: recovery, CF06_ERASURE_RUN_ENABLED: 'enabled' };
+    const tick = () => erasureWorker.scheduled({}, env);
+    await assert.rejects(tick(), /synthetic-owner-failure/);
+    assert.equal(job(f, 'owner-a').lease_epoch, 1);
+    assert.equal(count(f, 'sync_documents', 'owner-a'), 5);
+    const firstExpiry = job(f, 'owner-a').lease_until_ms;
+
+    // Move the SQL clock, not the stored lease, past its real deadline.
+    // Both jobs are eligible; original-request ordering would pick A again.
+    now = firstExpiry;
+    assert.deepEqual(await tick(), { outcome: 'progress', phase: 'data', removed: 4, table: 'sync_documents' });
+    assert.equal(count(f, 'sync_documents', 'owner-b'), 1);
+    assert.equal(job(f, 'owner-a').lease_epoch, 1);
+    now = job(f, 'owner-b').lease_until_ms;
+    await assert.rejects(tick(), /synthetic-owner-failure/);
+    assert.equal(job(f, 'owner-a').lease_epoch, 2);
+    now = job(f, 'owner-a').lease_until_ms;
+    assert.deepEqual(await tick(), { outcome: 'progress', phase: 'data', removed: 1, table: 'sync_documents' });
+    assert.equal(count(f, 'sync_documents', 'owner-b'), 0);
+    assert.equal(count(f, 'sync_documents', 'owner-a'), 5);
+
+    f.sqlite.exec('DROP TRIGGER synthetic_owner_failure');
+    now = job(f, 'owner-b').lease_until_ms;
+    assert.deepEqual(await tick(), { outcome: 'progress', phase: 'data', removed: 4, table: 'sync_documents' });
+    assert.equal(count(f, 'sync_documents', 'owner-a'), 1);
+    assert.equal(job(f, 'owner-a').lease_epoch, 3);
+    for (const uid of ['owner-a', 'owner-b']) {
+      assert.equal(count(f, 'cloud_account_keys', uid), 1);
+      assert.equal(count(f, 'health_erasure_finalizations', uid), 0);
+      assert.equal(job(f, uid).status, 'processing');
+    }
+  } finally { clock.close(); registry.close(); f.sqlite.close(); }
 });
 
 void test('scheduler has no public fetch endpoint and handles only one bounded step per tick', async () => {

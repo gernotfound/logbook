@@ -61,7 +61,7 @@ const FIND_JOB = [
   '  AND j.lease_until_ms <= ' + SERVER_NOW,
   "  AND s.status = 'withdrawn'",
   '  AND s.consent_revision = j.consent_revision AND s.fence_epoch = j.fence_epoch',
-  'ORDER BY j.requested_at_ms, j.uid LIMIT 1',
+  'ORDER BY MAX(j.requested_at_ms, j.lease_until_ms), j.requested_at_ms, j.uid LIMIT 1',
 ].join('\n');
 
 const CLAIM_JOB = [
@@ -251,9 +251,11 @@ const AWAIT_KEYS = [
 ].join('\n');
 
 /**
- * Select the oldest eligible request across both phases: a continuing stream
- * of data jobs must not starve a terminal key erasure. The explicit key-only
- * helper retains its narrower selection, without granting terminal authority.
+ * Queue by eligibility time, not original request age alone. A claimed job
+ * re-enters at its lease expiry even if its step fails or the reply is lost.
+ * Older waiting jobs then take precedence; future arrivals cannot overtake
+ * an already eligible retry. The key-only helper uses the same ordering
+ * within its narrower phase, without granting terminal authority.
  * The single UPDATE ... RETURNING CAS fences the selected owner,
  * consent generation, phase, previous lease and current withdrawn status.
  * A lost claim acknowledgement cannot be interpreted as ownership.
