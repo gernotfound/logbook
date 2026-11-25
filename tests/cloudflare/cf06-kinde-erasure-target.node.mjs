@@ -393,12 +393,52 @@ void test('application readiness for a health owner requires the real SQL erasur
   const intent = await recordKindeAccountErasureIntent(db, proof);
   sqlite.prepare("INSERT INTO sync_subjects(uid,status,consent_revision,fence_epoch) VALUES (?,'active',1,1)").run(identity.uid);
   sqlite.prepare('INSERT INTO sync_state(uid,revision) VALUES (?,0)').run(identity.uid);
+  sqlite.prepare("INSERT INTO health_consent_acceptances VALUES (?,1,'privacy-v1','terms-v1',?,1)")
+    .run(identity.uid, Date.now());
   recovery.sqlite.prepare("INSERT INTO recovery_owner_fences VALUES (?, 'pending', 0, 1, 0, 1)").run(identity.uid);
   recovery.sqlite.prepare("UPDATE recovery_owner_fences SET status='active', consent_revision=1, change_seq=2 WHERE uid=?").run(identity.uid);
   assert.equal(await acceptKindeAccountErasure(db, recovery.db, intent), true);
   assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'progress', removed: 2 });
   assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'health-pending' });
 
+  const env = { DB: db, RECOVERY_DB: recovery.db, CF06_ERASURE_RUN_ENABLED: 'enabled' };
+  assert.deepEqual(await healthErasureWorker.scheduled(null, env), { outcome: 'awaiting-keys' });
+  sqlite.exec('UPDATE health_erasure_jobs SET lease_until_ms=1');
+  assert.deepEqual(await healthErasureWorker.scheduled(null, env), { outcome: 'complete', keyDisposition: 'never-issued' });
+  assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'application-complete' });
+  assert.equal(recovery.sqlite.prepare('SELECT finalized FROM recovery_erasure_cutoffs').get().finalized, 1);
+});
+
+void test('account erasure recovers a committed consent whose independent floor is still pending', async (t) => {
+  const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
+  const recovery = openRecoveryFixture(t);
+  await write(db, identity);
+  const intent = await recordKindeAccountErasureIntent(db, deletionRequestProof(attempt));
+  sqlite.prepare("INSERT INTO sync_subjects(uid,status,consent_revision,fence_epoch) VALUES (?,'active',1,1)").run(identity.uid);
+  sqlite.prepare('INSERT INTO sync_state(uid,revision) VALUES (?,0)').run(identity.uid);
+  sqlite.prepare("INSERT INTO health_consent_acceptances VALUES (?,1,'privacy-v1','terms-v1',?,1)")
+    .run(identity.uid, Date.now());
+  const otherUid = await deriveKindeOwnerId(issuer, 'kp_pending_other');
+  const enroll = recovery.sqlite.prepare("INSERT INTO recovery_owner_fences VALUES (?, 'pending', 0, 1, 0, 1)");
+  enroll.run(identity.uid);
+  enroll.run(otherUid);
+  const floor = recovery.sqlite.prepare('SELECT status, consent_revision, change_seq FROM recovery_owner_fences WHERE uid=?');
+  assert.equal(await acceptKindeAccountErasure(db, recovery.db, intent), true);
+  assert.deepEqual({ ...floor.get(identity.uid) }, { status: 'pending', consent_revision: 0, change_seq: 1 });
+  assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'progress', removed: 2 });
+  recovery.sqlite.exec("UPDATE recovery_control SET mode='sealed', generation=3");
+  await assert.rejects(runKindeAccountErasureAppStep(db, recovery.db, intent), /independent-recovery-fence-unavailable/);
+  assert.equal(floor.get(identity.uid).status, 'pending');
+  recovery.sqlite.exec("UPDATE recovery_control SET mode='open', generation=4");
+  const lostReply = d1For(recovery.sqlite, { afterWrite(sql) {
+    if (sql.includes('UPDATE recovery_owner_fences')) throw new Error('synthetic floor ACK lost');
+  } });
+  assert.deepEqual(await runKindeAccountErasureAppStep(db, lostReply, intent), { outcome: 'health-pending' });
+  assert.deepEqual({ ...floor.get(identity.uid) }, { status: 'blocked', consent_revision: 1, change_seq: 2 });
+  assert.deepEqual({ ...floor.get(otherUid) }, { status: 'pending', consent_revision: 0, change_seq: 1 });
+  assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'health-pending' });
+  assert.equal(floor.get(identity.uid).change_seq, 2);
+  await assert.rejects(requireIndependentAccountAccess(recovery.db, identity.uid), /independent-recovery-fence-unavailable/);
   const env = { DB: db, RECOVERY_DB: recovery.db, CF06_ERASURE_RUN_ENABLED: 'enabled' };
   assert.deepEqual(await healthErasureWorker.scheduled(null, env), { outcome: 'awaiting-keys' });
   sqlite.exec('UPDATE health_erasure_jobs SET lease_until_ms=1');
