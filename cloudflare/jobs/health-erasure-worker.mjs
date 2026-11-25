@@ -1,6 +1,6 @@
 import { D1_NOW_MS } from '../sql/d1-time.mjs';
 import {
-  IndependentFenceUnavailableError, recordVerifiedTerminalErasure, requireIndependentOwnerFence,
+  IndependentFenceUnavailableError, readOpenRecoveryGeneration, recordVerifiedTerminalErasure, requireIndependentOwnerFence,
 } from '../recovery/independent-owner-fence.mjs';
 import {
   armIndependentErasureCutoff, reconcileNextIndependentErasure,
@@ -213,7 +213,7 @@ async function finalizeHealthErasureLease(db, lease) {
   return verified;
 }
 
-async function finalizeWithIndependentFence(db, recoveryDb, lease) {
+async function finalizeWithIndependentFence(db, recoveryDb, lease, generation) {
   const { candidate, primary, scope } = lease;
   // The app's key phase is necessary to close export early. A stale
   // restored job or an expired lease cannot arm the independent cutoff.
@@ -230,10 +230,11 @@ async function finalizeWithIndependentFence(db, recoveryDb, lease) {
   `).bind(...scope).first();
   if (current?.uid !== candidate.uid) return { outcome: 'contended' };
 
-  await armIndependentErasureCutoff(recoveryDb, scope);
+  await armIndependentErasureCutoff(recoveryDb, scope, generation);
+  await readOpenRecoveryGeneration(recoveryDb, generation);
   const result = await finalizeHealthErasureLease(db, lease);
   if (result.outcome === 'complete') {
-    await recordVerifiedTerminalErasure(db, recoveryDb, candidate.uid, candidate);
+    await recordVerifiedTerminalErasure(db, recoveryDb, candidate.uid, candidate, generation);
   }
   return result;
 }
@@ -264,7 +265,7 @@ const AWAIT_KEYS = [
  * consent generation, phase, previous lease and current withdrawn status.
  * A lost claim acknowledgement cannot be interpreted as ownership.
  */
-async function claimOneHealthErasureLease(db, phase = null) {
+async function claimOneHealthErasureLease(db, phase = null, recoveryDb = null, generation = null) {
   if (phase !== null && phase !== 'data' && phase !== 'awaiting-keys') throw new Error('invalid-erasure-phase');
   if (!db || typeof db.withSession !== 'function') throw new Error('erasure-db-unavailable');
   const primary = db.withSession('first-primary');
@@ -279,6 +280,7 @@ async function claimOneHealthErasureLease(db, phase = null) {
     || !Number.isSafeInteger(candidate.fence_epoch) || candidate.fence_epoch < 1) {
     throw new Error('invalid-erasure-job');
   }
+  if (recoveryDb) await readOpenRecoveryGeneration(recoveryDb, generation);
   const token = newLeaseToken();
   const claimed = await primary.prepare(CLAIM_JOB)
     .bind(token, candidate.uid, candidate.consent_revision, candidate.fence_epoch, candidate.phase).first();
@@ -312,8 +314,8 @@ export async function acquireOneHealthErasureKeyPhaseLease(db) {
   };
 }
 
-async function runApplicationHealthErasureStep(db, recoveryDb = null) {
-  const lease = await claimOneHealthErasureLease(db);
+async function runApplicationHealthErasureStep(db, recoveryDb = null, generation = null) {
+  const lease = await claimOneHealthErasureLease(db, null, recoveryDb, generation);
   if (lease.outcome) return { outcome: lease.outcome };
   const { primary, candidate, scope } = lease;
   if (recoveryDb) {
@@ -325,18 +327,20 @@ async function runApplicationHealthErasureStep(db, recoveryDb = null) {
     await requireIndependentOwnerFence(recoveryDb, {
       uid: candidate.uid, status: 'withdrawn', consentRevision: candidate.consent_revision,
       fenceEpoch: candidate.fence_epoch, erasedBeforeRevision: subject.erased_before_revision,
-    }, 'erasure');
+    }, 'erasure', generation);
   }
   if (candidate.phase === 'awaiting-keys') {
-    return recoveryDb ? finalizeWithIndependentFence(db, recoveryDb, lease)
+    return recoveryDb ? finalizeWithIndependentFence(db, recoveryDb, lease, generation)
       : finalizeHealthErasureLease(db, lease);
   }
   for (const table of HEALTH_DATA_CLEANUP_TABLES) {
+    if (recoveryDb) await readOpenRecoveryGeneration(recoveryDb, generation);
     const result = await primary.prepare(deleteBoundedSql(table))
       .bind(candidate.uid, candidate.uid, ...scope).run();
     const removed = deletedRowCount(result);
     if (removed > 0) return { outcome: 'progress', phase: 'data', removed, table: table.name };
   }
+  if (recoveryDb) await readOpenRecoveryGeneration(recoveryDb, generation);
   const result = await primary.prepare(AWAIT_KEYS).bind(...scope).run();
   if (result?.success !== true || !Number.isSafeInteger(result.meta?.changes)
     || result.meta.changes < 0 || result.meta.changes > 1) {
@@ -386,11 +390,15 @@ export default {
     if (mode === 'account-application') {
       return await runKindeAccountErasureSweepTick(DB, RECOVERY_DB);
     }
-    const reconciliation = await reconcileNextIndependentErasure(DB, RECOVERY_DB);
+    if (!DB || !RECOVERY_DB || DB === RECOVERY_DB) throw new IndependentFenceUnavailableError();
+    const generation = await readOpenRecoveryGeneration(RECOVERY_DB);
+    const reconciliation = await reconcileNextIndependentErasure(DB, RECOVERY_DB, generation);
     // A reserved cutoff retry cannot authorize or prevent another owner's
     // independently fenced step. Preserve a failed invocation for diagnostics;
     // no completion receipt is returned for the unresolved cutoff.
-    const result = await runApplicationHealthErasureStep(DB, RECOVERY_DB);
+    await readOpenRecoveryGeneration(RECOVERY_DB, generation);
+    const result = await runApplicationHealthErasureStep(DB, RECOVERY_DB, generation);
+    await readOpenRecoveryGeneration(RECOVERY_DB, generation);
     if (reconciliation === 'blocked') throw new IndependentFenceUnavailableError();
     return result;
   },
