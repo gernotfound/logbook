@@ -203,3 +203,32 @@ void test('an empty eligible page still advances past a leap-day anniversary inv
     /invalid-kinde-inactivity-cursor/);
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM auth_principals WHERE status != 'active'").get().n, 0);
 });
+
+void test('raw activity pages stay bounded when disabled principals precede an active candidate', async (t) => {
+  const { db, sqlite, advance } = fixture(t);
+  const principal = sqlite.prepare("INSERT INTO auth_principals VALUES (?, 'active', ?, 1)");
+  const session = sqlite.prepare('INSERT INTO auth_sessions VALUES (?, ?, 1, ?, ?, ?, ?, NULL)');
+  const disable = sqlite.prepare("UPDATE auth_principals SET status='disabled' WHERE uid=?");
+  const disabled = [];
+  for (let i = 0; i < 20; i += 1) {
+    const uid = 'k_' + i.toString(16).padStart(43, '0');
+    const sessionHash = i.toString(16).padStart(64, '0');
+    principal.run(uid, VISIT - 1000);
+    session.run(sessionHash, uid, 'd'.repeat(64), VISIT - 1000, VISIT + IDLE_TTL, VISIT + IDLE_TTL);
+    assert.deepEqual(await recordKindeForegroundActivity(db, { ...claims, uid, sessionHash }), { outcome: 'recorded' });
+    disable.run(uid);
+    disabled.push(uid);
+  }
+  assert.deepEqual(await recordKindeForegroundActivity(db, claims), { outcome: 'recorded' });
+  const dueAt = earliestKindeInactivityErasureAt(VISIT);
+  advance(dueAt - VISIT);
+  sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=2");
+  const first = await readKindeInactivityCandidates(db);
+  assert.deepEqual(first, { candidates: [], nextCursor: { lastRecordedAtMs: VISIT, uid: disabled[15] } });
+  assert.deepEqual(await readKindeInactivityCandidates(db, first.nextCursor), {
+    candidates: [{ uid: UID, authEpoch: 1, generation: 2, lastRecordedAtMs: VISIT, eligibleAtMs: dueAt }],
+    nextCursor: null,
+  });
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM auth_principals WHERE status='disabled'").get().n, 20);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_activity').get().n, 21);
+});
