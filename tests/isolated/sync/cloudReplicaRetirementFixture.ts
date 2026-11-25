@@ -45,7 +45,7 @@ export async function stagedRetirement() {
         leaseUntilMs: now - 600000, checkpointAtMs: now - 86400000,
     };
     const control = {
-        revision: 0, fenceEpoch: 5, consentRevision: 1,
+        uid, revision: 0, fenceEpoch: 5, consentRevision: 1,
         replicas: {
             s02: { ...target, status: 'active' as const,
                 lastSeq: 8, checkpointClock: { s00: 4 } },
@@ -57,7 +57,7 @@ export async function stagedRetirement() {
 
 export function remoteRetirement(target: Awaited<ReturnType<typeof stagedRetirement>>['target']) {
     const retired = {
-        revision: 1, fenceEpoch: 5, consentRevision: 1,
+        uid, revision: 1, fenceEpoch: 5, consentRevision: 1,
         replicas: {
             s02: { ...target, status: 'retired' as const,
                 lastSeq: 8, checkpointClock: { s00: 4 } },

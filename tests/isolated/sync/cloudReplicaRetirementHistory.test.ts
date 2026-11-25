@@ -8,7 +8,7 @@ import { get } from 'idb-keyval';
 import { CloudReplicaMutationReconciliationRequiredError } from '../../../src/lib/sync/cloudReplicaTransport';
 import { resumeCloudflareReplicaRetirement } from '../../../src/lib/sync/cloudReplicaRetirementRecovery';
 import { commitLocal, readLocal } from '../../../src/lib/sync/localRepository';
-import { data, owner, storage, stagedRetirement, remoteRetirement, resetRetirementFixture, cleanupRetirementFixture } from './cloudReplicaRetirementFixture';
+import { data, uid, owner, storage, stagedRetirement, remoteRetirement, resetRetirementFixture, cleanupRetirementFixture } from './cloudReplicaRetirementFixture';
 
 beforeEach(() => resetRetirementFixture(catalogSource.read));
 afterEach(cleanupRetirementFixture);
@@ -26,7 +26,7 @@ describe('candidate D1 durable expired-replica retirement', () => {
             }),
         );
         transport.control.mockImplementation(async () => ({
-            revision: 2, fenceEpoch: 5, consentRevision: 1,
+            uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
             replicas: { s02: { ...target, status: 'retired' as const, lastSeq: 8,
                 checkpointClock: { s00: 4 } } },
         }));
@@ -50,7 +50,7 @@ describe('candidate D1 durable expired-replica retirement', () => {
             }),
         );
         transport.control.mockResolvedValue({
-            revision: 2, fenceEpoch: 5, consentRevision: 1,
+            uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
             replicas: { s02: { ...target, generation: 2, replicaId: 'new-replica',
                 status: 'active', lastSeq: 8, checkpointClock: {} } },
         });
@@ -72,7 +72,7 @@ describe('candidate D1 durable expired-replica retirement', () => {
             }),
         );
         transport.control.mockResolvedValue({
-            revision: 2, fenceEpoch: 5, consentRevision: 1,
+            uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
             replicas: { s02: { ...target, replicaId: 'unexpected-id',
                 status: 'active', lastSeq: 8, checkpointClock: {} } },
         });
@@ -92,7 +92,7 @@ describe('candidate D1 durable expired-replica retirement', () => {
                 reconciliationRequired: true, replayed: true, baseSeq: 8, replica: target,
             }),
         );
-        const successor = { revision: 2, fenceEpoch: 5, consentRevision: 1,
+        const successor = { uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
             replicas: { s02: { ...target, generation: 2, replicaId: 'successor',
                 status: 'active' as const, lastSeq: 8, checkpointClock: {} } } };
         transport.control.mockResolvedValueOnce(successor)
@@ -113,11 +113,11 @@ describe('candidate D1 durable expired-replica retirement', () => {
             }),
         );
         transport.control.mockResolvedValueOnce({
-            revision: 2, fenceEpoch: 5, consentRevision: 1,
+            uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
             replicas: { s02: { ...target, status: 'retired' as const, lastSeq: 8,
                 checkpointClock: { s00: 4 } } },
         }).mockResolvedValueOnce({
-            revision: 3, fenceEpoch: 5, consentRevision: 1,
+            uid, revision: 3, fenceEpoch: 5, consentRevision: 1,
             replicas: { s02: { ...target, status: 'retired' as const, lastSeq: 8,
                 checkpointClock: { s00: 4 } } },
         });
@@ -155,7 +155,7 @@ describe('candidate D1 durable expired-replica retirement', () => {
             }),
         );
         transport.control.mockResolvedValue({
-            revision: 2, fenceEpoch: 5, consentRevision: 1,
+            uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
             replicas: { s02: { ...target, status: 'retired' as const,
                 lastSeq: 9, checkpointClock: { s00: 4 } } },
         });
@@ -176,14 +176,14 @@ describe('candidate D1 durable expired-replica retirement', () => {
             }),
         );
         transport.control.mockResolvedValue({
-            revision: 2, fenceEpoch: 5, consentRevision: 1,
+            uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
             replicas: { s02: { ...target, status: 'retired' as const,
                 lastSeq: 8, checkpointClock: { s00: 4 } } },
         });
         let current = true;
         transport.control.mockImplementationOnce(async () => {
             current = false;
-            return { revision: 2, fenceEpoch: 5, consentRevision: 1,
+            return { uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
                 replicas: { s02: { ...target, status: 'retired' as const,
                     lastSeq: 8, checkpointClock: { s00: 4 } } } };
         });

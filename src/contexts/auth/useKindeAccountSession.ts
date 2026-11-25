@@ -23,6 +23,8 @@ type Decision = Parameters<typeof acceptKindeCandidateInitialConsent>[0]['decisi
 type PresenceFence = ReturnType<typeof captureKindeCandidatePresenceFence>;
 type CandidatePreparationResult = Awaited<ReturnType<typeof prepareKindeCandidateOwner>>;
 type CandidateReplicaRegistryResult = Awaited<ReturnType<typeof import('../../lib/sync/kindeCandidateReplicaRegistry').inspectKindeCandidateReplicaRegistry>>;
+type CandidateRetirementWitness = import('../../lib/sync/kindeCandidateReplicaRetirementBridge').CandidateReplicaRetirementWitness;
+type CandidateRetirementOutcome = Awaited<ReturnType<typeof import('../../lib/sync/kindeCandidateReplicaRetirementBridge').retireKindeCandidateReplica>>;
 type CandidateRestoreResult = Awaited<ReturnType<typeof import('../../lib/auth/kindeCandidateRestore').restoreKindeCandidateBackup>>;
 
 // Read only the local CSRF-cookie witness. Network refresh is triggered only
@@ -315,6 +317,34 @@ export function useKindeAccountSession({
         }
     };
 
+    /** Explicit, isolated maintenance only; no public fitness grant or ACK. */
+    const manageCandidateReplicaRetirement = async (witness?: CandidateRetirementWitness): Promise<CandidateRetirementOutcome> => {
+        if (identityOnly || !candidatePreparationEnabled || !canAct()
+            || view.phase !== 'consent-confirmed' || !view.principal.emailVerified
+            || view.principal.healthConsentRevision < 1) throw new KindeCandidateBoundaryError();
+        const session = observed.current;
+        if (!session?.csrfToken || !session.stillCurrent()) throw new KindeCandidateBoundaryError();
+        const current = () => viewIsCurrent() && session.stillCurrent();
+        const expected = {
+            uid: view.principal.uid, fenceEpoch: view.principal.fenceEpoch,
+            healthConsentRevision: view.principal.healthConsentRevision,
+        };
+        busyRef.current = true;
+        setBusy(true);
+        try {
+            const bridge = await import('../../lib/sync/kindeCandidateReplicaRetirementBridge');
+            if (!current()) throw new KindeCandidateBoundaryError();
+            const result = witness
+                ? await bridge.retireKindeCandidateReplica({ expected, witness, stillCurrent: current })
+                : await bridge.recoverKindeCandidateReplicaRetirement({ expected, stillCurrent: current });
+            if (!current()) throw new KindeCandidateBoundaryError();
+            return result;
+        } finally {
+            busyRef.current = false;
+            if (mounted.current) setBusy(false);
+        }
+    };
+
     /**
      * Candidate-only explicit export. Unlock an already provisioned device
      * vault for this operation, then release the exact grant even on failure.
@@ -538,7 +568,7 @@ export function useKindeAccountSession({
 
     return {
         view, busy, reportInteraction, signIn, enterGuest, acceptConsent, logout, prepareCandidateArchive,
-        inspectCandidateReplicas, prepareCandidateBackup,
+        inspectCandidateReplicas, manageCandidateReplicaRetirement, prepareCandidateBackup,
         restoreCandidateBackup,
         withdrawCandidateConsent, reconcileCandidateWithdrawal, prepareCandidateRightsJson,
         retry: async () => { if (canAct()) await refresh(); },

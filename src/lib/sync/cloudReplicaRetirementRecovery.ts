@@ -25,8 +25,8 @@ function mayRetire(entry: Entry, confirmation: Confirmation): boolean {
           && entry.leaseUntilMs === confirmation.leaseUntilMs);
 }
 
-function controlOwnerMatches(control: CloudReplicaControlSnapshot, owner: string, confirmation: Confirmation): boolean {
-    return confirmation === undefined || control.uid === owner.slice(5);
+function controlOwnerMatches(control: CloudReplicaControlSnapshot, owner: string): boolean {
+    return control.uid === owner.slice(5);
 }
 
 function current(guard: Guard): void {
@@ -66,7 +66,7 @@ export async function stageCloudflareReplicaRetirement(
         || !Number.isSafeInteger(control.fenceEpoch) || control.fenceEpoch < 1
         || !Number.isSafeInteger(control.consentRevision) || control.consentRevision < 1
         || !entry || entry.status !== 'active' || !sameReplica({ ...entry, slot: replica.slot }, replica)
-        || !controlOwnerMatches(control, owner, confirmation)
+        || !controlOwnerMatches(control, owner)
         || !mayRetire(entry, confirmation)) {
         throw new Error('Replica D1 non ritirabile: rileggere il registro senza modificare il journal.');
     }
@@ -123,7 +123,7 @@ async function rebaseUncommittedRetirement(
         || control.consentRevision !== intent.consentRevision
         || !target || target.status !== 'active'
         || !sameReplica({ ...target, slot: intent.replica.slot }, intent.replica)
-        || !controlOwnerMatches(control, owner, intent.confirmation)
+        || !controlOwnerMatches(control, owner)
         || !mayRetire(target, intent.confirmation)) {
         return 'reconciliation-required';
     }
@@ -220,7 +220,7 @@ export async function resumeCloudflareReplicaRetirement(
     if (control.revision < receipt.currentRevision
         || control.fenceEpoch !== intent.expectedFenceEpoch
         || control.consentRevision !== intent.consentRevision
-        || !controlOwnerMatches(control, owner, intent.confirmation)
+        || !controlOwnerMatches(control, owner)
         || (!exactRetirement && !superseded)) {
         return 'reconciliation-required';
     }

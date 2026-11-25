@@ -21,7 +21,7 @@ describe('candidate D1 durable expired-replica retirement', () => {
         const sealed = await get(storage);
         const transport = remoteRetirement(target);
         transport.control.mockResolvedValueOnce({
-            revision: 2, fenceEpoch: 5, consentRevision: 1,
+            uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
             replicas: { s02: { ...target, status: 'active' as const,
                 lastSeq: 8, checkpointClock: { s00: 4 } } },
         });
@@ -41,7 +41,7 @@ describe('candidate D1 durable expired-replica retirement', () => {
         expect(await get(storage)).toBe(sealed);
 
         await expect(stageCloudflareReplicaRetirement(owner, {
-            revision: 0, fenceEpoch: 5, consentRevision: 1,
+            uid, revision: 0, fenceEpoch: 5, consentRevision: 1,
             replicas: { s02: { ...target, status: 'active' as const,
                 lastSeq: 8, checkpointClock: {} } },
         }, target, () => false)).rejects.toThrow('sessione');
