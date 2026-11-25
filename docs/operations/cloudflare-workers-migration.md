@@ -9,7 +9,7 @@
   migrazioni additive `0012`–`0016`. Per la D1 EU già usata per collaudare
   l'identità Kinde, `upgrade_existing_test_db_0016` richiede un prefisso
   contiguo `0011`–`0016` e tabelle nuove ancora vuote. La 0014 aggiunge
-  il checkpoint dello scheduler; la 0015 aggiunge il contatore di assegnazione, inizialmente zero. La 0016 aggiunge il checkpoint diagnostico inizialmente inutilizzato, con lease e generazioni. Nessuna attiva il cron.
+  il checkpoint dello scheduler; la 0015 aggiunge il contatore di assegnazione, inizialmente zero. La 0016 aggiunge il checkpoint diagnostico inizialmente inutilizzato, con lease e generazioni. Il preflight verifica il controllo inattività iniziale paused/1 anche per ogni prefisso già a 0013 o superiore, prima di qualsiasi scrittura. Nessuna attiva il cron.
   Richiede bookmark Time Travel, repliche disabilitate, identità di
   collaudo presenti e zero consensi, ADK e job sanitari. Il percorso
   predefinito richiede una D1 vuota.

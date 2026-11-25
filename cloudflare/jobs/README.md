@@ -26,13 +26,19 @@ cron, account deletion o inattività.
   quando nessuna riga è eleggibile. Il candidato dry-run 0016 mantiene
   cursor/lease in D1, resetta su cambio policy o recovery, non espone UID
   e non esegue enqueue. Non riusare il suo checkpoint per cancellazioni.
-  `recordKindeInactivityErasureIntent` collega atomicamente l'enqueue al controllo, al marker attività, all'epoch e al target; non accoda con sessione corrente e blocca il principal senza inventare una riautenticazione. Lo scanner schedulato non è montato. La futura
+  `recordKindeInactivityErasureIntent` collega atomicamente l'enqueue al controllo, al marker attività, all'epoch e al target; non accoda con sessione corrente e blocca il principal senza inventare una riautenticazione. Lo scanner distruttivo non è montato. La futura
   abilitazione richiede revisione e autorizzazione specifica, senza
   modificare implicitamente il manifesto isolato. I test sintetici che
   chiamano `runOneHealthErasureStep` non eludono questo gate di runtime.
 - Con il processore esplicitamente abilitato, `CF06_ERASURE_RUN_MODE` seleziona
   un solo percorso per invocazione: `health` (anche se omesso),
-  `account-application` oppure `alternating-application`. Altri valori mantengono la pausa prima di leggere D1.
+  `account-application`, `alternating-application` oppure `inactivity-dry-run`.
+  Altri valori mantengono la pausa prima di leggere D1. Il percorso diagnostico
+  richiede anche `CF06_INACTIVITY_RECOVERY_GENERATION` come stringa decimale
+  canonica positiva e sicura, proveniente dalla configurazione trusted: non
+  deriva il pin dal registro corrente e non entra nelle lane di erasure.
+  Il pin mancante o malformato mantiene la pausa prima di accedere ai binding;
+  un pin obsoleto fallisce chiuso. Nessuna variabile o cron è attivata.
   La modalità account invoca il checkpoint persistente 0014 per un solo
   intento durevole, senza scanner, dipendenze Management o prova terminale
   account. Nessuna modalità è configurata nel manifesto. La modalità alternata assegna un solo turno tramite incremento atomico

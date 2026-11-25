@@ -209,6 +209,22 @@ void test('explicit 0016 test upgrade preserves identities across the 0012–001
   assertReadOnlyRequests([...before.calls, ...after.calls]);
 });
 
+void test('upgrade preflight rejects a previously enabled, advanced or missing inactivity control', async () => {
+  for (const migrationCount of [13, 14, 15, 16]) {
+    for (const inactivityControl of [[], [{ singleton: 1, mode: 'enabled', generation: 2 }],
+      [{ singleton: 1, mode: 'paused', generation: 3 }]]) {
+      const provider = syntheticProvider({ migrationCount, principals: 3, sessions: 29, inactivityControl });
+      await assert.rejects(verifyRemoteIsolatedD1({ phase: 'before', account: ACCOUNT, token: 'test',
+        existingTestDb0016: true, request: provider.request }), /new inactivity scanner must remain paused/);
+      assertReadOnlyRequests(provider.calls);
+    }
+    const provider = syntheticProvider({ migrationCount, principals: 3, sessions: 29 });
+    assert.equal((await verifyRemoteIsolatedD1({ phase: 'before', account: ACCOUNT, token: 'test',
+      existingTestDb0016: true, request: provider.request })).applied, migrationCount);
+    assertReadOnlyRequests(provider.calls);
+  }
+});
+
 void test('0016 test upgrade rejects altered SQL, mismatched ledger, health data and changed identity counts', async () => {
   const sql = readFileSync(new URL('../../cloudflare/api/migrations/0012_kinde_erasure_decisions.sql', import.meta.url), 'utf8');
   assert.doesNotThrow(() => verifyExistingTestUpgradeSql(sql));

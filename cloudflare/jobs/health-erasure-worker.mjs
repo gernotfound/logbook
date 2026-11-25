@@ -8,6 +8,7 @@ import {
 
 import { HEALTH_DATA_CLEANUP_TABLES } from './erasure-tables.mjs';
 import { runKindeAccountErasureSweepTick } from './kinde-account-erasure-scheduler.mjs';
+import { runKindeInactivityDryRunTick } from './kinde-inactivity-dry-run.mjs';
 
 // Candidate-only D1 erasure worker. No public fetch, route or cron binding.
 // Terminal key erasure requires migration 0010: a single SQL INSERT atomically
@@ -382,8 +383,20 @@ export default {
     let mode = env.CF06_ERASURE_RUN_MODE;
     // One bounded pipeline per invocation. Account processing is application-only
     // until a separate, validated Management boundary is available.
-    if (mode !== undefined && mode !== 'health' && mode !== 'account-application' && mode !== 'alternating-application') {
+    if (mode !== undefined && mode !== 'health' && mode !== 'account-application'
+      && mode !== 'alternating-application' && mode !== 'inactivity-dry-run') {
       return { outcome: 'paused' };
+    }
+    if (mode === 'inactivity-dry-run') {
+      // This pin is an external authorization, not a generation discovered
+      // from a restored database. Invalid configuration must not read D1.
+      const pin = env.CF06_INACTIVITY_RECOVERY_GENERATION;
+      if (typeof pin !== 'string' || pin.length > 16) return { outcome: 'paused' };
+      const generation = Number(pin);
+      if (!Number.isSafeInteger(generation) || generation < 1 || String(generation) !== pin) {
+        return { outcome: 'paused' };
+      }
+      return await runKindeInactivityDryRunTick(env.DB, env.RECOVERY_DB, generation);
     }
     const { DB, RECOVERY_DB } = env;
     if (mode === 'alternating-application') mode = await claimErasureLane(DB, RECOVERY_DB);
