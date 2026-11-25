@@ -3,8 +3,8 @@ name: Cloudflare isolated D1 migrations (manual, main-only)
 on:
   workflow_dispatch:
     inputs:
-      upgrade_existing_test_db_0015:
-        description: Apply reviewed 0012 through 0015 to the isolated test D1, preserving existing synthetic identities
+      upgrade_existing_test_db_0016:
+        description: Apply reviewed 0012 through 0016 to the isolated test D1, preserving existing synthetic identities
         type: boolean
         default: false
 
@@ -26,7 +26,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_API_TOKEN }}
-      UPGRADE_EXISTING_TEST_DB_0015: ${{ inputs.upgrade_existing_test_db_0015 }}
+      UPGRADE_EXISTING_TEST_DB_0016: ${{ inputs.upgrade_existing_test_db_0016 }}
     steps:
       - name: Checkout exact main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -58,7 +58,7 @@ jobs:
           node --test tests/cloudflare/cf02-isolated-d1-schema.node.mjs
           node scripts/check-cloudflare-api-isolation.mjs
           node scripts/verify-cloudflare-isolated-d1-schema.mjs before \
-            "${UPGRADE_EXISTING_TEST_DB_0015}" "${RUNNER_TEMP}/logbook-d1-test-counts.json"
+            "${UPGRADE_EXISTING_TEST_DB_0016}" "${RUNNER_TEMP}/logbook-d1-test-counts.json"
       - name: Confirm current main lease immediately before schema write
         shell: bash
         run: |
@@ -74,4 +74,4 @@ jobs:
       - name: Independently verify applied ledger and erasure fences
         run: |
           node scripts/verify-cloudflare-isolated-d1-schema.mjs after \
-            "${UPGRADE_EXISTING_TEST_DB_0015}" "${RUNNER_TEMP}/logbook-d1-test-counts.json"
+            "${UPGRADE_EXISTING_TEST_DB_0016}" "${RUNNER_TEMP}/logbook-d1-test-counts.json"

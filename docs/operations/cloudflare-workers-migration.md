@@ -6,16 +6,16 @@
 
 - Il workflow applicativo manuale `cloudflare-d1-isolated-migrations.yml`
   verifica il `main` remoto, il gate del relativo SHA e l'impronta della
-  migrazioni additive `0012`–`0015`. Per la D1 EU già usata per collaudare
-  l'identità Kinde, `upgrade_existing_test_db_0015` richiede un prefisso
-  contiguo `0011`–`0015` e tabelle nuove ancora vuote. La 0014 aggiunge
-  il checkpoint dello scheduler; la 0015 aggiunge il contatore di assegnazione, inizialmente zero. Nessuna delle due attiva il cron.
+  migrazioni additive `0012`–`0016`. Per la D1 EU già usata per collaudare
+  l'identità Kinde, `upgrade_existing_test_db_0016` richiede un prefisso
+  contiguo `0011`–`0016` e tabelle nuove ancora vuote. La 0014 aggiunge
+  il checkpoint dello scheduler; la 0015 aggiunge il contatore di assegnazione, inizialmente zero. La 0016 aggiunge il checkpoint diagnostico inizialmente inutilizzato, con lease e generazioni. Nessuna attiva il cron.
   Richiede bookmark Time Travel, repliche disabilitate, identità di
   collaudo presenti e zero consensi, ADK e job sanitari. Il percorso
   predefinito richiede una D1 vuota.
 - Il controllo dopo Wrangler verifica schema e ledger, tabelle nuove
   vuote, controllo inattività paused/generation 1, checkpoint scheduler
-  iniziale non utilizzato, contatore dispatch a zero e inventario invariato
+  iniziale non utilizzato, contatore dispatch a zero, checkpoint dry-run iniziale e inventario invariato
   di identità, sessioni e replica sintetica.
   Se i conteggi cambiano o l'esito è incerto, il workflow si ferma e il
   ledger va riletto prima di ritentare.

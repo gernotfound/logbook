@@ -18,8 +18,12 @@ const ELIGIBLE_SOURCE = `
  * Reading this page never queues or disables an account.
  * @param {{withSession: (policy: 'first-primary') => any}} db
  * @param {{lastRecordedAtMs: number, uid: string} | null} [after]
+ * @param {number | null} [expectedGeneration]
  */
-export async function readKindeInactivityCandidates(db, after = null) {
+export async function readKindeInactivityCandidates(db, after = null, expectedGeneration = null) {
+  if (expectedGeneration !== null && (!Number.isSafeInteger(expectedGeneration) || expectedGeneration < 1)) {
+    throw new TypeError('invalid-kinde-inactivity-generation');
+  }
   if (after !== null && (!Number.isSafeInteger(after.lastRecordedAtMs)
     || after.lastRecordedAtMs <= 0 || typeof after.uid !== 'string' || !UID.test(after.uid))) {
     throw new TypeError('invalid-kinde-inactivity-cursor');
@@ -33,6 +37,7 @@ export async function readKindeInactivityCandidates(db, after = null) {
       SELECT a.uid, a.last_recorded_at_ms, control.generation, ${D1_NOW_MS} AS observed_at_ms
       FROM kinde_inactivity_control control CROSS JOIN kinde_account_activity a
       WHERE control.singleton = 1 AND control.mode = 'enabled'
+        AND (? IS NULL OR control.generation = ?)
         AND a.last_recorded_at_ms <= ${D1_NOW_MS} - ?
       ${cursorPredicate}
       ORDER BY a.last_recorded_at_ms, a.uid LIMIT ${MAX_PAGE}
@@ -40,7 +45,7 @@ export async function readKindeInactivityCandidates(db, after = null) {
     SELECT a.uid, p.auth_epoch, p.status AS principal_status, a.last_recorded_at_ms, a.generation, a.observed_at_ms
     FROM activity_page a LEFT JOIN auth_principals p ON p.uid = a.uid
     ORDER BY a.last_recorded_at_ms, a.uid
-  `).bind(DAYS_365_MS, ...cursorBindings).all();
+  `).bind(expectedGeneration, expectedGeneration, DAYS_365_MS, ...cursorBindings).all();
   if (page?.success !== true || !Array.isArray(page.results) || page.results.length > MAX_PAGE) {
     throw new Error('kinde-inactivity-candidates-unavailable');
   }

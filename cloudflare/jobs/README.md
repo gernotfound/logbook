@@ -1,6 +1,6 @@
 # CF-06 — candidato Worker di cancellazione sanitaria
 
-> CF-06 #1404/#1405: moduli candidati account deletion e inattività integrati, con ingresso account application-only candidato, non distribuito/schedulato. Migrazioni 0012–0015 applicative e 0005 recovery ancora separate dalla distribuzione del codice. Il runner account deve provare cleanup owner-scoped (incluso marker attività), floor indipendente e Kinde-last con ACK/readback esatti. Vedere [runbook](../../docs/operations/cloudflare-workers-migration.md).
+> CF-06 #1404/#1405: moduli candidati account deletion e inattività integrati, con ingresso account application-only candidato, non distribuito/schedulato. Migrazioni 0012–0016 applicative e 0005 recovery ancora separate dalla distribuzione del codice. Il runner account deve provare cleanup owner-scoped (incluso marker attività), floor indipendente e Kinde-last con ACK/readback esatti. Vedere [runbook](../../docs/operations/cloudflare-workers-migration.md).
 
 **Stato:** configurazione candidata **non distribuita e non schedulata**.
 Questo manifesto prepara il Worker `health-erasure-worker.mjs` ai test di
@@ -23,8 +23,9 @@ cron, account deletion o inattività.
   dell'inattività introdotto in 0013 (paused per default, generazione).
   La selezione dry-run limita la pagina indicizzata a 16 marker prima
   del join e del filtro sul principal; non accoda e avanza anche
-  quando nessuna riga è eleggibile; il futuro scanner deve distinguere
-  pagina senza candidati da fine scansione e ripartire a cambio generazione.
+  quando nessuna riga è eleggibile. Il candidato dry-run 0016 mantiene
+  cursor/lease in D1, resetta su cambio policy o recovery, non espone UID
+  e non esegue enqueue. Non riusare il suo checkpoint per cancellazioni.
   `recordKindeInactivityErasureIntent` collega atomicamente l'enqueue al controllo, al marker attività, all'epoch e al target; non accoda con sessione corrente e blocca il principal senza inventare una riautenticazione. Lo scanner schedulato non è montato. La futura
   abilitazione richiede revisione e autorizzazione specifica, senza
   modificare implicitamente il manifesto isolato. I test sintetici che

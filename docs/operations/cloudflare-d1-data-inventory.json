@@ -193,6 +193,14 @@
       "Monotonic lane assignment counter; no owner data or erasure proof.",
       "Restart/replay safely; never authorize erasure from the counter."
     ],
+    "kinde_inactivity_scan_checkpoint": [
+      "cursor_uid",
+      "control-with-owner-cursor",
+      "not-applicable",
+      "control",
+      "Single diagnostic traversal cursor and timestamp, policy/recovery generations and lease; replaced as pages advance, cleared at end or generation reset; retention review open.",
+      "Never an authorization or a destructive scan cursor; restart on generation change, require external recovery pin."
+    ],
     "kinde_account_erasure_scheduler": [
       "cursor_uid",
       "control-with-owner-cursor",

@@ -6,7 +6,8 @@ import { isKindeInactivityCandidateCurrent, readKindeInactivityCandidates } from
 import {
   ACTIVITY_WRITE_INTERVAL_MS, earliestKindeInactivityErasureAt,
 } from '../../cloudflare/jobs/kinde-inactivity-time.mjs';
-import { applyCurrentD1Schema } from './current-d1-schema.mjs';
+import { runKindeInactivityDryRunTick } from '../../cloudflare/jobs/kinde-inactivity-dry-run.mjs';
+import { applyCurrentD1RecoverySchema, applyCurrentD1Schema } from './current-d1-schema.mjs';
 
 const VISIT = Date.parse('2026-11-24T16:38:00.000Z');
 const UID = 'k_' + 'a'.repeat(43);
@@ -17,7 +18,7 @@ const claims = {
   uid: UID, fenceEpoch: 1, sessionHash: HASH, authenticated: true, rateGatePassed: true, csrfVerified: true,
 };
 
-function fixture(t, rejectAfterWrite = false) {
+function fixture(t, rejectAfterWrite = false, hooks = {}) {
   const sqlite = new DatabaseSync(':memory:');
   const clock = new DatabaseSync(':memory:');
   t.after(() => { sqlite.close(); clock.close(); });
@@ -38,9 +39,19 @@ function fixture(t, rejectAfterWrite = false) {
       async first() {
         const row = sqlite.prepare(sql).get(...args) ?? null;
         if (rejectAfterWrite && sql.includes('INSERT INTO kinde_account_activity')) throw new Error('synthetic ACK lost');
+        hooks.afterFirst?.(sql);
         return row;
       },
-      async all() { return { success: true, results: sqlite.prepare(sql).all(...args) }; },
+      async all() {
+        const results = sqlite.prepare(sql).all(...args);
+        hooks.afterAll?.(sql);
+        return { success: true, results };
+      },
+      async run() {
+        const { changes } = sqlite.prepare(sql).run(...args);
+        hooks.afterRun?.(sql);
+        return { success: true, meta: { changes } };
+      },
     }; } }; } };
   } };
   return { sqlite, db, advance(ms) { observedAt += ms; } };
@@ -231,4 +242,84 @@ void test('raw activity pages stay bounded when disabled principals precede an a
   });
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM auth_principals WHERE status='disabled'").get().n, 20);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_activity').get().n, 21);
+});
+
+void test('persistent dry run checkpoints empty pages, retries ambiguous writes and resets on both generations', async (t) => {
+  const hooks = {};
+  const { db, sqlite, advance } = fixture(t, false, hooks);
+  const registry = new DatabaseSync(':memory:');
+  t.after(() => registry.close());
+  applyCurrentD1RecoverySchema(registry);
+  registry.exec("UPDATE recovery_control SET mode='open', generation=2");
+  const recovery = { withSession(mode) {
+    assert.equal(mode, 'first-primary');
+    return { prepare(sql) { return { async first() { return registry.prepare(sql).get() ?? null; } }; } };
+  } };
+  const tick = (pin = 2) => runKindeInactivityDryRunTick(db, recovery, pin);
+  const checkpoint = () => ({ ...sqlite.prepare('SELECT * FROM kinde_inactivity_scan_checkpoint').get() });
+  const principal = sqlite.prepare("INSERT INTO auth_principals VALUES (?, 'active', ?, 1)");
+  const session = sqlite.prepare('INSERT INTO auth_sessions VALUES (?, ?, 1, ?, ?, ?, ?, NULL)');
+  const disabled = [];
+  for (let i = 0; i < 16; i += 1) {
+    const uid = 'k_' + i.toString(16).padStart(43, '0');
+    const sessionHash = i.toString(16).padStart(64, '0');
+    principal.run(uid, VISIT - 1000);
+    session.run(sessionHash, uid, 'd'.repeat(64), VISIT - 1000, VISIT + IDLE_TTL, VISIT + IDLE_TTL);
+    assert.deepEqual(await recordKindeForegroundActivity(db, { ...claims, uid, sessionHash }), { outcome: 'recorded' });
+    sqlite.prepare("UPDATE auth_principals SET status='disabled' WHERE uid=?").run(uid);
+    disabled.push(uid);
+  }
+  await recordKindeForegroundActivity(db, claims);
+  advance(earliestKindeInactivityErasureAt(VISIT) - VISIT);
+  const initial = checkpoint();
+  assert.equal((await tick()).outcome, 'not-claimed');
+  assert.deepEqual(checkpoint(), initial);
+  await assert.rejects(tick(null), /kinde-inactivity-scanner-unavailable/);
+  await assert.rejects(runKindeInactivityDryRunTick(db, db, 2), /kinde-inactivity-scanner-unavailable/);
+  sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=2");
+  hooks.afterFirst = sql => {
+    if (sql.includes('RETURNING policy_generation')) throw Error('synthetic claim reply lost');
+  };
+  await assert.rejects(tick(), /synthetic claim reply lost/);
+  delete hooks.afterFirst;
+  assert.equal(checkpoint().cursor_uid, null);
+  assert.equal((await tick()).outcome, 'not-claimed');
+  advance(60001);
+  const pair = await Promise.all([tick(), tick()]);
+  assert.deepEqual(pair.map(result => result.outcome).sort(), ['checkpointed', 'not-claimed']);
+  assert.deepEqual(pair.find(result => result.outcome === 'checkpointed'),
+    { outcome: 'checkpointed', candidateCount: 0, endOfSweep: false });
+  assert.equal(checkpoint().cursor_uid, disabled[15]);
+  hooks.afterRun = sql => {
+    if (sql.includes('SET cursor_uid')) throw Error('synthetic checkpoint reply lost');
+  };
+  assert.deepEqual(await tick(), { outcome: 'checkpointed', candidateCount: 1, endOfSweep: true });
+  delete hooks.afterRun;
+  assert.equal(checkpoint().cursor_uid, null);
+
+  hooks.afterAll = () => sqlite.exec("UPDATE kinde_inactivity_control SET mode='paused', generation=3");
+  assert.equal((await tick()).outcome, 'contended');
+  delete hooks.afterAll;
+  assert.equal(checkpoint().cursor_uid, null);
+  assert.equal((await tick()).outcome, 'not-claimed');
+  sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=4");
+  advance(60001);
+  assert.deepEqual(await tick(), { outcome: 'checkpointed', candidateCount: 0, endOfSweep: false });
+  assert.equal(checkpoint().policy_generation, 4);
+  assert.equal(checkpoint().cursor_uid, disabled[15]);
+
+  registry.exec("UPDATE recovery_control SET mode='sealed', generation=3");
+  registry.exec("UPDATE recovery_control SET mode='open', generation=4");
+  const before = checkpoint();
+  await assert.rejects(tick(), /independent-recovery-fence-unavailable/);
+  assert.deepEqual(checkpoint(), before);
+  assert.deepEqual(await tick(4), { outcome: 'checkpointed', candidateCount: 0, endOfSweep: false });
+  assert.equal(checkpoint().recovery_generation, 4);
+  assert.equal(checkpoint().cursor_uid, disabled[15]);
+  assert.throws(() => sqlite.exec("DELETE FROM kinde_inactivity_scan_checkpoint"), /checkpoint-immutable/);
+  assert.throws(() => sqlite.exec("UPDATE kinde_inactivity_scan_checkpoint SET lease_epoch=0"), /checkpoint-fenced/);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_activity').get().n, 17);
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM auth_principals WHERE status='disabled'").get().n, 16);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_intents').get().n, 0);
+  assert.equal(registry.prepare('SELECT COUNT(*) AS n FROM recovery_account_erasure_denials').get().n, 0);
 });
