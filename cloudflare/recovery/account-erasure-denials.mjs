@@ -26,7 +26,7 @@ export async function requireIndependentAccountAccess(recoveryDb, uid) {
 }
 
 /** @param {{ uid: string, authEpoch: number, receiptHash: string, authenticatedAtMs: number, confirmedAtMs: number }} intent */
-async function digestForIntent(intent) {
+export async function digestForIntent(intent) {
   const { uid, authEpoch, receiptHash, authenticatedAtMs, confirmedAtMs } = intent;
   if (!UID.test(uid) || !HASH.test(receiptHash) || !Number.isSafeInteger(authEpoch) || authEpoch < 1
     || !Number.isSafeInteger(authenticatedAtMs) || authenticatedAtMs < 1
