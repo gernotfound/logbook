@@ -279,10 +279,10 @@ export async function recordVerifiedHealthWithdrawal(appDb, fenceDb, uid) {
 
 // Record the terminal floor only after the primary has proven every final
 // effect. A failed independent write leaves the owner denied, not completed.
-export async function recordVerifiedTerminalErasure(appDb, fenceDb, uid, expectedGeneration = null) {
+export async function recordVerifiedTerminalErasure(appDb, fenceDb, uid, expectedGeneration = null, expectedRecoveryGeneration = null) {
   try {
     if (!validUid(uid)) throw new IndependentFenceUnavailableError();
-    const generation = requireOpenGeneration(await readRegistry(fenceDb, uid));
+    const generation = requireOpenGeneration(await readRegistry(fenceDb, uid), expectedRecoveryGeneration);
     const row = await primary(appDb).prepare(`SELECT s.uid, s.status,
       s.consent_revision, s.fence_epoch, s.erased_before_revision
       FROM sync_subjects s
@@ -327,7 +327,10 @@ export async function recordVerifiedTerminalErasure(appDb, fenceDb, uid, expecte
     const registry = await readRegistry(fenceDb, uid);
     requireOpenGeneration(registry, generation);
     const old = registry?.owner;
-    if (!matches(old, next)) {
+    // This is already the exact primary readback after the application proof.
+    // A transition or an ambiguous write still requires a fresh readback.
+    if (matches(old, next)) return next;
+    {
       const before = {
         uid, status: old?.status, consentRevision: next.consentRevision - 1,
         fenceEpoch: next.fenceEpoch - 1, erasedBeforeRevision: old?.erasedBeforeRevision,
