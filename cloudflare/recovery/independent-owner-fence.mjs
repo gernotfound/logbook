@@ -48,10 +48,11 @@ async function readRegistry(db, uid, checkRights = false) {
       AND c.consent_revision = f.consent_revision AND c.fence_epoch = f.fence_epoch
   ) AS erasure_cutoff` : '';
   const row = await primary(db).prepare(`SELECT c.mode, f.uid, f.status,
-    f.consent_revision, f.fence_epoch, f.erased_before_revision, f.change_seq${cutoffSql}
+    f.consent_revision, f.fence_epoch, f.erased_before_revision, f.change_seq, c.generation${cutoffSql}
     FROM recovery_control c LEFT JOIN recovery_owner_fences f ON f.uid = ?
     WHERE c.singleton = 1`).bind(uid).first();
-  return row ? { mode: row.mode, owner: row.uid ? shape(row) : null, erasureCutoff: row.erasure_cutoff } : null;
+  return row ? { mode: row.mode, generation: row.generation,
+    owner: row.uid ? shape(row) : null, erasureCutoff: row.erasure_cutoff } : null;
 }
 
 /**
@@ -86,16 +87,28 @@ export async function requireIndependentOwnerFence(fenceDb, subject, purpose = '
   }
 }
 
-async function applyTransition(db, before, after) {
+// A generation change invalidates an in-flight runtime proof even if the
+// registry has already reopened. Check it in the write itself and on readback.
+function requireOpenGeneration(registry, expected = null) {
+  if (registry?.mode !== 'open' || !Number.isSafeInteger(registry.generation)
+    || registry.generation < 1 || (expected !== null && registry.generation !== expected)) {
+    throw new IndependentFenceUnavailableError();
+  }
+  return registry.generation;
+}
+
+async function applyTransition(db, before, after, generation = null) {
   const result = await primary(db).prepare(`UPDATE recovery_owner_fences SET
     status = ?, consent_revision = ?, fence_epoch = ?,
     erased_before_revision = ?, change_seq = change_seq + 1
     WHERE uid = ? AND status = ? AND consent_revision = ?
       AND fence_epoch = ? AND erased_before_revision = ?
+      AND (? IS NULL OR EXISTS (SELECT 1 FROM recovery_control
+        WHERE singleton = 1 AND mode = 'open' AND generation = ?))
     RETURNING uid`).bind(after.status, after.consentRevision,
     after.fenceEpoch, after.erasedBeforeRevision,
     before.uid, before.status, before.consentRevision,
-    before.fenceEpoch, before.erasedBeforeRevision).first();
+    before.fenceEpoch, before.erasedBeforeRevision, generation, generation).first();
   if (result?.uid === before.uid) return;
   throw new IndependentFenceUnavailableError();
 }
@@ -123,6 +136,7 @@ export async function enrollIndependentOwner(fenceDb, uid, epoch = 1, { requireO
       || (requireOpen && existing.mode !== 'open')) {
       throw new IndependentFenceUnavailableError();
     }
+    const generation = requireOpen ? requireOpenGeneration(existing) : null;
     if (existing.owner && !matches(existing.owner, expected)) {
       throw new IndependentFenceUnavailableError();
     }
@@ -130,14 +144,17 @@ export async function enrollIndependentOwner(fenceDb, uid, epoch = 1, { requireO
       try {
         await primary(fenceDb).prepare(`INSERT INTO recovery_owner_fences
           (uid,status,consent_revision,fence_epoch,erased_before_revision,change_seq)
-          VALUES (?,'pending',0,1,0,1)`).bind(uid).run();
+          SELECT ?,'pending',0,1,0,1 WHERE ? IS NULL OR EXISTS (
+            SELECT 1 FROM recovery_control WHERE singleton = 1 AND mode = 'open' AND generation = ?
+          )`).bind(uid, generation, generation).run();
       } catch {
         // A concurrent enrollment may have committed, but only the primary
         // readback below can distinguish it from an unavailable write.
       }
     }
     const readback = await readRegistry(fenceDb, uid);
-    if (!matches(readback?.owner, expected) || (requireOpen && readback.mode !== 'open')) {
+    if (requireOpen) requireOpenGeneration(readback, generation);
+    if (!matches(readback?.owner, expected)) {
       throw new IndependentFenceUnavailableError();
     }
     return expected;
@@ -151,6 +168,7 @@ export async function enrollIndependentOwner(fenceDb, uid, epoch = 1, { requireO
 export async function recordVerifiedInitialConsent(appDb, fenceDb, uid, { requireOpen = false } = {}) {
   try {
     if (!validUid(uid)) throw new IndependentFenceUnavailableError();
+    const generation = requireOpen ? requireOpenGeneration(await readRegistry(fenceDb, uid)) : null;
     const verified = await primary(appDb).prepare(`SELECT s.uid, s.status,
       s.consent_revision, s.fence_epoch, s.erased_before_revision
       FROM sync_subjects s JOIN health_consent_acceptances c ON c.uid = s.uid
@@ -164,14 +182,23 @@ export async function recordVerifiedInitialConsent(appDb, fenceDb, uid, { requir
     const next = shape(verified);
     const previous = { ...next, status: 'pending', consentRevision: 0 };
     const registry = await readRegistry(fenceDb, uid);
-    if (requireOpen && registry?.mode !== 'open') throw new IndependentFenceUnavailableError();
+    if (requireOpen) requireOpenGeneration(registry, generation);
     const existing = registry?.owner;
     if (!matches(existing, next)) {
       if (!matches(existing, previous)) throw new IndependentFenceUnavailableError();
-      try { await applyTransition(fenceDb, previous, next); }
+      try { await applyTransition(fenceDb, previous, next, generation); }
       catch {
-        if (!matches((await readRegistry(fenceDb, uid))?.owner, next)) throw new IndependentFenceUnavailableError();
+        // A concurrent write or lost reply can only be reconciled from the
+        // primary, under the same open generation for runtime callers.
+        const readback = await readRegistry(fenceDb, uid);
+        if (requireOpen) requireOpenGeneration(readback, generation);
+        if (!matches(readback?.owner, next)) throw new IndependentFenceUnavailableError();
       }
+    }
+    if (requireOpen) {
+      const readback = await readRegistry(fenceDb, uid);
+      requireOpenGeneration(readback, generation);
+      if (!matches(readback?.owner, next)) throw new IndependentFenceUnavailableError();
     }
     return next;
   } catch {
@@ -244,6 +271,7 @@ export async function recordVerifiedHealthWithdrawal(appDb, fenceDb, uid) {
 export async function recordVerifiedTerminalErasure(appDb, fenceDb, uid, expectedGeneration = null) {
   try {
     if (!validUid(uid)) throw new IndependentFenceUnavailableError();
+    const generation = requireOpenGeneration(await readRegistry(fenceDb, uid));
     const row = await primary(appDb).prepare(`SELECT s.uid, s.status,
       s.consent_revision, s.fence_epoch, s.erased_before_revision
       FROM sync_subjects s
@@ -285,7 +313,9 @@ export async function recordVerifiedTerminalErasure(appDb, fenceDb, uid, expecte
         || expectedGeneration.fence_epoch !== next.fenceEpoch - 1))) {
       throw new IndependentFenceUnavailableError();
     }
-    const old = (await readRegistry(fenceDb, uid))?.owner;
+    const registry = await readRegistry(fenceDb, uid);
+    requireOpenGeneration(registry, generation);
+    const old = registry?.owner;
     if (!matches(old, next)) {
       const before = {
         uid, status: old?.status, consentRevision: next.consentRevision - 1,
@@ -294,11 +324,12 @@ export async function recordVerifiedTerminalErasure(appDb, fenceDb, uid, expecte
       if (!matches(old, before) || !['blocked', 'withdrawn'].includes(before.status)) {
         throw new IndependentFenceUnavailableError();
       }
-      try { await applyTransition(fenceDb, before, next); }
-      catch {
-        if (!matches((await readRegistry(fenceDb, uid))?.owner, next)) throw new IndependentFenceUnavailableError();
-      }
+      try { await applyTransition(fenceDb, before, next, generation); }
+      catch { /* Only the exact primary readback below proves the result. */ }
     }
+    const readback = await readRegistry(fenceDb, uid);
+    requireOpenGeneration(readback, generation);
+    if (!matches(readback?.owner, next)) throw new IndependentFenceUnavailableError();
     return next;
   } catch {
     throw new IndependentFenceUnavailableError();

@@ -194,7 +194,12 @@ condizioni autorizzative o produrre una ricevuta. La riconciliazione di un
 cutoff già prenotato può fallire senza bloccare il passo di un altro owner,
 che richiede la propria fence indipendente; il tick resta fallito, senza
 attribuire una ricevuta al cutoff. Gate globale o prenotazione non provati
-interrompono il tick prima di qualsiasi passo.
+interrompono il tick prima di qualsiasi passo. L'enrollment e l'attestazione
+iniziale runtime (`requireOpen`) e la pubblicazione del floor terminale
+vincolano la scrittura e la rilettura alla stessa generazione aperta del
+registro indipendente. Seal/reopen durante la prova invalida l'esito;
+un commit già avvenuto resta monotono. Non è una transazione cross-D1:
+prima di restore servono arresto e quiescenza verificati dei writer.
 
 ## Matrice sintetica delle autorizzazioni
 

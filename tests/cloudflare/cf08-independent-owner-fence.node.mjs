@@ -141,6 +141,90 @@ void test('independent monotone fence blocks old consent after a physical applic
   }
 });
 
+void test('runtime enrollment and initial consent reject a seal/reopen between registry proof and write', async () => {
+  const app = new DatabaseSync(':memory:');
+  const ledger = new DatabaseSync(':memory:');
+  try {
+    applyCurrentD1Schema(app);
+    applyCurrentD1RecoverySchema(ledger);
+    const db = new D1Sqlite(ledger);
+    const appDb = new D1Sqlite(app);
+    ledger.exec("UPDATE recovery_control SET mode='open', generation=2");
+    addOwner(app, 'owner-a');
+    const reopen = () => {
+      ledger.exec("UPDATE recovery_control SET mode='sealed', generation=generation+1");
+      ledger.exec("UPDATE recovery_control SET mode='open', generation=generation+1");
+    };
+    const interrupt = (needle) => ({ withSession(mode) {
+      const real = db.withSession(mode);
+      return { prepare(sql) {
+        const statement = real.prepare(sql);
+        if (sql.includes(needle)) reopen();
+        return statement;
+      } };
+    } });
+    await rejected(enrollIndependentOwner(interrupt('INSERT INTO recovery_owner_fences'), 'owner-a', 1,
+      { requireOpen: true }));
+    assert.equal(fence(ledger, 'owner-a'), undefined);
+    await enrollIndependentOwner(db, 'owner-a', 1, { requireOpen: true });
+    await rejected(recordVerifiedInitialConsent(appDb, interrupt('UPDATE recovery_owner_fences'), 'owner-a',
+      { requireOpen: true }));
+    assert.equal(fence(ledger, 'owner-a').status, 'pending');
+    assert.equal(fence(ledger, 'owner-a').change_seq, 1);
+    assert.equal((await recordVerifiedInitialConsent(appDb, db, 'owner-a', { requireOpen: true })).status, 'active');
+  } finally { app.close(); ledger.close(); }
+});
+
+void test('terminal proof cannot cross a recovery generation or be acknowledged after the registry seals', async () => {
+  for (const interruption of ['before-proof', 'before-write', 'after-write']) {
+    const app = new DatabaseSync(':memory:');
+    const ledger = new DatabaseSync(':memory:');
+    try {
+      applyCurrentD1Schema(app);
+      applyCurrentD1RecoverySchema(ledger);
+      const appDb = new D1Sqlite(app);
+      const db = new D1Sqlite(ledger);
+      ledger.exec("UPDATE recovery_control SET mode='open', generation=2");
+      addOwner(app, 'owner-a');
+      await enrollIndependentOwner(db, 'owner-a');
+      await recordVerifiedInitialConsent(appDb, db, 'owner-a');
+      await armIndependentHealthWithdrawal(db, subject(app, 'owner-a'));
+      app.prepare('INSERT INTO health_erasure_jobs (uid,consent_revision,fence_epoch,requested_at_ms) VALUES (?,1,1,?)')
+        .run('owner-a', Date.now());
+      assert.deepEqual(await runOneHealthErasureStep(appDb), { outcome: 'awaiting-keys' });
+      app.prepare('UPDATE health_erasure_jobs SET lease_until_ms=?').run(Date.now()-1000);
+      assert.deepEqual(await runOneHealthErasureStep(appDb), { outcome: 'complete', keyDisposition: 'never-issued' });
+      const seal = () => ledger.exec("UPDATE recovery_control SET mode='sealed', generation=generation+1");
+      const open = () => ledger.exec("UPDATE recovery_control SET mode='open', generation=generation+1");
+      const proofDb = { withSession(mode) {
+        if (interruption === 'before-proof') { seal(); open(); }
+        return appDb.withSession(mode);
+      } };
+      const interrupted = { withSession(mode) {
+        const real = db.withSession(mode);
+        return { prepare(sql) {
+          const statement = real.prepare(sql);
+          if (!sql.includes('UPDATE recovery_owner_fences')) return statement;
+          return { bind(...args) { return { async first() {
+            if (interruption === 'before-write') { seal(); open(); }
+            const result = await statement.bind(...args).first();
+            if (interruption === 'after-write') seal();
+            return result;
+          } }; } };
+        } };
+      } };
+      await rejected(recordVerifiedTerminalErasure(proofDb, interrupted, 'owner-a'));
+      assert.equal(fence(ledger, 'owner-a').erased_before_revision, interruption === 'after-write' ? 2 : 0);
+      if (interruption === 'after-write') {
+        await rejected(recordVerifiedTerminalErasure(appDb, db, 'owner-a'));
+        open();
+      }
+      assert.equal((await recordVerifiedTerminalErasure(appDb, db, 'owner-a')).erasedBeforeRevision, 2);
+      assert.equal(fence(ledger, 'owner-a').change_seq, 4);
+    } finally { app.close(); ledger.close(); }
+  }
+});
+
 void test('missing, unavailable or altered external proof and duplicate enrollment fail closed', async () => {
   const ledger = new DatabaseSync(':memory:');
   try {
