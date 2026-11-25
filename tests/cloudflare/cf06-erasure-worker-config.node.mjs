@@ -20,12 +20,21 @@ void test('CF-06 scheduler stays inert without an exact, deliberate processing o
   for (const flag of [undefined, null, '', false, true, '1', 'true', 'enabled ']) {
     const env = {
       CF06_ERASURE_RUN_ENABLED: flag,
+      CF06_ERASURE_RUN_MODE: 'account-application',
       get DB() { throw new Error('unexpected-primary-read'); },
       get RECOVERY_DB() { throw new Error('unexpected-recovery-read'); },
     };
     assert.deepEqual(await erasureWorker.scheduled({}, env), { outcome: 'paused' });
   }
   assert.deepEqual(await erasureWorker.scheduled({}, undefined), { outcome: 'paused' });
+  for (const mode of [null, '', true, 'account', 'account-application ', 'provider', 'inactivity']) {
+    assert.deepEqual(await erasureWorker.scheduled({}, {
+      CF06_ERASURE_RUN_ENABLED: 'enabled',
+      CF06_ERASURE_RUN_MODE: mode,
+      get DB() { throw new Error('unexpected-primary-read'); },
+      get RECOVERY_DB() { throw new Error('unexpected-recovery-read'); },
+    }), { outcome: 'paused' });
+  }
   let requestedPrimary = false;
   await assert.rejects(erasureWorker.scheduled({}, {
     CF06_ERASURE_RUN_ENABLED: 'enabled',
@@ -44,6 +53,7 @@ void test('CF-06 candidate rejects accidental cron activation, new routes, secre
     { assets: { directory: '../dist' } },
     { services: [{ binding: 'KINDE_HTTP', service: 'thelogbook-cf03-kinde-http-isolated' }] },
     { vars: { CLOUD_ACCOUNT_KEK_V1: 'forbidden' } },
+    { vars: { CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_ERASURE_RUN_MODE: 'account-application' } },
     { unsafe: { bindings: [] } },
     { d1_databases: [candidate.d1_databases[0]] },
     { d1_databases: [

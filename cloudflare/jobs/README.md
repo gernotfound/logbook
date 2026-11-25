@@ -1,6 +1,6 @@
 # CF-06 — candidato Worker di cancellazione sanitaria
 
-> CF-06 #1404/#1405: moduli candidati account deletion e inattività integrati, ma non montati/schedulati. Migrazioni 0012–0014 applicative e 0005 recovery ancora separate dalla distribuzione del codice. Il runner account deve provare cleanup owner-scoped (incluso marker attività), floor indipendente e Kinde-last con ACK/readback esatti. Vedere [runbook](../../docs/operations/cloudflare-workers-migration.md).
+> CF-06 #1404/#1405: moduli candidati account deletion e inattività integrati, con ingresso account application-only candidato, non distribuito/schedulato. Migrazioni 0012–0014 applicative e 0005 recovery ancora separate dalla distribuzione del codice. Il runner account deve provare cleanup owner-scoped (incluso marker attività), floor indipendente e Kinde-last con ACK/readback esatti. Vedere [runbook](../../docs/operations/cloudflare-workers-migration.md).
 
 **Stato:** configurazione candidata **non distribuita e non schedulata**.
 Questo manifesto prepara il Worker `health-erasure-worker.mjs` ai test di
@@ -28,7 +28,14 @@ cron, account deletion o inattività.
   abilitazione richiede revisione e autorizzazione specifica, senza
   modificare implicitamente il manifesto isolato. I test sintetici che
   chiamano `runOneHealthErasureStep` non eludono questo gate di runtime.
-- Un tick del codice applicativo prova al massimo una riconciliazione del
+- Con il processore esplicitamente abilitato, `CF06_ERASURE_RUN_MODE` seleziona
+  un solo percorso per invocazione: `health` (anche se omesso) oppure
+  `account-application`. Altri valori mantengono la pausa prima di leggere D1.
+  La modalità account invoca il checkpoint persistente 0014 per un solo
+  intento durevole, senza scanner, dipendenze Management o prova terminale
+  account. Nessuna modalità è configurata nel manifesto. L'alternanza equa
+  fra pipeline e il budget del futuro cron restano da collaudare.
+- Un tick sanitario prova al massimo una riconciliazione del
   cutoff e un passo con lease D1, prima della fase finale atomica. Il Worker
   deve fallire senza dichiarare una cancellazione riuscita se il registro
   indipendente non è disponibile.
@@ -45,7 +52,8 @@ una riga terminale già presente viene saltata senza attribuire una nuova
 ricevuta. `runKindeAccountErasureSweepTick` conserva il checkpoint D1
 (0014) con lease ed epoch/token esatti, senza alterare le fence owner.
 Un lease scaduto non avanza il cursore; una nuova scansione ritenta il
-lavoro. Scheduler non montato, quote, retry/backoff e configurazione
+lavoro. Ingresso application-only collegato nel candidato, non schedulato;
+quote, retry/backoff e configurazione
 Management restano da integrare e collaudare.
 
 **Prima di un futuro deployment e di un cron:** provare il Worker con la
