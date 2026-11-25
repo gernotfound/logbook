@@ -2,7 +2,7 @@ import {
   readIndependentAccountErasureGeneration, reconcileAccountErasureHealthFence, requireIndependentAccountErasureDenial,
 } from '../recovery/account-erasure-denials.mjs';
 import {
-  recordVerifiedTerminalErasure, requireIndependentOwnerFence,
+  recordVerifiedTerminalErasure,
 } from '../recovery/independent-owner-fence.mjs';
 
 import { ACCOUNT_AUTH_CLEANUP_TABLES, HEALTH_CHILD_TABLES } from './erasure-tables.mjs';
@@ -43,23 +43,30 @@ export async function runKindeAccountErasureAppStep(appDb, recoveryDb, intent, e
   const generation = await readIndependentAccountErasureGeneration(recoveryDb, intent, expected);
   const scope = intentScopeArgs(intent);
   const primary = appDb.withSession('first-primary');
-  const accepted = await primary.prepare(`SELECT r.uid ${JOB_SOURCE} ${SCOPE}`).bind(...scope).first();
+  // Select only the first nonempty allowlisted table. Empty DELETE attempts
+  // and their separate recovery reads can exhaust the Free D1 query budget
+  // before Management has even verified presence.
+  const accepted = await primary.prepare(`
+    SELECT r.uid, CASE
+      ${ACCOUNT_AUTH_CLEANUP_TABLES.map(({ name }) => `WHEN EXISTS (SELECT 1 FROM ${name} WHERE uid = r.uid) THEN '${name}'`).join('\n')}
+      ELSE NULL END AS cleanup_table
+    ${JOB_SOURCE} ${SCOPE}
+  `).bind(...scope).first();
   if (accepted?.uid !== intent.uid) return { outcome: 'contended' };
-
-  for (const table of ACCOUNT_AUTH_CLEANUP_TABLES) {
-    await requireIndependentAccountErasureDenial(recoveryDb, intent, generation);
-    const result = await primary.prepare(deleteSessionRowsSql(table)).bind(intent.uid, intent.uid, ...scope).run();
-    const removed = result?.meta?.changes;
-    if (result?.success !== true || !Number.isSafeInteger(removed) || removed < 0 || removed > CHUNK_SIZE) {
-      throw new Error('kinde-erasure-application-unavailable');
-    }
-    if (removed > 0) {
-      await requireIndependentAccountErasureDenial(recoveryDb, intent, generation);
-      return { outcome: 'progress', removed };
-    }
+  if (accepted.cleanup_table === null) {
+    return verifyKindeAccountErasureAppComplete(appDb, recoveryDb, intent, generation);
   }
-
-  return verifyKindeAccountErasureAppComplete(appDb, recoveryDb, intent, generation);
+  const table = ACCOUNT_AUTH_CLEANUP_TABLES.find(({ name }) => name === accepted.cleanup_table);
+  if (!table) throw new Error('kinde-erasure-application-unavailable');
+  await requireIndependentAccountErasureDenial(recoveryDb, intent, generation);
+  const result = await primary.prepare(deleteSessionRowsSql(table)).bind(intent.uid, intent.uid, ...scope).run();
+  const removed = result?.meta?.changes;
+  if (result?.success !== true || !Number.isSafeInteger(removed) || removed < 0 || removed > CHUNK_SIZE) {
+    throw new Error('kinde-erasure-application-unavailable');
+  }
+  if (removed === 0) return { outcome: 'contended' };
+  await requireIndependentAccountErasureDenial(recoveryDb, intent, generation);
+  return { outcome: 'progress', removed };
 }
 
 /**
@@ -96,10 +103,9 @@ export async function verifyKindeAccountErasureAppComplete(appDb, recoveryDb, in
       }
       return { outcome: 'health-pending' };
     }
-    const floor = await recordVerifiedTerminalErasure(appDb, recoveryDb, intent.uid, {
+    await recordVerifiedTerminalErasure(appDb, recoveryDb, intent.uid, {
       uid: intent.uid, consent_revision: observed.consent_revision - 1, fence_epoch: observed.fence_epoch - 1,
-    });
-    await requireIndependentOwnerFence(recoveryDb, floor, 'terminal');
+    }, generation);
   }
   await requireIndependentAccountErasureDenial(recoveryDb, intent, generation);
   return { outcome: 'application-complete' };

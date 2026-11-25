@@ -780,6 +780,58 @@ void test('the provider runs last and the final receipt survives a lost D1 reply
   await assert.rejects(requireIndependentAccountAccess(recovery.db, identity.uid), /independent-recovery-fence-unavailable/);
 });
 
+void test('full account sweep with a terminal health proof leaves headroom within the Free D1 query budget', async (t) => {
+  const { db, sqlite, attempt, identity, write, codec } = await deletionAttemptFixture(t);
+  const recovery = openRecoveryFixture(t);
+  await write(db, identity);
+  const intent = await recordKindeAccountErasureIntent(db, deletionRequestProof(attempt));
+  sqlite.prepare("INSERT INTO sync_subjects(uid,status,consent_revision,fence_epoch) VALUES (?,'active',1,1)").run(identity.uid);
+  sqlite.prepare('INSERT INTO sync_state(uid,revision) VALUES (?,0)').run(identity.uid);
+  sqlite.prepare("INSERT INTO health_consent_acceptances VALUES (?,1,'privacy-v1','terms-v1',?,1)").run(identity.uid, Date.now());
+  recovery.sqlite.prepare("INSERT INTO recovery_owner_fences VALUES (?, 'pending', 0, 1, 0, 1)").run(identity.uid);
+  recovery.sqlite.prepare("UPDATE recovery_owner_fences SET status='active', consent_revision=1, change_seq=2 WHERE uid=?").run(identity.uid);
+  assert.equal(await acceptKindeAccountErasure(db, recovery.db, intent), true);
+  assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'progress', removed: 2 });
+  const env = { DB: db, RECOVERY_DB: recovery.db, CF06_ERASURE_RUN_ENABLED: 'enabled' };
+  assert.deepEqual(await healthErasureWorker.scheduled(null, env), { outcome: 'awaiting-keys' });
+  sqlite.exec('UPDATE health_erasure_jobs SET lease_until_ms=1');
+  assert.deepEqual(await healthErasureWorker.scheduled(null, env), { outcome: 'complete', keyDisposition: 'never-issued' });
+
+  let queries = 0;
+  const count = () => { queries += 1; };
+  const countedDb = d1For(sqlite, { beforeWrite: count, afterFirst: count });
+  const countedRecovery = d1For(recovery.sqlite, { beforeWrite: count, afterFirst: count });
+  const calls = [];
+  let present = true;
+  const dependencies = {
+    issuer, codec, accessToken: 'synthetic.worker.token',
+    async fetchImpl(request) {
+      calls.push(request.method);
+      if (request.method === 'DELETE') {
+        present = false;
+        return Response.json({ code: 'OK', message: 'Synthetic deletion acknowledgement' });
+      }
+      return Response.json({ code: 'OK', message: 'Synthetic lookup', users: present ? [{ id: subject }] : [] });
+    },
+  };
+  assert.deepEqual(await runKindeAccountErasureSweepTick(countedDb, countedRecovery, dependencies), {
+    outcome: 'checkpointed', result: { outcome: 'provider-acknowledged' },
+  });
+  assert.deepEqual(calls, ['GET', 'DELETE']);
+  assert.ok(queries <= 45, `D1 statements in full provider sweep: ${queries}`);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_completions').get().n, 0);
+  assert.deepEqual(await runKindeAccountErasureSweepTick(db, recovery.db, dependencies), {
+    outcome: 'checkpointed', result: { outcome: 'idle' },
+  });
+  queries = 0;
+  const complete = await runKindeAccountErasureSweepTick(countedDb, countedRecovery, dependencies);
+  assert.equal(complete.outcome, 'checkpointed');
+  assert.equal(complete.result.outcome, 'complete');
+  assert.ok(queries <= 45, `D1 statements in final provider sweep: ${queries}`);
+  assert.deepEqual(calls, ['GET', 'DELETE', 'GET']);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_completions').get().n, 1);
+});
+
 void test('a recovery generation change during Management lookup withholds DELETE and permits a fresh retry', async (t) => {
   const { db, sqlite, attempt, identity, write, codec } = await deletionAttemptFixture(t);
   const recovery = openRecoveryFixture(t);
