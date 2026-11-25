@@ -201,6 +201,14 @@
       "Single diagnostic traversal cursor and timestamp, policy/recovery generations and lease; replaced as pages advance, cleared at end or generation reset; retention review open.",
       "Never an authorization or a destructive scan cursor; restart on generation change, require external recovery pin."
     ],
+    "kinde_inactivity_enqueue_checkpoint": [
+      "cursor_uid",
+      "control-with-owner-cursor",
+      "not-applicable",
+      "control",
+      "Single enqueue traversal cursor and lease, separate from diagnostic state; cleared at end or generation reset; retention review open.",
+      "Restart on generation change, require external recovery pin and exact lease; not an erasure receipt."
+    ],
     "kinde_account_erasure_scheduler": [
       "cursor_uid",
       "control-with-owner-cursor",

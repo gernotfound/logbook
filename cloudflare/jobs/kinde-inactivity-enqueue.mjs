@@ -15,10 +15,13 @@ const UID = /^k_[A-Za-z0-9_-]{43}$/;
  * @param {Parameters<typeof readOpenRecoveryGeneration>[0]} recoveryDb
  * @param {Awaited<ReturnType<typeof import('./kinde-inactivity-candidates.mjs').readKindeInactivityCandidates>>['candidates'][number]} candidate
  * @param {number} expectedRecoveryGeneration
+ * @param {{epoch: number, token: string} | null} [traversalLease] candidate scheduler witness
  */
-export async function recordKindeInactivityErasureIntent(db, recoveryDb, candidate, expectedRecoveryGeneration) {
+export async function recordKindeInactivityErasureIntent(db, recoveryDb, candidate, expectedRecoveryGeneration, traversalLease = null) {
   if (!db || !recoveryDb || db === recoveryDb
     || !Number.isSafeInteger(expectedRecoveryGeneration) || expectedRecoveryGeneration < 1
+    || (traversalLease !== null && (!Number.isSafeInteger(traversalLease.epoch) || traversalLease.epoch < 1
+      || typeof traversalLease.token !== 'string' || !/^[0-9a-f]{64}$/.test(traversalLease.token)))
     || !candidate || typeof candidate.uid !== 'string' || !UID.test(candidate.uid)
     || !Number.isSafeInteger(candidate.authEpoch) || candidate.authEpoch < 1 || candidate.authEpoch >= Number.MAX_SAFE_INTEGER
     || !Number.isSafeInteger(candidate.generation) || candidate.generation < 1
@@ -41,11 +44,17 @@ export async function recordKindeInactivityErasureIntent(db, recoveryDb, candida
       WHERE p.uid = ? AND p.auth_epoch = ? AND p.status = 'active'
         AND c.singleton = 1 AND c.mode = 'enabled' AND c.generation = ?
         AND a.last_recorded_at_ms = ? AND ? <= ${D1_NOW_MS}
+        AND (? IS NULL OR EXISTS (SELECT 1 FROM kinde_inactivity_enqueue_checkpoint q
+          WHERE q.singleton = 1 AND q.lease_epoch = ? AND q.lease_token = ?
+            AND q.policy_generation = c.generation AND q.recovery_generation = ?
+            AND q.lease_until_ms > ${D1_NOW_MS}))
         AND NOT EXISTS (SELECT 1 FROM kinde_account_erasure_intents i WHERE i.uid = p.uid)
         AND NOT EXISTS (SELECT 1 FROM auth_sessions t WHERE t.uid = p.uid AND t.auth_epoch = p.auth_epoch
           AND t.revoked_at_ms IS NULL AND t.issued_at_ms <= ${D1_NOW_MS}
           AND t.idle_expires_at_ms > ${D1_NOW_MS} AND t.absolute_expires_at_ms > ${D1_NOW_MS})
-    `).bind(receiptHash, eligibleAtMs, uid, authEpoch, generation, lastRecordedAtMs, eligibleAtMs).run();
+    `).bind(receiptHash, eligibleAtMs, uid, authEpoch, generation, lastRecordedAtMs, eligibleAtMs,
+      traversalLease?.epoch ?? null, traversalLease?.epoch ?? null, traversalLease?.token ?? null,
+      expectedRecoveryGeneration).run();
     confirmedNoChange = result?.success === true && result.meta?.changes === 0;
   } catch { /* Only an exact primary read can recover an ambiguous insert. */ }
   try {

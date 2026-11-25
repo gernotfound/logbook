@@ -8,6 +8,7 @@ import { deriveKindeOwnerId } from '../../cloudflare/auth/kinde-owner-id.mjs';
 import { recordKindeForegroundActivity } from '../../cloudflare/auth/kinde-foreground-activity.mjs';
 import { recordKindeInactivityErasureIntent } from '../../cloudflare/jobs/kinde-inactivity-enqueue.mjs';
 import { scanKindeInactivityEnqueueStep } from '../../cloudflare/jobs/kinde-inactivity-enqueue-scan.mjs';
+import { runKindeInactivityEnqueueTick } from '../../cloudflare/jobs/kinde-inactivity-enqueue-scheduler.mjs';
 import { readKindeInactivityCandidates } from '../../cloudflare/jobs/kinde-inactivity-candidates.mjs';
 import { earliestKindeInactivityErasureAt } from '../../cloudflare/jobs/kinde-inactivity-time.mjs';
 import healthErasureWorker from '../../cloudflare/jobs/health-erasure-worker.mjs';
@@ -1262,4 +1263,59 @@ void test('enqueue scanning does not report progress on a policy change or an am
     { decision: 'none', nextCursor: null });
   assert.deepEqual(await runOneKindeAccountErasureStep(db, recovery.db),
     { nextCursor: identity.uid, result: { outcome: 'accepted' } });
+});
+
+void test('the enqueue scheduler fences expired leases and recovers an exact lost checkpoint acknowledgement', async (t) => {
+  const { db, sqlite, identity, write, attempt } = await deletionAttemptFixture(t);
+  const recovery = openRecoveryFixture(t);
+  const clock = new DatabaseSync(':memory:');
+  t.after(() => clock.close());
+  const fmt = clock.prepare('SELECT strftime(?, ?) AS value');
+  let now = Date.now();
+  sqlite.function('strftime', (format, date) => fmt.get(format, date === 'now' ? new Date(now).toISOString() : date).value);
+  await write(db, identity);
+  assert.deepEqual(await recordKindeForegroundActivity(db, {
+    uid: identity.uid, sessionHash: attempt.sessionHash, fenceEpoch: 1,
+    authenticated: true, csrfVerified: true, rateGatePassed: true,
+  }), { outcome: 'recorded' });
+  now = earliestKindeInactivityErasureAt(now);
+  const checkpoint = () => ({ ...sqlite.prepare('SELECT * FROM kinde_inactivity_enqueue_checkpoint').get() });
+  const diagnostic = () => ({ ...sqlite.prepare('SELECT * FROM kinde_inactivity_scan_checkpoint').get() });
+  const initial = checkpoint(), diagnosticInitial = diagnostic();
+  const tick = (database = db, pin = 2) => runKindeInactivityEnqueueTick(database, recovery.db, pin);
+  assert.deepEqual(await tick(), { outcome: 'not-claimed' });
+  assert.deepEqual(checkpoint(), initial);
+  sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=2");
+  const lostClaim = d1For(sqlite, { afterFirst(sql) {
+    if (sql.includes('RETURNING policy_generation')) throw Error('synthetic lost claim');
+  } });
+  await assert.rejects(tick(lostClaim), /synthetic lost claim/);
+  assert.deepEqual(await tick(), { outcome: 'not-claimed' });
+  now += 60_001;
+  const expired = d1For(sqlite, { beforeWrite(sql) {
+    if (sql.includes('INSERT INTO kinde_account_erasure_intents')) now += 60_001;
+  } });
+  assert.deepEqual(await tick(expired), { outcome: 'contended' });
+  assert.equal(sqlite.prepare('SELECT status FROM auth_principals').get().status, 'active');
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_intents').get().n, 0);
+  assert.equal(checkpoint().cursor_uid, null);
+  const lostCheckpoint = d1For(sqlite, { afterWrite(sql) {
+    if (sql.includes('UPDATE kinde_inactivity_enqueue_checkpoint') && sql.includes('SET cursor_uid')) {
+      throw Error('synthetic lost checkpoint');
+    }
+  } });
+  assert.deepEqual(await tick(lostCheckpoint), { outcome: 'checkpointed', decision: 'recorded', endOfSweep: true });
+  assert.equal(checkpoint().lease_until_ms, 0);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_intents').get().n, 1);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_requests').get().n, 0);
+  assert.equal(recovery.sqlite.prepare('SELECT COUNT(*) AS n FROM recovery_account_erasure_denials').get().n, 0);
+  assert.deepEqual(diagnostic(), diagnosticInitial);
+  recovery.sqlite.exec("UPDATE recovery_control SET mode='sealed', generation=3");
+  recovery.sqlite.exec("UPDATE recovery_control SET mode='open', generation=4");
+  const before = checkpoint();
+  await assert.rejects(tick(), /independent-recovery-fence-unavailable/);
+  assert.deepEqual(checkpoint(), before);
+  assert.deepEqual(await tick(db, 4), { outcome: 'checkpointed', decision: 'none', endOfSweep: true });
+  assert.equal(checkpoint().recovery_generation, 4);
+  assert.throws(() => sqlite.exec('DELETE FROM kinde_inactivity_enqueue_checkpoint'), /enqueue-checkpoint-immutable/);
 });

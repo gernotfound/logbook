@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { verifyExistingTestUpgradeSql, verifyInactivityMigrationSql, verifySchedulerMigrationSql, verifyDispatchMigrationSql, verifyScanMigrationSql, verifyLocalMigrationTarget, verifyMigrationLedger,
+import { verifyExistingTestUpgradeSql, verifyInactivityMigrationSql, verifySchedulerMigrationSql, verifyDispatchMigrationSql, verifyScanMigrationSql, verifyEnqueueMigrationSql, verifyLocalMigrationTarget, verifyMigrationLedger,
   verifyRemoteIsolatedD1, MIGRATIONS } from '../../scripts/verify-cloudflare-isolated-d1-schema.mjs';
 import { D1_NOW_MS } from '../../cloudflare/sql/d1-time.mjs';
 
@@ -41,6 +41,10 @@ const schema = [
   { name: 'kinde_inactivity_control_generation', type: 'trigger' },
   { name: 'kinde_inactivity_control_no_delete', type: 'trigger' },
   { name: 'kinde_inactivity_control_no_replace', type: 'trigger' },
+  { name: 'kinde_inactivity_enqueue_checkpoint', type: 'table' },
+  { name: 'kinde_inactivity_enqueue_checkpoint_no_delete', type: 'trigger' },
+  { name: 'kinde_inactivity_enqueue_checkpoint_no_replace', type: 'trigger' },
+  { name: 'kinde_inactivity_enqueue_checkpoint_transition', type: 'trigger' },
   { name: 'kinde_inactivity_intent_fence', type: 'trigger' },
   { name: 'kinde_inactivity_intent_freeze', type: 'trigger' },
   { name: 'kinde_inactivity_scan_checkpoint', type: 'table' },
@@ -60,6 +64,8 @@ function syntheticProvider({
   scheduler = [{ singleton: 1, cursor_uid: null, lease_epoch: 0, lease_token: null, lease_until_ms: 0 }],
   dispatch = [{ singleton: 1, turn: 0 }],
   scan = [{ singleton: 1, policy_generation: 0, recovery_generation: 0,
+    cursor_last_recorded_at_ms: null, cursor_uid: null, lease_epoch: 0, lease_token: null, lease_until_ms: 0 }],
+  enqueue = [{ singleton: 1, policy_generation: 0, recovery_generation: 0,
     cursor_last_recorded_at_ms: null, cursor_uid: null, lease_epoch: 0, lease_token: null, lease_until_ms: 0 }],
   objects = schema, jurisdiction = 'eu', replication = 'disabled',
   failedStatus = null,
@@ -81,6 +87,7 @@ function syntheticProvider({
         : sql.includes('FROM kinde_account_erasure_scheduler') ? scheduler
         : sql.includes('FROM erasure_dispatch_control') ? dispatch
         : sql.includes('FROM kinde_inactivity_scan_checkpoint') ? scan
+        : sql.includes('FROM kinde_inactivity_enqueue_checkpoint') ? enqueue
         : [{ principals, sessions, keys, consents, erasure_jobs: erasureJobs,
           subjects, states, documents, replicas, receipts, replica_mutations: replicaMutations,
           erasure_targets: 0, deletion_attempts: 0, account_intents: 0, account_requests: accountRequests,
@@ -134,7 +141,7 @@ void test('only approved isolated D1 with exactly reviewed SQL files is eligible
   assert.throws(() => verifyLocalMigrationTarget(config, [...names, '0016_unknown.sql']));
 });
 
-void test('the known contiguous migration prefixes may resume; completion requires 0016', () => {
+void test('the known contiguous migration prefixes may resume; completion requires 0017', () => {
   assert.equal(verifyMigrationLedger(ledger(8), 'before'), 8);
   assert.equal(verifyMigrationLedger(ledger(9), 'before'), 9);
   assert.equal(verifyMigrationLedger(ledger(10), 'before'), 10);
@@ -143,28 +150,29 @@ void test('the known contiguous migration prefixes may resume; completion requir
   assert.equal(verifyMigrationLedger(ledger(13), 'before'), 13);
   assert.equal(verifyMigrationLedger(ledger(14), 'before'), 14);
   assert.equal(verifyMigrationLedger(ledger(15), 'before'), 15);
-  assert.equal(verifyMigrationLedger(ledger(16), 'after'), 16);
+  assert.equal(verifyMigrationLedger(ledger(16), 'before'), 16);
+  assert.equal(verifyMigrationLedger(ledger(17), 'after'), 17);
   for (const entries of [
     ledger(7), [...ledger(11), { id: 12, name: '0012_kinde_account_erasure.sql' }], [...ledger(8), { id: 10, name: MIGRATIONS[8] }],
     [...ledger(8), { id: 9, name: '0009_other.sql' }],
     [...ledger(10), { id: 11, name: '0011_unknown.sql' }],
     ledger(8).map((row, i) => i === 0 ? { ...row, id: 0 } : row),
   ]) assert.throws(() => verifyMigrationLedger(entries, 'before'));
-  assert.throws(() => verifyMigrationLedger(ledger(15), 'after'));
+  assert.throws(() => verifyMigrationLedger(ledger(16), 'after'));
 });
 
 void test('checks account, EU D1, Time Travel, ledger, empty principals and schema readback', async () => {
   const before = syntheticProvider();
   assert.deepEqual(await verifyRemoteIsolatedD1({
     phase: 'before', account: ACCOUNT, token: 'test', request: before.request,
-  }), { phase: 'before', applied: 8, expected: 16, jurisdiction: 'eu',
+  }), { phase: 'before', applied: 8, expected: 17, jurisdiction: 'eu',
     timeTravelBookmarkVerified: true });
   assertReadOnlyRequests(before.calls);
 
-  const after = syntheticProvider({ migrationCount: 16 });
+  const after = syntheticProvider({ migrationCount: 17 });
   assert.equal((await verifyRemoteIsolatedD1({
     phase: 'after', account: ACCOUNT, token: 'test', request: after.request,
-  })).applied, 16);
+  })).applied, 17);
   assert.ok(after.calls.some(c => c.sql?.includes('sqlite_master')));
   assertReadOnlyRequests(after.calls);
 });
@@ -178,13 +186,15 @@ void test('fails closed on provider, migration and isolation drift without write
     { scheduler: [] }, { scheduler: [{ singleton: 1, cursor_uid: null, lease_epoch: 1, lease_token: 'a'.repeat(64), lease_until_ms: 0 }] },
     { dispatch: [] }, { dispatch: [{ singleton: 1, turn: 2 }] },
     { scan: [] }, { scan: [{ singleton: 1, policy_generation: 2, recovery_generation: 2, cursor_last_recorded_at_ms: null, cursor_uid: null, lease_epoch: 1, lease_token: 'a'.repeat(64), lease_until_ms: 0 }] },
+    { enqueue: [] }, { enqueue: [{ singleton: 1, policy_generation: 2, recovery_generation: 2, cursor_last_recorded_at_ms: null, cursor_uid: null, lease_epoch: 1, lease_token: 'a'.repeat(64), lease_until_ms: 0 }] },
+    { objects: schema.filter(row => row.name !== 'kinde_inactivity_enqueue_checkpoint_transition') },
     { objects: schema.filter(row => row.name !== 'kinde_inactivity_scan_checkpoint_transition') },
     { objects: schema.filter(row => row.name !== 'erasure_dispatch_control_transition') },
     { objects: schema.filter(row => row.name !== 'kinde_account_erasure_completion_fence') },
     { objects: schema.map(row => row.name === 'cloud_key_first_issuance'
       ? { ...row, sql: 'accepted_at_ms <= julianday(\'now\')' } : row) },
   ]) {
-    const provider = syntheticProvider({ migrationCount: 16, ...options });
+    const provider = syntheticProvider({ migrationCount: 17, ...options });
     await assert.rejects(verifyRemoteIsolatedD1({
       phase: 'after', account: ACCOUNT, token: 'test', request: provider.request,
     }));
@@ -192,17 +202,17 @@ void test('fails closed on provider, migration and isolation drift without write
   }
 });
 
-void test('explicit 0016 test upgrade preserves identities across the 0012–0016 migrations', async () => {
+void test('explicit 0017 test upgrade preserves identities across the 0012–0017 migrations', async () => {
   const existing = { principals: 3, sessions: 29, subjects: 1, states: 1, documents: 1, replicas: 1, receipts: 1 };
   const before = syntheticProvider({ migrationCount: 11, ...existing });
-  const after = syntheticProvider({ migrationCount: 16, ...existing });
-  const options = { account: ACCOUNT, token: 'test', existingTestDb0016: true };
+  const after = syntheticProvider({ migrationCount: 17, ...existing });
+  const options = { account: ACCOUNT, token: 'test', existingTestDb0017: true };
   const preflight = await verifyRemoteIsolatedD1({ ...options, phase: 'before', request: before.request });
   assert.deepEqual(preflight.inventory, { ...existing, replica_mutations: 0 });
   const verified = await verifyRemoteIsolatedD1({
     ...options, phase: 'after', request: after.request, priorInventory: preflight.inventory,
   });
-  assert.equal(verified.applied, 16);
+  assert.equal(verified.applied, 17);
   const alreadyApplied = await verifyRemoteIsolatedD1({ ...options, phase: 'before', request: after.request });
   assert.deepEqual(alreadyApplied.inventory, preflight.inventory);
   assert.ok(after.calls.some(c => c.sql?.includes('sqlite_master')));
@@ -210,22 +220,22 @@ void test('explicit 0016 test upgrade preserves identities across the 0012–001
 });
 
 void test('upgrade preflight rejects a previously enabled, advanced or missing inactivity control', async () => {
-  for (const migrationCount of [13, 14, 15, 16]) {
+  for (const migrationCount of [13, 14, 15, 16, 17]) {
     for (const inactivityControl of [[], [{ singleton: 1, mode: 'enabled', generation: 2 }],
       [{ singleton: 1, mode: 'paused', generation: 3 }]]) {
       const provider = syntheticProvider({ migrationCount, principals: 3, sessions: 29, inactivityControl });
       await assert.rejects(verifyRemoteIsolatedD1({ phase: 'before', account: ACCOUNT, token: 'test',
-        existingTestDb0016: true, request: provider.request }), /new inactivity scanner must remain paused/);
+        existingTestDb0017: true, request: provider.request }), /new inactivity scanner must remain paused/);
       assertReadOnlyRequests(provider.calls);
     }
     const provider = syntheticProvider({ migrationCount, principals: 3, sessions: 29 });
     assert.equal((await verifyRemoteIsolatedD1({ phase: 'before', account: ACCOUNT, token: 'test',
-      existingTestDb0016: true, request: provider.request })).applied, migrationCount);
+      existingTestDb0017: true, request: provider.request })).applied, migrationCount);
     assertReadOnlyRequests(provider.calls);
   }
 });
 
-void test('0016 test upgrade rejects altered SQL, mismatched ledger, health data and changed identity counts', async () => {
+void test('0017 test upgrade rejects altered SQL, mismatched ledger, health data and changed identity counts', async () => {
   const sql = readFileSync(new URL('../../cloudflare/api/migrations/0012_kinde_erasure_decisions.sql', import.meta.url), 'utf8');
   assert.doesNotThrow(() => verifyExistingTestUpgradeSql(sql));
   assert.throws(() => verifyExistingTestUpgradeSql(sql + '\nDELETE FROM auth_sessions;'), /unreviewed SQL/);
@@ -241,7 +251,10 @@ void test('0016 test upgrade rejects altered SQL, mismatched ledger, health data
   const scanSql = readFileSync(new URL('../../cloudflare/api/migrations/0016_kinde_inactivity_scan_checkpoint.sql', import.meta.url), 'utf8');
   assert.doesNotThrow(() => verifyScanMigrationSql(scanSql));
   assert.throws(() => verifyScanMigrationSql(scanSql + '\nDELETE FROM auth_sessions;'), /unreviewed inactivity scan SQL/);
-  const options = { account: ACCOUNT, token: 'test', existingTestDb0016: true };
+  const enqueueSql = readFileSync(new URL('../../cloudflare/api/migrations/0017_kinde_inactivity_enqueue_checkpoint.sql', import.meta.url), 'utf8');
+  assert.doesNotThrow(() => verifyEnqueueMigrationSql(enqueueSql));
+  assert.throws(() => verifyEnqueueMigrationSql(enqueueSql + '\nDELETE FROM auth_sessions;'), /unreviewed inactivity enqueue SQL/);
+  const options = { account: ACCOUNT, token: 'test', existingTestDb0017: true };
   for (const override of [
     { migrationCount: 9 }, { migrationCount: 10 }, { keys: 1 }, { consents: 1 },
     { migrationCount: 12, accountRequests: 1 },
@@ -254,7 +267,7 @@ void test('0016 test upgrade rejects altered SQL, mismatched ledger, health data
   const existing = { principals: 3, sessions: 29, subjects: 1, states: 1, documents: 1, replicas: 1, receipts: 1 };
   const inventory = { ...existing, replica_mutations: 0 };
   for (const [override, priorInventory] of [[{}, undefined], [{ sessions: 30 }, inventory], [{ documents: 0 }, inventory]]) {
-    const after = syntheticProvider({ migrationCount: 16, ...existing, ...override });
+    const after = syntheticProvider({ migrationCount: 17, ...existing, ...override });
     await assert.rejects(verifyRemoteIsolatedD1({ ...options, phase: 'after', request: after.request, priorInventory }),
       /existing test inventory changed/);
     assertReadOnlyRequests(after.calls);
@@ -264,7 +277,7 @@ void test('0016 test upgrade rejects altered SQL, mismatched ledger, health data
 void test('manual workflow is main-only, version pinned and does not deploy Worker or DNS', () => {
   const yml = readFileSync(new URL('../../.github/workflows/cloudflare-d1-isolated-migrations.yml', import.meta.url), 'utf8');
   assert.match(yml, /workflow_dispatch:/);
-  assert.match(yml, /upgrade_existing_test_db_0016:[\s\S]+type: boolean\s+default: false/);
+  assert.match(yml, /upgrade_existing_test_db_0017:[\s\S]+type: boolean\s+default: false/);
   assert.match(yml, /github\.ref == 'refs\/heads\/main'/);
   assert.match(yml, /git ls-remote --exit-code origin refs\/heads\/main/);
   assert.match(yml, /wrangler@4\.159\.0 d1 migrations apply/);

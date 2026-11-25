@@ -24,6 +24,7 @@ export const MIGRATIONS = Object.freeze(`
 0014_kinde_account_erasure_scheduler.sql
 0015_erasure_dispatch_control.sql
 0016_kinde_inactivity_scan_checkpoint.sql
+0017_kinde_inactivity_enqueue_checkpoint.sql
 `.trim().split('\n'));
 const DATABASE = 'thelogbook-cf02-eu-isolated-20261113';
 const DATABASE_ID = '9aa51833-8adc-495f-bdfc-93b5542e8023';
@@ -38,6 +39,8 @@ const DISPATCH_MIGRATION = '0015_erasure_dispatch_control.sql';
 const DISPATCH_MIGRATION_SHA256 = '92f5a5316aa3900dbd4f465aee22337780241b7986983242315eae7ddf535c54';
 const SCAN_MIGRATION = '0016_kinde_inactivity_scan_checkpoint.sql';
 const SCAN_MIGRATION_SHA256 = '99c84652de1ffb5166330547793495359b9cff0736aa49a83fd685102520a94a';
+const ENQUEUE_MIGRATION = '0017_kinde_inactivity_enqueue_checkpoint.sql';
+const ENQUEUE_MIGRATION_SHA256 = 'f06694c04972493a7d788999ba8e71a8bb5017806fa5139c8761b7fa8f2820a9';
 const MIGRATION_DIR = new URL('../cloudflare/api/migrations/', import.meta.url);
 const EXISTING_TEST_TABLES = Object.freeze({
   subjects: 'sync_subjects',
@@ -80,6 +83,11 @@ export function verifyDispatchMigrationSql(sql) {
 export function verifyScanMigrationSql(sql) {
   assert.equal(createHash('sha256').update(sql.replaceAll('\r\n', '\n')).digest('hex'),
     SCAN_MIGRATION_SHA256, 'unreviewed inactivity scan SQL for test D1');
+}
+
+export function verifyEnqueueMigrationSql(sql) {
+  assert.equal(createHash('sha256').update(sql.replaceAll('\r\n', '\n')).digest('hex'),
+    ENQUEUE_MIGRATION_SHA256, 'unreviewed inactivity enqueue SQL for test D1');
 }
 
 export function verifyLocalMigrationTarget(config, names) {
@@ -131,7 +139,7 @@ function unpackQuery(body) {
 export async function verifyRemoteIsolatedD1({
   phase,
   account,
-  existingTestDb0016 = false,
+  existingTestDb0017 = false,
   priorInventory,
   request = fetch,
   token,
@@ -150,7 +158,8 @@ export async function verifyRemoteIsolatedD1({
   verifySchedulerMigrationSql(readFileSync(new URL(SCHEDULER_MIGRATION, MIGRATION_DIR), 'utf8'));
   verifyDispatchMigrationSql(readFileSync(new URL(DISPATCH_MIGRATION, MIGRATION_DIR), 'utf8'));
   verifyScanMigrationSql(readFileSync(new URL(SCAN_MIGRATION, MIGRATION_DIR), 'utf8'));
-  if (existingTestDb0016) assert.equal(names.length, 16, 'populated test D1 mode permits only reviewed migrations through 0016');
+  verifyEnqueueMigrationSql(readFileSync(new URL(ENQUEUE_MIGRATION, MIGRATION_DIR), 'utf8'));
+  if (existingTestDb0017) assert.equal(names.length, 17, 'populated test D1 mode permits only reviewed migrations through 0017');
 
   const root = BASE + '/accounts/' + account + '/d1/database/' + DATABASE_ID;
   async function call(path, sql) {
@@ -183,9 +192,9 @@ export async function verifyRemoteIsolatedD1({
   const ledger = unpackQuery(await call('/query',
     'SELECT id, name FROM d1_migrations ORDER BY id'));
   const applied = verifyMigrationLedger(ledger, phase);
-  if (existingTestDb0016 && phase === 'before') {
-    assert.ok(applied >= 11 && applied <= 16,
-      'populated test D1 requires a contiguous 0011–0016 prefix');
+  if (existingTestDb0017 && phase === 'before') {
+    assert.ok(applied >= 11 && applied <= 17,
+      'populated test D1 requires a contiguous 0011–0017 prefix');
   }
 
   // Read only aggregates. The application DB already holds identity sessions
@@ -195,21 +204,21 @@ export async function verifyRemoteIsolatedD1({
     sessions: 'auth_sessions',
     keys: 'cloud_account_keys',
     erasure_jobs: 'health_erasure_jobs',
-    ...(existingTestDb0016 ? { consents: 'health_consent_acceptances', ...EXISTING_TEST_TABLES } : {}),
+    ...(existingTestDb0017 ? { consents: 'health_consent_acceptances', ...EXISTING_TEST_TABLES } : {}),
     ...(applied >= 12 ? ACCOUNT_ERASURE_TABLES : {}),
     ...(applied >= 13 ? { activity: 'kinde_account_activity' } : {}),
   };
   const countSql = Object.entries(tables).map(([key, table]) => `(SELECT COUNT(*) FROM ${table}) AS ${key}`).join(', ');
   const counts = unpackQuery(await call('/query', 'SELECT ' + countSql));
   assert.equal(counts.length, 1, 'invalid isolation count response');
-  const emptyTables = existingTestDb0016 ? ['keys', 'erasure_jobs', 'consents'] : ['principals', 'sessions', 'keys', 'erasure_jobs'];
+  const emptyTables = existingTestDb0017 ? ['keys', 'erasure_jobs', 'consents'] : ['principals', 'sessions', 'keys', 'erasure_jobs'];
   if (applied >= 12) emptyTables.push(...Object.keys(ACCOUNT_ERASURE_TABLES));
   if (applied >= 13) emptyTables.push('activity');
   for (const key of emptyTables) {
     assert.equal(counts[0]?.[key], 0, 'non-empty isolated D1 ' + key);
   }
   let inventory;
-  if (existingTestDb0016) {
+  if (existingTestDb0017) {
     inventory = Object.fromEntries(['principals', 'sessions', ...Object.keys(EXISTING_TEST_TABLES)]
       .map(key => [key, counts[0]?.[key]]));
     assert.ok(Object.values(inventory).every(count => Number.isSafeInteger(count) && count >= 0),
@@ -248,6 +257,14 @@ export async function verifyRemoteIsolatedD1({
     'new inactivity scan checkpoint must remain unused');
   }
 
+  if (applied >= 17) {
+    const enqueue = unpackQuery(await call('/query',
+      'SELECT singleton, policy_generation, recovery_generation, cursor_last_recorded_at_ms, cursor_uid, lease_epoch, lease_token, lease_until_ms FROM kinde_inactivity_enqueue_checkpoint ORDER BY singleton LIMIT 2'));
+    assert.deepEqual(enqueue, [{ singleton: 1, policy_generation: 0, recovery_generation: 0,
+      cursor_last_recorded_at_ms: null, cursor_uid: null, lease_epoch: 0, lease_token: null, lease_until_ms: 0 }],
+    'new inactivity enqueue checkpoint must remain unused');
+  }
+
   if (phase === 'after') {
     const schema = unpackQuery(await call('/query', [
       "SELECT name, type, sql FROM sqlite_master WHERE name IN (",
@@ -264,6 +281,8 @@ export async function verifyRemoteIsolatedD1({
       "'kinde_account_activity_insert_fence', 'kinde_account_activity_update_fence',",
       "'kinde_inactivity_control', 'kinde_inactivity_control_generation',",
       "'kinde_inactivity_control_no_delete', 'kinde_inactivity_control_no_replace',",
+      "'kinde_inactivity_enqueue_checkpoint', 'kinde_inactivity_enqueue_checkpoint_no_delete',",
+      "'kinde_inactivity_enqueue_checkpoint_no_replace', 'kinde_inactivity_enqueue_checkpoint_transition',",
       "'kinde_inactivity_intent_fence', 'kinde_inactivity_intent_freeze',",
       "'kinde_inactivity_scan_checkpoint', 'kinde_inactivity_scan_checkpoint_no_delete',",
       "'kinde_inactivity_scan_checkpoint_no_replace', 'kinde_inactivity_scan_checkpoint_transition',",
@@ -301,6 +320,10 @@ export async function verifyRemoteIsolatedD1({
       ['kinde_inactivity_control_generation', 'trigger'],
       ['kinde_inactivity_control_no_delete', 'trigger'],
       ['kinde_inactivity_control_no_replace', 'trigger'],
+      ['kinde_inactivity_enqueue_checkpoint', 'table'],
+      ['kinde_inactivity_enqueue_checkpoint_no_delete', 'trigger'],
+      ['kinde_inactivity_enqueue_checkpoint_no_replace', 'trigger'],
+      ['kinde_inactivity_enqueue_checkpoint_transition', 'trigger'],
       ['kinde_inactivity_intent_fence', 'trigger'],
       ['kinde_inactivity_intent_freeze', 'trigger'],
       ['kinde_inactivity_scan_checkpoint', 'table'],
@@ -323,16 +346,16 @@ export async function verifyRemoteIsolatedD1({
 async function verifyFromCli() {
   const [, , phase, flag = 'false', inventoryPath] = process.argv;
   assert.ok(flag === 'true' || flag === 'false', 'invalid populated test DB mode');
-  const existingTestDb0016 = flag === 'true';
-  if (existingTestDb0016) assert.ok(inventoryPath, 'missing private run inventory path');
-  const priorInventory = existingTestDb0016 && phase === 'after'
+  const existingTestDb0017 = flag === 'true';
+  if (existingTestDb0017) assert.ok(inventoryPath, 'missing private run inventory path');
+  const priorInventory = existingTestDb0017 && phase === 'after'
     ? JSON.parse(readFileSync(inventoryPath, 'utf8')) : undefined;
   const { inventory, ...result } = await verifyRemoteIsolatedD1({
-    phase, existingTestDb0016, priorInventory,
+    phase, existingTestDb0017, priorInventory,
     account: process.env.CLOUDFLARE_ACCOUNT_ID,
     token: process.env.CLOUDFLARE_API_TOKEN,
   });
-  if (existingTestDb0016 && phase === 'before') {
+  if (existingTestDb0017 && phase === 'before') {
     writeFileSync(inventoryPath, JSON.stringify(inventory), { flag: 'wx', mode: 0o600 });
   }
   return result;
