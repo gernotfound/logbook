@@ -1,7 +1,7 @@
 // Candidate-only encrypted replica API. There is intentionally no public fixture,
 // secret-header login, test backdoor or fallback identity when AUTH_GATE is absent.
 import { z } from 'zod';
-import { BODY_LIMIT_BYTES, BadInput, id, claimInput, retireInput, readInput, pageInput, commitInput, commitStatusInput, authClaims, uniquePaths, validateSealedBatch } from './replica-contracts.mjs';
+import { BODY_LIMIT_BYTES, BadInput, id, claimInput, retireInput, readInput, pageInput, commitInput, commitStatusInput, authClaims, activityAuthClaims, uniquePaths, validateSealedBatch } from './replica-contracts.mjs';
 import {
   requireCurrentIndependentSyncFence, RuntimeSyncAccessRevokedError,
 } from '../recovery/runtime-sync-fence.mjs';
@@ -9,7 +9,9 @@ import consentWorker from './consent-worker.mjs';
 import logoutWorker from './logout-worker.mjs';
 import cloudKeyWorker from './cloud-key-worker.mjs';
 import { commitEncryptedBatch, readAccessState, readCloudKeyPrecondition, readCommitOutcome, readDocumentPage, readReceipt, readReplicaControl, readRightsAccessState, readRightsDocumentPage, readSnapshot } from './d1-document-store.mjs';
-import { requireIndependentOwnerFence } from '../recovery/independent-owner-fence.mjs';
+import { readOpenRecoveryGeneration, requireIndependentOwnerFence } from '../recovery/independent-owner-fence.mjs';
+import { requireIndependentAccountAccess } from '../recovery/account-erasure-denials.mjs';
+import { recordKindeForegroundActivity } from '../auth/kinde-foreground-activity.mjs';
 import {
   mutationResponse, prepareReplicaClaim, prepareReplicaRetirement, readPublicCheckpointClock,
   readReplicaMutationReceipt, readReplicaMutationOutcome, writeReplicaMutation,
@@ -91,11 +93,11 @@ async function authorize(request, env, route, isMutation) {
   if (response.status === 401 || response.status === 403) throw new BadInput('unauthorized', response.status);
   if (!response.ok) throw new BadInput('auth-unavailable', 503);
   let claims;
-  try { claims = authClaims.parse(await response.json()); }
+  try { claims = (route === '/v1/account/activity' ? activityAuthClaims : authClaims).parse(await response.json()); }
   catch { throw new BadInput('auth-unavailable', 503); }
   // Rights-only remains possible after losing email verification, but no
   // active-fitness route may inherit that weaker scope from the AuthGate.
-  if (!claims.emailVerified && route !== '/v1/rights/scan') throw new BadInput('unauthorized', 403);
+  if (!claims.emailVerified && route !== '/v1/rights/scan' && route !== '/v1/account/activity') throw new BadInput('unauthorized', 403);
   if (isMutation && !claims.csrfVerified) throw new BadInput('csrf-required', 403);
   return claims;
 }
@@ -114,6 +116,26 @@ async function handler(request, env) {
     || request.headers.get('origin') !== env.API_ORIGIN
     || (request.headers.has('sec-fetch-site') && request.headers.get('sec-fetch-site') !== 'same-origin')) {
     return reply({ error: 'origin-rejected' }, 403);
+  }
+  if (route === '/v1/account/activity') {
+    // No marker is created merely by deploying this private API or by
+    // servicing login, refresh, sync or other background traffic.
+    if (env.CF06_FOREGROUND_ACTIVITY_ENABLED !== 'enabled') return reply({ error: 'activity-unavailable' }, 503);
+    if (!env.DB || !env.RECOVERY_DB || env.DB === env.RECOVERY_DB) return reply({ error: 'activity-unavailable' }, 503);
+    checkJsonRequestHeaders(request, maxBodyBytes);
+    const claims = await authorize(request, env, route, true);
+    if (!z.strictObject({}).safeParse(await jsonBounded(request, maxBodyBytes)).success) {
+      throw new BadInput('invalid-input', 400);
+    }
+    const generation = await readOpenRecoveryGeneration(env.RECOVERY_DB);
+    await requireIndependentAccountAccess(env.RECOVERY_DB, claims.uid);
+    await readOpenRecoveryGeneration(env.RECOVERY_DB, generation);
+    const result = await recordKindeForegroundActivity(env.DB, claims);
+    if (result.outcome === 'unauthorized') throw new BadInput('unauthorized', 403);
+    if (result.outcome !== 'recorded' && result.outcome !== 'observed') throw new BadInput('activity-unavailable', 503);
+    await requireIndependentAccountAccess(env.RECOVERY_DB, claims.uid);
+    await readOpenRecoveryGeneration(env.RECOVERY_DB, generation);
+    return reply({ outcome: result.outcome });
   }
   if (!env.DB || typeof env.DB.prepare !== 'function' || typeof env.DB.batch !== 'function') {
     return reply({ error: 'storage-unavailable' }, 503);

@@ -16,7 +16,7 @@ const MUTATION_ROUTES = new Set([
 ]);
 const IDENTITY_READ_ROUTES = new Set(['/v1/consent/status']);
 const IDENTITY_MUTATION_ROUTES = new Set(['/v1/consent/initial', '/v1/consent/withdraw', '/v1/auth/logout',
-  '/v1/cloud-key/rights-export', '/v1/rights/scan']);
+  '/v1/cloud-key/rights-export', '/v1/rights/scan', '/v1/account/activity']);
 
 function json(payload, status) {
   return new Response(JSON.stringify(payload), {
@@ -158,7 +158,7 @@ async function authorize(request, env) {
   // A session may be closed before verification or first health consent.
   if ((!identityOnly || (IDENTITY_MUTATION_ROUTES.has(route)
     && !['/v1/auth/logout', '/v1/consent/withdraw',
-      '/v1/cloud-key/rights-export', '/v1/rights/scan'].includes(route))) && !emailVerified) {
+      '/v1/cloud-key/rights-export', '/v1/rights/scan', '/v1/account/activity'].includes(route))) && !emailVerified) {
     return json({ error: 'unauthorized' }, 401);
   }
   const suppliedCsrf = request.headers.get('x-csrf-token');

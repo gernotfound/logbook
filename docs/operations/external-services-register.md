@@ -1,5 +1,9 @@
 # Registro dei servizi esterni — stato corrente TheLogBook
 
+## Readback Cloudflare · 25 novembre 2026
+
+Verifica diretta in sola lettura: quattro Worker `thelogbook-frontend` (ASSETS, KINDE_HTTP; nessun D1_API), `thelogbook-api-isolated` (AUTH_GATE, DB, RECOVERY_DB, secret KEK presente), `thelogbook-cf03-auth-gate-isolated` (DB, limiter) e `thelogbook-cf03-kinde-http-isolated` (DB, AUTH_GATE, limiter e secret Kinde presenti). Tutti senza cron; nessun Worker CF-06 osservato. D1 applicativa `jurisdiction=eu` ledger 0011; recovery `jurisdiction=eu` ledger 0004. Codice candidato fino a 0016/0005: nessuna applicazione implicita. Flag attività assente dai binding osservati; nessun nuovo tracking. Nessuna lettura di segreti, dati personali o modifica provider manuale. Snapshot non certifica funzionalità, localizzazione Workers, GO o custodia indipendente; vedere [quadro corrente](cloudflare-current-state.md). Le sezioni datate sotto restano storico.
+
 ## Readback Cloudflare — 24/11/2026
 
 Zona attiva, Custom Domain `thelogbook.me` → `thelogbook-frontend`, Always Use HTTPS on, DNSSEC disabled. Frontend solo APP_ORIGIN/ASSETS/KINDE_HTTP, senza D1_API. API privata con DB, RECOVERY_DB, AUTH_GATE e CLOUD_ACCOUNT_KEK_V1 secret_text. Quattro Worker, zero schedule; entrambe le D1 isolate EU con read replication disabled. Ledger applicativo 0011, recovery 0004; migrazioni candidate 0012/0013 e 0005 non applicate. Nessuna lettura di valori segreti o dati account. Custodia KEK indipendente, Management Kinde, riautenticazione effettiva, quote e privacy restano da attestare. [Quadro operativo e prove exact-SHA](cloudflare-current-state.md). Le riletture precedenti sono storiche.

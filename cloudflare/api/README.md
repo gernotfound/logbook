@@ -850,3 +850,7 @@ execute D1 SQL. Instead, the automated deploy readback verifies only the
 Workers' actual binding IDs and disabled public URLs; schema/jurisdiction
 are independently verified by the provider. Denied Worker reads still fail
 closed. See `tests/cloudflare/cf02-provider-bindings.node.mjs`.
+
+## CF-06 — osservazione attività identity-only (candidato)
+
+`POST /v1/account/activity` è una mutazione con body JSON `{}` (128 byte massimi), sessione corrente e CSRF/rate gate privato. Non esige consenso sanitario e non accetta UID, timestamp o altro dato dal browser. Verifica il registro account indipendente aperto e la generazione recovery prima/dopo il marker; rifiuta la risposta quando cambia. `CF06_FOREGROUND_ACTIVITY_ENABLED=enabled` è opt-in trusted assente dalle configurazioni; il frontend pubblico non ha `D1_API`. La chiamata esplicita è candidata, non prova la presenza umana e non è invocata da login, refresh o background. Restano collegamento UI foreground, quota e collaudo provider/restore; niente nuova rotta pubblica o tracking attivo.
