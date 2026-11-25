@@ -53,15 +53,26 @@ CREATE INDEX kinde_deletion_oauth_expiry ON kinde_deletion_oauth_attempts (expir
 CREATE INDEX kinde_deletion_oauth_owner ON kinde_deletion_oauth_attempts (uid, state_hash);
 CREATE INDEX auth_sessions_owner_token ON auth_sessions (uid, token_hash);
 
--- This records an explicit, freshly reauthenticated request. A row proves
--- the owner's decision even if a cross-D1 call or its acknowledgement fails.
+-- Durable manual or inactivity decision. An inactivity decision does not
+-- manufacture a signed reauthentication timestamp.
 CREATE TABLE kinde_account_erasure_intents (
   uid TEXT PRIMARY KEY REFERENCES auth_principals(uid) ON DELETE RESTRICT,
   auth_epoch INTEGER NOT NULL CHECK (auth_epoch BETWEEN 1 AND 9007199254740990),
   receipt_hash TEXT NOT NULL UNIQUE CHECK (length(receipt_hash) = 64 AND receipt_hash NOT GLOB '*[^0-9a-f]*'),
-  reauthenticated_at_ms INTEGER NOT NULL CHECK (reauthenticated_at_ms > 0 AND reauthenticated_at_ms % 1000 = 0),
-  confirmed_at_ms INTEGER NOT NULL CHECK (
-    confirmed_at_ms >= reauthenticated_at_ms AND confirmed_at_ms - reauthenticated_at_ms <= 300000
+  reauthenticated_at_ms INTEGER CHECK (reauthenticated_at_ms > 0 AND reauthenticated_at_ms % 1000 = 0),
+  confirmed_at_ms INTEGER NOT NULL CHECK (confirmed_at_ms > 0),
+  inactivity_generation INTEGER,
+  inactivity_recorded_at_ms INTEGER,
+  inactivity_eligible_at_ms INTEGER,
+  CHECK (
+    (reauthenticated_at_ms IS NOT NULL AND inactivity_generation IS NULL
+      AND inactivity_recorded_at_ms IS NULL AND inactivity_eligible_at_ms IS NULL
+      AND confirmed_at_ms >= reauthenticated_at_ms AND confirmed_at_ms - reauthenticated_at_ms <= 300000)
+    OR (reauthenticated_at_ms IS NULL AND inactivity_generation IS NOT NULL
+      AND inactivity_recorded_at_ms IS NOT NULL AND inactivity_eligible_at_ms IS NOT NULL
+      AND inactivity_generation >= 1 AND inactivity_recorded_at_ms > 0
+      AND inactivity_eligible_at_ms >= inactivity_recorded_at_ms + 31536000000
+      AND confirmed_at_ms >= inactivity_eligible_at_ms)
   )
 ) STRICT;
 
@@ -89,10 +100,11 @@ CREATE TABLE kinde_account_erasure_requests (
   uid TEXT PRIMARY KEY REFERENCES kinde_account_erasure_intents(uid) ON DELETE RESTRICT,
   prior_auth_epoch INTEGER NOT NULL CHECK (prior_auth_epoch BETWEEN 1 AND 9007199254740990),
   receipt_hash TEXT NOT NULL UNIQUE CHECK (length(receipt_hash) = 64 AND receipt_hash NOT GLOB '*[^0-9a-f]*'),
-  reauthenticated_at_ms INTEGER NOT NULL CHECK (reauthenticated_at_ms > 0 AND reauthenticated_at_ms % 1000 = 0),
-  requested_at_ms INTEGER NOT NULL CHECK (
-    requested_at_ms >= reauthenticated_at_ms AND requested_at_ms - reauthenticated_at_ms <= 300000
-  )
+  reauthenticated_at_ms INTEGER CHECK (reauthenticated_at_ms > 0 AND reauthenticated_at_ms % 1000 = 0),
+  requested_at_ms INTEGER NOT NULL CHECK (requested_at_ms > 0 AND (
+    reauthenticated_at_ms IS NULL OR
+    (requested_at_ms >= reauthenticated_at_ms AND requested_at_ms - reauthenticated_at_ms <= 300000)
+  ))
 ) STRICT;
 
 CREATE TRIGGER kinde_account_erasure_request_fence
@@ -102,7 +114,7 @@ WHEN EXISTS (SELECT 1 FROM kinde_account_erasure_requests WHERE uid = NEW.uid OR
     SELECT 1 FROM auth_principals p JOIN kinde_account_erasure_intents i ON i.uid = p.uid
     WHERE p.uid = NEW.uid AND p.status IN ('active', 'disabled')
       AND p.auth_epoch = NEW.prior_auth_epoch AND p.auth_epoch >= i.auth_epoch
-      AND i.receipt_hash = NEW.receipt_hash AND i.reauthenticated_at_ms = NEW.reauthenticated_at_ms
+      AND i.receipt_hash = NEW.receipt_hash AND i.reauthenticated_at_ms IS NEW.reauthenticated_at_ms
       AND i.confirmed_at_ms = NEW.requested_at_ms
   )
 BEGIN SELECT RAISE(ABORT, 'kinde-account-erasure-request-fenced'); END;
@@ -132,7 +144,10 @@ BEGIN SELECT RAISE(ABORT, 'kinde-account-erasure-request-retained'); END;
 
 CREATE TRIGGER kinde_account_erasure_disallow_reactivation
 BEFORE UPDATE ON auth_principals
-WHEN NEW.status = 'active' AND EXISTS (SELECT 1 FROM kinde_account_erasure_requests WHERE uid = OLD.uid)
+WHEN NEW.status = 'active' AND (
+  EXISTS (SELECT 1 FROM kinde_account_erasure_requests WHERE uid = OLD.uid)
+  OR EXISTS (SELECT 1 FROM kinde_account_erasure_intents WHERE uid = OLD.uid AND reauthenticated_at_ms IS NULL)
+)
 BEGIN SELECT RAISE(ABORT, 'kinde-account-erasure-request-retained'); END;
 
 CREATE TABLE kinde_account_erasure_provider_progress (

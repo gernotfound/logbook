@@ -142,7 +142,7 @@
       "erasure-proof",
       "not-applicable",
       "retain-proof",
-      "Immutable user decision and receipt digest; retention review open.",
+      "Immutable manual or inactivity decision and receipt digest; inactivity stores marker, policy generation and calendar deadline without reauthentication; retention review open.",
       "Exact durable proof, independent deny and no fabricated reauth."
     ],
     "kinde_account_erasure_requests": [
