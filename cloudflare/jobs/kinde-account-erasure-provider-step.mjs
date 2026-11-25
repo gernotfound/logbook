@@ -1,5 +1,5 @@
 import { D1_NOW_MS } from '../sql/d1-time.mjs';
-import { requireIndependentAccountErasureDenial } from '../recovery/account-erasure-denials.mjs';
+import { readIndependentAccountErasureGeneration, requireIndependentAccountErasureDenial } from '../recovery/account-erasure-denials.mjs';
 import { runKindeAccountErasureAppStep, verifyKindeAccountErasureAppComplete } from './kinde-account-erasure-app-step.mjs';
 import { createKindeErasureManagement } from './kinde-erasure-management.mjs';
 import { KINDE_ERASURE_TARGET_FORMAT } from './kinde-erasure-target.mjs';
@@ -64,10 +64,13 @@ async function claimProviderLease(primary, uid) {
  */
 export async function runKindeAccountErasureProviderStep(db, recoveryDb, intent, dependencies) {
   if (!db || !recoveryDb || db === recoveryDb) throw new Error('kinde-erasure-provider-unavailable');
-  await requireIndependentAccountErasureDenial(recoveryDb, intent);
+  const generation = await readIndependentAccountErasureGeneration(recoveryDb, intent);
   const completedAtMs = await readCompletion(db, intent);
-  if (completedAtMs !== null) return { outcome: 'complete', completedAtMs };
-  const app = await runKindeAccountErasureAppStep(db, recoveryDb, intent);
+  if (completedAtMs !== null) {
+    await requireIndependentAccountErasureDenial(recoveryDb, intent, generation);
+    return { outcome: 'complete', completedAtMs };
+  }
+  const app = await runKindeAccountErasureAppStep(db, recoveryDb, intent, generation);
   if (app.outcome !== 'application-complete') return app;
 
   const { uid } = intent;
@@ -91,15 +94,17 @@ export async function runKindeAccountErasureProviderStep(db, recoveryDb, intent,
     fetchImpl: dependencies.fetchImpl,
     async proveTerminalFence(currentUid) {
       if (currentUid !== uid
-        || (await verifyKindeAccountErasureAppComplete(db, recoveryDb, intent)).outcome !== 'application-complete') return false;
+        || (await verifyKindeAccountErasureAppComplete(db, recoveryDb, intent, generation)).outcome !== 'application-complete') return false;
       const live = await db.withSession('first-primary').prepare(`
         SELECT uid FROM kinde_account_erasure_provider_progress WHERE ${LIVE_LEASE}
       `).bind(...leaseScope).first();
-      return live?.uid === uid;
+      if (live?.uid !== uid) return false;
+      return requireIndependentAccountErasureDenial(recoveryDb, intent, generation);
     },
   });
   const target = { uid, subject, accessToken: dependencies.accessToken };
   const presence = await management.readPresence(target);
+  await requireIndependentAccountErasureDenial(recoveryDb, intent, generation);
 
   if (lease.delete_acknowledged_at_ms !== null) {
     if (presence !== 'absent') return { outcome: 'provider-pending' };
@@ -115,8 +120,8 @@ export async function runKindeAccountErasureProviderStep(db, recoveryDb, intent,
       // A lost final response may already have committed the atomic receipt.
       uncertain = true;
     }
-    await requireIndependentAccountErasureDenial(recoveryDb, intent);
     const proof = await readCompletion(db, intent);
+    await requireIndependentAccountErasureDenial(recoveryDb, intent, generation);
     if (proof !== null) return { outcome: 'complete', completedAtMs: proof };
     if (uncertain) throw new Error('kinde-erasure-provider-unavailable');
     return { outcome: 'contended' };
@@ -132,11 +137,13 @@ export async function runKindeAccountErasureProviderStep(db, recoveryDb, intent,
   `).bind(...leaseScope).first();
   if (started?.uid !== uid) return { outcome: 'contended' };
   if (await management.requestErasure(target) !== 'acknowledged') return { outcome: 'provider-unconfirmed' };
+  await requireIndependentAccountErasureDenial(recoveryDb, intent, generation);
   const acknowledged = await primary.prepare(`
     UPDATE kinde_account_erasure_provider_progress
     SET delete_acknowledged_at_ms = ${D1_NOW_MS}, lease_until_ms = 0
     WHERE ${LIVE_LEASE} AND delete_acknowledged_at_ms IS NULL
     RETURNING uid
   `).bind(...leaseScope).first();
+  await requireIndependentAccountErasureDenial(recoveryDb, intent, generation);
   return { outcome: acknowledged?.uid === uid ? 'provider-acknowledged' : 'contended' };
 }

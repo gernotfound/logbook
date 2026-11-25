@@ -1,5 +1,5 @@
 import {
-  reconcileAccountErasureHealthFence, requireIndependentAccountErasureDenial,
+  readIndependentAccountErasureGeneration, reconcileAccountErasureHealthFence, requireIndependentAccountErasureDenial,
 } from '../recovery/account-erasure-denials.mjs';
 import {
   recordVerifiedTerminalErasure, requireIndependentOwnerFence,
@@ -36,25 +36,30 @@ function deleteSessionRowsSql({ name, key }) {
  * @param {{withSession: (policy: 'first-primary') => any}} appDb
  * @param {Parameters<typeof requireIndependentAccountErasureDenial>[0]} recoveryDb
  * @param {Parameters<typeof requireIndependentAccountErasureDenial>[1]} intent
+ * @param {number | null} [expected]
  */
-export async function runKindeAccountErasureAppStep(appDb, recoveryDb, intent) {
+export async function runKindeAccountErasureAppStep(appDb, recoveryDb, intent, expected = null) {
   if (!appDb || !recoveryDb || appDb === recoveryDb) throw new Error('kinde-erasure-application-unavailable');
-  await requireIndependentAccountErasureDenial(recoveryDb, intent);
+  const generation = await readIndependentAccountErasureGeneration(recoveryDb, intent, expected);
   const scope = intentScopeArgs(intent);
   const primary = appDb.withSession('first-primary');
   const accepted = await primary.prepare(`SELECT r.uid ${JOB_SOURCE} ${SCOPE}`).bind(...scope).first();
   if (accepted?.uid !== intent.uid) return { outcome: 'contended' };
 
   for (const table of ACCOUNT_AUTH_CLEANUP_TABLES) {
+    await requireIndependentAccountErasureDenial(recoveryDb, intent, generation);
     const result = await primary.prepare(deleteSessionRowsSql(table)).bind(intent.uid, intent.uid, ...scope).run();
     const removed = result?.meta?.changes;
     if (result?.success !== true || !Number.isSafeInteger(removed) || removed < 0 || removed > CHUNK_SIZE) {
       throw new Error('kinde-erasure-application-unavailable');
     }
-    if (removed > 0) return { outcome: 'progress', removed };
+    if (removed > 0) {
+      await requireIndependentAccountErasureDenial(recoveryDb, intent, generation);
+      return { outcome: 'progress', removed };
+    }
   }
 
-  return verifyKindeAccountErasureAppComplete(appDb, recoveryDb, intent);
+  return verifyKindeAccountErasureAppComplete(appDb, recoveryDb, intent, generation);
 }
 
 /**
@@ -63,9 +68,11 @@ export async function runKindeAccountErasureAppStep(appDb, recoveryDb, intent) {
  * @param {Parameters<typeof runKindeAccountErasureAppStep>[0]} appDb
  * @param {Parameters<typeof runKindeAccountErasureAppStep>[1]} recoveryDb
  * @param {Parameters<typeof runKindeAccountErasureAppStep>[2]} intent
+ * @param {number | null} [expected]
  */
-export async function verifyKindeAccountErasureAppComplete(appDb, recoveryDb, intent) {
+export async function verifyKindeAccountErasureAppComplete(appDb, recoveryDb, intent, expected = null) {
   if (!appDb || !recoveryDb || appDb === recoveryDb) throw new Error('kinde-erasure-application-unavailable');
+  const generation = await readIndependentAccountErasureGeneration(recoveryDb, intent, expected);
   const scope = intentScopeArgs(intent);
   const observed = await appDb.withSession('first-primary').prepare(`
     SELECT r.uid, s.status, s.consent_revision, s.fence_epoch, s.erased_before_revision,
@@ -78,13 +85,14 @@ export async function verifyKindeAccountErasureAppComplete(appDb, recoveryDb, in
       ${ACCOUNT_AUTH_CLEANUP_TABLES.map(({ name }) => `AND NOT EXISTS (SELECT 1 FROM ${name} WHERE uid = r.uid)`).join('\n')}
   `).bind(...scope).first();
   if (observed?.uid !== intent.uid) return { outcome: 'contended' };
+  await requireIndependentAccountErasureDenial(recoveryDb, intent, generation);
   if (observed.orphan_health_rows !== 0) throw new Error('kinde-erasure-application-unavailable');
   if (observed.status !== null) {
     if (observed.status !== 'withdrawn' || !Number.isSafeInteger(observed.consent_revision)
       || observed.consent_revision < 2 || observed.erased_before_revision !== observed.consent_revision) {
       if (observed.status === 'withdrawn' && observed.consent_revision === 1
         && observed.erased_before_revision === 0) {
-        await reconcileAccountErasureHealthFence(appDb, recoveryDb, intent);
+        await reconcileAccountErasureHealthFence(appDb, recoveryDb, intent, generation);
       }
       return { outcome: 'health-pending' };
     }
@@ -93,6 +101,6 @@ export async function verifyKindeAccountErasureAppComplete(appDb, recoveryDb, in
     });
     await requireIndependentOwnerFence(recoveryDb, floor, 'terminal');
   }
-  await requireIndependentAccountErasureDenial(recoveryDb, intent);
+  await requireIndependentAccountErasureDenial(recoveryDb, intent, generation);
   return { outcome: 'application-complete' };
 }
