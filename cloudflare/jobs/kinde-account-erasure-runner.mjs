@@ -8,8 +8,8 @@ const HASH = /^[a-f0-9]{64}$/;
 /**
  * Candidate-only dispatcher: one intent row per tick, including terminal
  * rows. Keyset traversal of the primary key bounds reads even if most
- * historical intents are already complete. The scheduler must persist its
- * cursor, advance on blocked rows and start a new sweep at null. The cursor
+ * historical intents are already complete. The separate durable sweep
+ * checkpoint advances on blocked rows and starts a new sweep at null. The cursor
  * is not an authorization, lease, or proof of completion.
  *
  * @param {Parameters<typeof acceptKindeAccountErasure>[0]} db

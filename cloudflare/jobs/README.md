@@ -1,6 +1,6 @@
 # CF-06 — candidato Worker di cancellazione sanitaria
 
-> CF-06 #1404/#1405: moduli candidati account deletion e inattività integrati, ma non montati/schedulati. Migrazioni 0012/0013 applicative e 0005 recovery ancora separate dalla distribuzione del codice. Il runner account deve provare cleanup owner-scoped (incluso marker attività), floor indipendente e Kinde-last con ACK/readback esatti. Vedere [runbook](../../docs/operations/cloudflare-workers-migration.md).
+> CF-06 #1404/#1405: moduli candidati account deletion e inattività integrati, ma non montati/schedulati. Migrazioni 0012–0014 applicative e 0005 recovery ancora separate dalla distribuzione del codice. Il runner account deve provare cleanup owner-scoped (incluso marker attività), floor indipendente e Kinde-last con ACK/readback esatti. Vedere [runbook](../../docs/operations/cloudflare-workers-migration.md).
 
 **Stato:** configurazione candidata **non distribuita e non schedulata**.
 Questo manifesto prepara il Worker `health-erasure-worker.mjs` ai test di
@@ -43,8 +43,11 @@ Il dispatcher candidato `runOneKindeAccountErasureStep` seleziona un solo
 intento per tick con cursore UID, riconcilia l'accettazione cross-D1 e
 delega ai passi esistenti. Un owner bloccato non deve fermare la scansione;
 una riga terminale già presente viene saltata senza attribuire una nuova
-ricevuta. Il cursore durevole dello scheduler, le quote, il retry e la
-configurazione Management restano da integrare e collaudare.
+ricevuta. `runKindeAccountErasureSweepTick` conserva il checkpoint D1
+(0014) con lease ed epoch/token esatti, senza alterare le fence owner.
+Un lease scaduto non avanza il cursore; una nuova scansione ritenta il
+lavoro. Scheduler non montato, quote, retry/backoff e configurazione
+Management restano da integrare e collaudare.
 
 **Prima di un futuro deployment e di un cron:** provare il Worker con la
 versione Wrangler adottata dalla CI, schema e quote Cloudflare Free effettivi,
