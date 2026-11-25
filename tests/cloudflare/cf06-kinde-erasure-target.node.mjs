@@ -1219,6 +1219,72 @@ void test('the enqueue scanner processes one owner per step and keeps the unproc
   assert.equal(recovery.sqlite.prepare('SELECT COUNT(*) AS n FROM recovery_account_erasure_denials').get().n, 0);
 });
 
+void test('durable inactivity enqueue crosses full pages of ineligible owners without skipping or duplicating decisions', async (t) => {
+  const { db, sqlite, write } = await deletionAttemptFixture(t);
+  const recovery = openRecoveryFixture(t);
+  const clock = new DatabaseSync(':memory:');
+  t.after(() => clock.close());
+  const fmt = clock.prepare('SELECT strftime(?, ?) AS value');
+  let now = Date.now();
+  sqlite.function('strftime', (format, date) => fmt.get(format,
+    date === 'now' ? new Date(now).toISOString() : date).value);
+
+  const insertPrincipal = sqlite.prepare("INSERT INTO auth_principals VALUES (?, 'active', ?, 1)");
+  const insertSession = sqlite.prepare('INSERT INTO auth_sessions VALUES (?, ?, 1, ?, ?, ?, ?, NULL)');
+  const owners = [];
+  for (let index = 0; index < 35; index += 1) {
+    const subject = `kp_synthetic-scanner-page-${index}`;
+    const uid = await deriveKindeOwnerId(issuer, subject);
+    const sessionHash = createHash('sha256').update(subject).digest('hex');
+    insertPrincipal.run(uid, now - 1000);
+    insertSession.run(sessionHash, uid, 'c'.repeat(64), now - 1000, now + 30_000, now + 60_000);
+    await write(db, { uid, subject, authEpoch: 1 });
+    assert.deepEqual(await recordKindeForegroundActivity(db, {
+      uid, sessionHash, fenceEpoch: 1, authenticated: true, csrfVerified: true, rateGatePassed: true,
+    }), { outcome: 'recorded' });
+    owners.push(uid);
+  }
+  owners.sort();
+  const eligible = [owners[16], owners[17], owners[34]];
+  const disable = sqlite.prepare("UPDATE auth_principals SET status='disabled' WHERE uid=?");
+  for (const uid of owners) if (!eligible.includes(uid)) disable.run(uid);
+
+  const marker = now;
+  now = earliestKindeInactivityErasureAt(marker);
+  sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=2");
+  const tick = (database = db) => runKindeInactivityEnqueueTick(database, recovery.db, 2);
+  const checkpoint = () => ({ ...sqlite.prepare(
+    'SELECT cursor_uid, cursor_last_recorded_at_ms FROM kinde_inactivity_enqueue_checkpoint',
+  ).get() });
+  const intents = () => sqlite.prepare('SELECT uid FROM kinde_account_erasure_intents ORDER BY uid')
+    .all().map(row => row.uid);
+
+  assert.deepEqual(await tick(), { outcome: 'checkpointed', decision: 'none', endOfSweep: false });
+  assert.deepEqual(checkpoint(), { cursor_uid: owners[15], cursor_last_recorded_at_ms: marker });
+  assert.deepEqual(intents(), []);
+
+  assert.deepEqual(await tick(), { outcome: 'checkpointed', decision: 'recorded', endOfSweep: false });
+  assert.deepEqual(checkpoint(), { cursor_uid: owners[16], cursor_last_recorded_at_ms: marker });
+  assert.deepEqual(intents(), [owners[16]]);
+
+  const lostCheckpointAck = d1For(sqlite, { afterWrite(sql) {
+    if (sql.includes('UPDATE kinde_inactivity_enqueue_checkpoint') && sql.includes('SET cursor_uid')) {
+      throw Error('synthetic lost checkpoint acknowledgement');
+    }
+  } });
+  assert.deepEqual(await tick(lostCheckpointAck),
+    { outcome: 'checkpointed', decision: 'recorded', endOfSweep: false });
+  assert.deepEqual(checkpoint(), { cursor_uid: owners[32], cursor_last_recorded_at_ms: marker });
+  assert.deepEqual(intents(), [owners[16], owners[17]]);
+
+  assert.deepEqual(await tick(), { outcome: 'checkpointed', decision: 'recorded', endOfSweep: true });
+  assert.deepEqual(checkpoint(), { cursor_uid: null, cursor_last_recorded_at_ms: null });
+  assert.deepEqual(intents(), [...eligible].sort());
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM health_erasure_jobs').get().n, 0);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_requests').get().n, 0);
+  assert.equal(recovery.sqlite.prepare('SELECT COUNT(*) AS n FROM recovery_account_erasure_denials').get().n, 0);
+});
+
 void test('enqueue scanning does not report progress on a policy change or an ambiguous decision', async (t) => {
   const { db, sqlite, identity, write, attempt } = await deletionAttemptFixture(t);
   const recovery = openRecoveryFixture(t);
