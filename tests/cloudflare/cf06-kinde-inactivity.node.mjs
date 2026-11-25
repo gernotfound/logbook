@@ -22,7 +22,7 @@ const claims = {
   uid: UID, fenceEpoch: 1, sessionHash: HASH, authenticated: true, rateGatePassed: true, csrfVerified: true,
 };
 
-function fixture(t, rejectAfterWrite = false, hooks = {}) {
+function fixture(t, rejectAfterWrite = false, hooks = {}, { emailVerified = true } = {}) {
   const sqlite = new DatabaseSync(':memory:');
   const clock = new DatabaseSync(':memory:');
   t.after(() => { sqlite.close(); clock.close(); });
@@ -33,7 +33,7 @@ function fixture(t, rejectAfterWrite = false, hooks = {}) {
   sqlite.function('strftime', (format, date) =>
     formatTime.get(format, date === 'now' ? new Date(observedAt).toISOString() : date).value);
   const addPrincipal = sqlite.prepare("INSERT INTO auth_principals VALUES (?, 'active', ?, 1)");
-  addPrincipal.run(UID, VISIT - 1000);
+  addPrincipal.run(UID, emailVerified ? VISIT - 1000 : null);
   addPrincipal.run(OTHER_UID, VISIT - 1000);
   sqlite.prepare('INSERT INTO auth_sessions VALUES (?, ?, 1, ?, ?, ?, ?, NULL)')
     .run(HASH, UID, 'd'.repeat(64), VISIT - 1000, VISIT + IDLE_TTL, VISIT + IDLE_TTL);
@@ -365,7 +365,7 @@ void test('scheduled diagnostic mode requires an external recovery pin and never
 
 void test('candidate activity HTTP boundary uses real AuthGate, identity-only session and independent denial, never health consent', async (t) => {
   const hooks = {};
-  const { db, sqlite, advance } = fixture(t, false, hooks);
+  const { db, sqlite, advance } = fixture(t, false, hooks, { emailVerified: false });
   const registry = new DatabaseSync(':memory:');
   t.after(() => registry.close());
   applyCurrentD1RecoverySchema(registry);
@@ -420,7 +420,7 @@ void test('candidate activity HTTP boundary uses real AuthGate, identity-only se
   assert.equal(markers().length, 0);
   registry.exec("UPDATE recovery_control SET mode='open', generation=4");
   // A genuine identity session need not have verified email or health consent.
-  sqlite.prepare('UPDATE auth_principals SET verified_at_ms=NULL WHERE uid=?').run(UID);
+  assert.equal(sqlite.prepare('SELECT verified_at_ms FROM auth_principals WHERE uid=?').get(UID).verified_at_ms, null);
   const response = await fetch();
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('cache-control'), 'no-store');
@@ -439,8 +439,14 @@ void test('candidate activity HTTP boundary uses real AuthGate, identity-only se
   assert.equal((await fetch()).status, 503);
   delete hooks.afterFirst;
   assert.equal(markers()[0].last_recorded_at_ms, VISIT + ACTIVITY_WRITE_INTERVAL_MS);
+  // Synthetic restored application: the independent denial survives but the
+  // application still presents an active principal and unrevoked session.
+  registry.prepare('INSERT INTO recovery_account_erasure_denials VALUES (?, ?)').run(UID, 'f'.repeat(64));
+  advance(ACTIVITY_WRITE_INTERVAL_MS);
+  assert.equal((await fetch()).status, 503);
+  assert.equal(markers()[0].last_recorded_at_ms, VISIT + ACTIVITY_WRITE_INTERVAL_MS);
   sqlite.prepare('UPDATE auth_sessions SET revoked_at_ms=? WHERE token_hash=?')
-    .run(VISIT + ACTIVITY_WRITE_INTERVAL_MS, sessionHash);
+    .run(VISIT + 2 * ACTIVITY_WRITE_INTERVAL_MS, sessionHash);
   assert.equal((await fetch()).status, 401);
   assert.equal(markers().length, 1);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM health_consent_acceptances').get().n, 0);

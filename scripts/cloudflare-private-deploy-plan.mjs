@@ -16,6 +16,8 @@ const privateWorkflows = {
       'cloudflare/api/**',
       'cloudflare/auth/**',
       'cloudflare/recovery/**',
+      'cloudflare/jobs/kinde-erasure-intent.mjs',
+      'cloudflare/jobs/kinde-inactivity-time.mjs',
       'cloudflare/sql/**',
       'cloudflare/http/**',
       'package.json',
