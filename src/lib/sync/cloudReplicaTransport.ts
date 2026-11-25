@@ -69,6 +69,7 @@ export interface CloudReplicaRetirementRequest {
     expectedFenceEpoch: number;
     consentRevision: number;
     replica: Pick<ReplicaIdentity, 'slot' | 'replicaId' | 'generation'>;
+    confirmation?: { lastSeq: number; checkpointAtMs: number; leaseUntilMs: number };
 }
 
 export interface CloudReplicaMutationResult {
@@ -464,7 +465,10 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
             const confirmed = parseMutationResponse(value, body.mutationId, body.expectedRevision, ['retire']);
             if (confirmed.replica.slot !== body.replica.slot
                 || confirmed.replica.replicaId !== body.replica.replicaId
-                || confirmed.replica.generation !== body.replica.generation) {
+                || confirmed.replica.generation !== body.replica.generation
+                || (body.confirmation !== undefined && (confirmed.baseSeq !== body.confirmation.lastSeq
+                    || confirmed.replica.checkpointAtMs !== body.confirmation.checkpointAtMs
+                    || confirmed.replica.leaseUntilMs !== body.confirmation.leaseUntilMs))) {
                 throw new CloudReplicaTransportError(0);
             }
             if (confirmed.reconciliationRequired) {

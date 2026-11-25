@@ -153,12 +153,15 @@ export async function writeReplicaMutation(db, uid, mutation) {
   ];
   // First INSERT is a trigger-enforced CAS. Any later failure undoes the
   // membership mutation and its receipt in the same D1 transaction.
+  // Old-schema automatic retirements and claims do not need the new column.
+  // Explicit retirement fails closed until 0019 is actually applied.
+  const explicit = mutation.action === 'retire' && mutation.retirementMode === 'explicit';
   const statements = [
     db.prepare(`INSERT INTO sync_replica_mutations
       (uid,mutation_id,request_hash,action,expected_revision,committed_revision,
        consent_revision,fence_epoch,slot,replica_id,generation,last_seq,
-       checkpoint_at_ms,lease_until_ms,checkpoint_clock_json)
-      VALUES (?, ?, ${sessionFencedRequestHashSql}, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+       checkpoint_at_ms,lease_until_ms,checkpoint_clock_json${explicit ? ',retirement_mode' : ''})
+      VALUES (?, ?, ${sessionFencedRequestHashSql}, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${explicit ? ", 'explicit'" : ''})`)
       .bind(...params),
   ];
   if (mutation.action === 'retire') {
@@ -196,13 +199,16 @@ export function prepareReplicaClaim(control, checkpointClock, candidateReplicaId
   };
 }
 
-export function prepareReplicaRetirement(control, replica) {
+export function prepareReplicaRetirement(control, replica, confirmation = undefined) {
   const entry = control.replicas[replica.slot];
   if (!entry || entry.status !== 'active'
       || entry.replicaId !== replica.replicaId || entry.generation !== replica.generation
-      || entry.leaseUntilMs + SKEW_MS >= Date.now()) return null;
+      || (confirmation === undefined ? entry.leaseUntilMs + SKEW_MS >= Date.now()
+        : confirmation.lastSeq !== entry.lastSeq || confirmation.checkpointAtMs !== entry.checkpointAtMs
+          || confirmation.leaseUntilMs !== entry.leaseUntilMs)) return null;
   return {
     action: 'retire', ...replica, lastSeq: entry.lastSeq,
+    ...(confirmation === undefined ? {} : { retirementMode: 'explicit' }),
     checkpointAtMs: entry.checkpointAtMs, leaseUntilMs: entry.leaseUntilMs,
     checkpointClock: entry.checkpointClock,
   };

@@ -296,7 +296,7 @@ async function handler(request, env) {
       selected = prepareReplicaClaim(control, cloudClock,
         claim.data.candidateReplicaId, claim.data.currentReplica);
     } else if (retirement?.success) {
-      selected = prepareReplicaRetirement(control, retirement.data.replica);
+      selected = prepareReplicaRetirement(control, retirement.data.replica, retirement.data.confirmation);
     } else {
       throw new BadInput('invalid-input', 400);
     }

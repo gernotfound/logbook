@@ -62,6 +62,23 @@ describe('Cloudflare transport: durable retirement and stale receipt', () => {
         expect(fetcher).toHaveBeenCalledTimes(1);
     });
 
+    it('binds explicit retirement receipt to all confirmed membership metadata', async () => {
+        const target = { slot: 's03', replicaId: 'live-replica', generation: 2 };
+        const confirmation = { lastSeq: 9, checkpointAtMs: Date.now() - 1000, leaseUntilMs: Date.now() + 60000 };
+        const request = { mutationId: 'mutation0000000333', expectedRevision: 2, expectedFenceEpoch: 5,
+            consentRevision: 1, replica: target, confirmation };
+        const receipt = { mutationId: request.mutationId, action: 'retire', revision: 3, currentRevision: 3,
+            reconciliationRequired: false, replayed: true, baseSeq: confirmation.lastSeq,
+            replica: { ...target, checkpointAtMs: confirmation.checkpointAtMs, leaseUntilMs: confirmation.leaseUntilMs } };
+        const good = createCloudflareReplicaTransport(vi.fn(async () => new Response(JSON.stringify(receipt))) as typeof fetch);
+        await expect(good.replayStoredRetirement(request, 'csrf')).resolves.toEqual(receipt);
+        for (const wrong of [{ ...receipt, baseSeq: 10 }, { ...receipt, replica: { ...receipt.replica, leaseUntilMs: confirmation.leaseUntilMs + 1 } },
+            { ...receipt, replica: { ...receipt.replica, checkpointAtMs: confirmation.checkpointAtMs + 1 } }]) {
+            const remote = createCloudflareReplicaTransport(vi.fn(async () => new Response(JSON.stringify(wrong))) as typeof fetch);
+            await expect(remote.replayStoredRetirement(request, 'csrf')).rejects.toBeInstanceOf(CloudReplicaTransportError);
+        }
+    });
+
     it('refuses to adopt an old retire receipt after another replica changed the register', async () => {
         const target = { slot: 's00', replicaId: 'old-device', generation: 2 };
         const old = { mutationId: 'mutation0000000203', action: 'retire', revision: 3,

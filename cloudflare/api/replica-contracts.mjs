@@ -56,7 +56,10 @@ const claimInput = z.strictObject({
   ...mutationBase, candidateReplicaId: z.string().min(1).max(128).refine(s => s.trim() === s),
   currentReplica: replica.nullable(), checkpointClock: z.record(slot, safeInt),
 });
-const retireInput = z.strictObject({ ...mutationBase, replica });
+const retireInput = z.strictObject({ ...mutationBase, replica,
+  confirmation: z.strictObject({ lastSeq: safeInt, checkpointAtMs: safeInt.min(1),
+    leaseUntilMs: safeInt.min(1) }).optional(),
+});
 const readInput = z.strictObject({ paths: z.array(documentPath).min(1).max(8) });
 const pageInput = z.strictObject({ after: documentPath.nullable(), expectedRevision: safeInt.nullable() })
   .refine(value => (value.after === null) === (value.expectedRevision === null));

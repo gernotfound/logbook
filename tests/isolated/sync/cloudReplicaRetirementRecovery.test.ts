@@ -10,7 +10,7 @@ import { stageCloudflareReplicaRetirement, resumeCloudflareReplicaRetirement } f
 import { adoptReplicaCheckpoint, commitLocal, readLocal } from '../../../src/lib/sync/localRepository';
 import { lockAllVaults, unlockVaultForOwner } from '../../../src/lib/sync/secureArchiveSession';
 import { updateArchiveRecord } from '../../../src/lib/sync/secureArchiveRepository';
-import { data, owner, storage, stagedRetirement, remoteRetirement, resetRetirementFixture, cleanupRetirementFixture } from './cloudReplicaRetirementFixture';
+import { data, uid, owner, storage, stagedRetirement, remoteRetirement, resetRetirementFixture, cleanupRetirementFixture } from './cloudReplicaRetirementFixture';
 
 beforeEach(() => resetRetirementFixture(catalogSource.read));
 afterEach(cleanupRetirementFixture);
@@ -184,6 +184,61 @@ describe('candidate D1 durable expired-replica retirement', () => {
             .rejects.toThrow('Retirement D1 non installabile');
         expect(await get(storage)).toBe(sealed);
         expect((await readLocal(owner))!.pending).toEqual(journal);
+    });
+
+    it('stages explicit removal only for the confirmed remote incarnation and keeps the journal', async () => {
+        await commitLocal(owner, data(171), data(170));
+        const now = Date.now();
+        const target = { slot: 's02', replicaId: 'active-remote-device', generation: 1,
+            leaseUntilMs: now + 86400000, checkpointAtMs: now - 1000 };
+        const confirmation = { lastSeq: 8, leaseUntilMs: target.leaseUntilMs, checkpointAtMs: target.checkpointAtMs };
+        const control = { uid, revision: 0, fenceEpoch: 5, consentRevision: 1,
+            replicas: { s02: { ...target, status: 'active' as const, lastSeq: 8, checkpointClock: { s00: 4 } } } };
+        const original = await get(storage);
+        await expect(stageCloudflareReplicaRetirement(owner, control, target, () => true)).rejects.toThrow('non ritirabile');
+        await expect(stageCloudflareReplicaRetirement(owner, { ...control, uid: 'other' }, target, () => true, confirmation)).rejects.toThrow('non ritirabile');
+        await expect(stageCloudflareReplicaRetirement(owner, control, target, () => true, { ...confirmation, lastSeq: 7 })).rejects.toThrow('non ritirabile');
+        expect(await get(storage)).toBe(original);
+        const journal = (await readLocal(owner))!.pending;
+        const intent = await stageCloudflareReplicaRetirement(owner, control, target, () => true, confirmation);
+        expect(intent.confirmation).toEqual(confirmation);
+        const remote = remoteRetirement(target);
+        const retired = { ...control, revision: 1, replicas: { s02: { ...control.replicas.s02, status: 'retired' as const } } };
+        remote.control.mockResolvedValue(retired);
+        remote.replayStoredRetirement.mockRejectedValueOnce(new Error('lost explicit response'));
+        const sealed = await get(storage);
+        await expect(resumeCloudflareReplicaRetirement(owner, remote, 'session-csrf', () => true)).rejects.toThrow('lost explicit response');
+        expect(await get(storage)).toBe(sealed);
+        lockAllVaults();
+        await unlockVaultForOwner(owner);
+        expect((await readLocal(owner))!.cloudflareReplicaRetirement).toEqual(intent);
+        await expect(resumeCloudflareReplicaRetirement(owner, remote, 'session-csrf', () => true)).resolves.toBe('retired');
+        expect(remote.replayStoredRetirement.mock.calls[1][0]).toEqual(intent);
+        expect((await readLocal(owner))!.pending).toEqual(journal);
+        expect((await readLocal(owner))!.cloudflareReplicaRetirement).toBeUndefined();
+    });
+
+    it('never silently rebases explicit confirmation after the target renewed or advanced', async () => {
+        const now = Date.now();
+        const target = { slot: 's02', replicaId: 'active-remote-device', generation: 1,
+            leaseUntilMs: now + 86400000, checkpointAtMs: now - 1000 };
+        const confirmation = { lastSeq: 8, leaseUntilMs: target.leaseUntilMs, checkpointAtMs: target.checkpointAtMs };
+        const control = { uid, revision: 0, fenceEpoch: 5, consentRevision: 1,
+            replicas: { s02: { ...target, status: 'active' as const, lastSeq: 8, checkpointClock: { s00: 4 } } } };
+        const intent = await stageCloudflareReplicaRetirement(owner, control, target, () => true, confirmation);
+        const sealed = await get(storage);
+        const remote = remoteRetirement(target);
+        remote.replayStoredRetirement.mockRejectedValue(new CloudReplicaTransportError(409));
+        remote.retirementMutationOutcome.mockResolvedValue({ outcome: 'not-committed', currentRevision: 2 });
+        remote.control.mockResolvedValueOnce({ ...control, revision: 2, replicas: { s02: { ...control.replicas.s02, lastSeq: 9 } } });
+        await expect(resumeCloudflareReplicaRetirement(owner, remote, 'session-csrf', () => true)).resolves.toBe('reconciliation-required');
+        expect(await get(storage)).toBe(sealed);
+        const stable = { ...control, revision: 2 };
+        remote.control.mockResolvedValueOnce(stable).mockResolvedValueOnce(stable);
+        await expect(resumeCloudflareReplicaRetirement(owner, remote, 'session-csrf', () => true)).resolves.toBe('retry-staged');
+        const replacement = (await readLocal(owner))!.cloudflareReplicaRetirement!;
+        expect(replacement.mutationId).not.toBe(intent.mutationId);
+        expect(replacement).toEqual({ ...intent, mutationId: replacement.mutationId, expectedRevision: 2 });
     });
 
     it('reuses exactly the saved mutation after a timeout rather than inventing another retirement', async () => {
