@@ -108,6 +108,8 @@ void test('mutation requires session-bound CSRF; wrong, malformed, absent and re
     }
     const outcome = await status(env, { route: '/v1/sync/replica/status', csrfValue: csrf });
     assert.equal(outcome.status, 200);
+    assert.equal((await status(env, { route: '/v1/sync/replica/cancel', csrfValue: csrf })).status, 200);
+    assert.equal((await status(env, { route: '/v1/sync/replica/cancel', csrfValue: 'wrong' })).status, 403);
     const unverified = await status(env, { route: '/v1/sync/receipt', csrfValue: token });
     assert.equal(unverified.status, 403);
   } finally { sqlite.close(); }

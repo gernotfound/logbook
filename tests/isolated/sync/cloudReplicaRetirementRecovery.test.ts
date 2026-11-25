@@ -6,6 +6,7 @@ vi.mock('../../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: ca
 
 import { get } from 'idb-keyval';
 import { CloudReplicaTransportError } from '../../../src/lib/sync/cloudReplicaTransport';
+import { cancelCloudflareReplicaMutation } from '../../../src/lib/sync/cloudReplicaMutationCancellation';
 import { stageCloudflareReplicaRetirement, resumeCloudflareReplicaRetirement } from '../../../src/lib/sync/cloudReplicaRetirementRecovery';
 import { adoptReplicaCheckpoint, commitLocal, readLocal } from '../../../src/lib/sync/localRepository';
 import { lockAllVaults, unlockVaultForOwner } from '../../../src/lib/sync/secureArchiveSession';
@@ -239,6 +240,22 @@ describe('candidate D1 durable expired-replica retirement', () => {
         const replacement = (await readLocal(owner))!.cloudflareReplicaRetirement!;
         expect(replacement.mutationId).not.toBe(intent.mutationId);
         expect(replacement).toEqual({ ...intent, mutationId: replacement.mutationId, expectedRevision: 2 });
+    });
+
+    it('preserves a committed retirement on cancellation and clears only a proven-uncommitted intent', async () => {
+        await commitLocal(owner, data(171), data(170));
+        const { intent, control } = await stagedRetirement();
+        const before = (await readLocal(owner))!;
+        const sealed = await get(storage);
+        const committed = { cancelReplicaMutation: async () => ({ outcome: 'committed' as const, currentRevision: 1 }), control: async () => ({ ...control, uid, revision: 1 }) };
+        await expect(cancelCloudflareReplicaMutation(owner, intent.mutationId, committed, 'session-csrf', () => true)).resolves.toBe('committed');
+        expect(await get(storage)).toBe(sealed);
+        const cancel = { ...committed, cancelReplicaMutation: async () => ({ outcome: 'not-committed' as const, currentRevision: 1 }) };
+        await expect(cancelCloudflareReplicaMutation(owner, intent.mutationId, cancel, 'session-csrf', () => true)).resolves.toBe('cancelled');
+        const after = (await readLocal(owner))!;
+        expect(after.cloudflareReplicaRetirement).toBeUndefined();
+        expect(after.pending).toEqual(before.pending);
+        expect(after.replica).toEqual(before.replica);
     });
 
     it('reuses exactly the saved mutation after a timeout rather than inventing another retirement', async () => {

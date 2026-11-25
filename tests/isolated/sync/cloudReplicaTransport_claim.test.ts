@@ -39,6 +39,20 @@ describe('Cloudflare transport: primary non-commit and replica claim', () => {
         await expect(conflict.claimMutationOutcome(claim, 'csrf')).rejects.toMatchObject({ status: 409 });
     });
 
+    it('sends the original membership intent for explicit cancellation, never accepting an unchanged revision as proof', async () => {
+        const input = { mutationId: 'mutation0000000800', expectedRevision: 2,
+            expectedFenceEpoch: 5, consentRevision: 1, candidateReplicaId: 'candidate-device',
+            currentReplica: null, checkpointClock: {} };
+        const fetcher = vi.fn(async () => new Response(JSON.stringify({ outcome: 'not-committed', currentRevision: 3 })));
+        const remote = createCloudflareReplicaTransport(fetcher as typeof fetch);
+        await expect(remote.cancelReplicaMutation(input, 'csrf')).resolves.toEqual({ outcome: 'not-committed', currentRevision: 3 });
+        expect(fetcher).toHaveBeenCalledWith('/v1/sync/replica/cancel', expect.objectContaining({ method: 'POST', credentials: 'include',
+            headers: expect.objectContaining({ 'X-CSRF-Token': 'csrf' }) }));
+        expect(JSON.parse((fetcher.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)).toEqual(input);
+        const bad = createCloudflareReplicaTransport(vi.fn(async () => new Response(JSON.stringify({ outcome: 'not-committed', currentRevision: 2 }))) as typeof fetch);
+        await expect(bad.cancelReplicaMutation(input, 'csrf')).rejects.toBeInstanceOf(CloudReplicaTransportError);
+    });
+
     it('uses the original retirement body for primary non-commit proof without a grant', async () => {
         const original = {
             mutationId: 'mutation0000000811', expectedRevision: 4,

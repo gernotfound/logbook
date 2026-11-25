@@ -17,6 +17,7 @@ const BODY_LIMIT_BYTES = new Map([
   ['/v1/sync/replica/claim', 4096],
   ['/v1/sync/replica/retire', 4096],
   ['/v1/sync/replica/status', 4096],
+  ['/v1/sync/replica/cancel', 4096],
   ['/v1/sync/commit', MAX_BODY_BYTES],
   ['/v1/sync/commit/status', 512],
 ]);

@@ -14,7 +14,7 @@ import { requireIndependentAccountAccess } from '../recovery/account-erasure-den
 import { recordKindeForegroundActivity } from '../auth/kinde-foreground-activity.mjs';
 import {
   mutationResponse, prepareReplicaClaim, prepareReplicaRetirement, readPublicCheckpointClock,
-  readReplicaMutationReceipt, readReplicaMutationOutcome, writeReplicaMutation,
+  readReplicaMutationReceipt, readReplicaMutationOutcome, fenceUncommittedReplicaMutation, writeReplicaMutation,
 } from './replica-maintenance.mjs';
 
 function reply(body, status = 200) {
@@ -146,7 +146,7 @@ async function handler(request, env) {
   checkJsonRequestHeaders(request, maxBodyBytes);
   const claims = await authorize(request, env, route,
     route === '/v1/sync/commit' || route === '/v1/sync/commit/status' || route === '/v1/sync/replica/claim' || route === '/v1/sync/replica/retire' || route === '/v1/sync/replica/status'
-    || route === '/v1/rights/scan');
+    || route === '/v1/sync/replica/cancel' || route === '/v1/rights/scan');
   const uid = claims.uid;
   const consentRevision = claims.healthConsentRevision;
   const fenceEpoch = claims.fenceEpoch;
@@ -240,7 +240,7 @@ async function handler(request, env) {
     // Bind the control snapshot to its server-verified session owner.
     return guardedReply({ uid, ...control });
   }
-  if (route === '/v1/sync/replica/status') {
+  if (route === '/v1/sync/replica/status' || route === '/v1/sync/replica/cancel') {
     // The two strict schemas are disjoint: a status lookup proves absence
     // for the exact original mutation body, never just a shared mutationId.
     const claim = claimInput.safeParse(raw);
@@ -251,8 +251,19 @@ async function handler(request, env) {
       || input.expectedFenceEpoch !== fenceEpoch) throw new BadInput('access-revoked', 403);
     // Only the primary can establish non-commit under a concurrent lost ACK.
     // This single SELECT prevents a receipt/revision time-of-check race.
-    const row = await readReplicaMutationOutcome(env.DB, uid, consentRevision, fenceEpoch, input.mutationId, claims.sessionHash);
+    let row = await readReplicaMutationOutcome(env.DB, uid, consentRevision, fenceEpoch, input.mutationId, claims.sessionHash);
     if (!row) throw new BadInput('access-revoked', 403);
+    if (route === '/v1/sync/replica/cancel' && row.existing_hash === null
+      && row.current_revision === input.expectedRevision) {
+      // A cancellation is a control revision fence, not a receipt or a data
+      // mutation. The CAS and absent receipt are rechecked in the SQL write.
+      await fenceUncommittedReplicaMutation(env.DB, uid, consentRevision, fenceEpoch, input, claims.sessionHash);
+      row = await readReplicaMutationOutcome(env.DB, uid, consentRevision, fenceEpoch, input.mutationId, claims.sessionHash);
+      if (!row) throw new BadInput('access-revoked', 403);
+    }
+    if (!Number.isSafeInteger(row.current_revision) || row.current_revision < 0) {
+      throw new BadInput('cloud-unavailable', 503);
+    }
     if (row.existing_hash !== null) {
       if (row.existing_hash !== await payloadHash(input)
         || row.existing_consent_revision !== consentRevision
