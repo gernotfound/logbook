@@ -9,6 +9,7 @@ import {
 import { HEALTH_DATA_CLEANUP_TABLES } from './erasure-tables.mjs';
 import { runKindeAccountErasureSweepTick } from './kinde-account-erasure-scheduler.mjs';
 import { runKindeInactivityDryRunTick } from './kinde-inactivity-dry-run.mjs';
+import { runKindeInactivityEnqueueTick } from './kinde-inactivity-enqueue-scheduler.mjs';
 
 // Candidate-only D1 erasure worker. No public fetch, route or cron binding.
 // Terminal key erasure requires migration 0010: a single SQL INSERT atomically
@@ -384,10 +385,16 @@ export default {
     // One bounded pipeline per invocation. Account processing is application-only
     // until a separate, validated Management boundary is available.
     if (mode !== undefined && mode !== 'health' && mode !== 'account-application'
-      && mode !== 'alternating-application' && mode !== 'inactivity-dry-run') {
+      && mode !== 'alternating-application' && mode !== 'inactivity-dry-run'
+      && mode !== 'inactivity-enqueue') {
       return { outcome: 'paused' };
     }
-    if (mode === 'inactivity-dry-run') {
+    if (mode === 'inactivity-dry-run' || mode === 'inactivity-enqueue') {
+      // Enqueue freezes an account. A processing flag and valid recovery pin
+      // alone must never turn a previously diagnostic configuration destructive.
+      if (mode === 'inactivity-enqueue' && env.CF06_INACTIVITY_ENQUEUE_ENABLED !== 'enabled') {
+        return { outcome: 'paused' };
+      }
       // This pin is an external authorization, not a generation discovered
       // from a restored database. Invalid configuration must not read D1.
       const pin = env.CF06_INACTIVITY_RECOVERY_GENERATION;
@@ -396,7 +403,9 @@ export default {
       if (!Number.isSafeInteger(generation) || generation < 1 || String(generation) !== pin) {
         return { outcome: 'paused' };
       }
-      return await runKindeInactivityDryRunTick(env.DB, env.RECOVERY_DB, generation);
+      return mode === 'inactivity-dry-run'
+        ? await runKindeInactivityDryRunTick(env.DB, env.RECOVERY_DB, generation)
+        : await runKindeInactivityEnqueueTick(env.DB, env.RECOVERY_DB, generation);
     }
     const { DB, RECOVERY_DB } = env;
     if (mode === 'alternating-application') mode = await claimErasureLane(DB, RECOVERY_DB);
