@@ -14,8 +14,9 @@ import { recordKindeInactivityErasureIntent } from './kinde-inactivity-enqueue.m
  * @param {number} policyGeneration
  * @param {number} recoveryGeneration external trusted pin
  * @param {EnqueueCursor | null} [cursor]
+ * @param {Parameters<typeof recordKindeInactivityErasureIntent>[4]} [traversalLease]
  */
-export async function scanKindeInactivityEnqueueStep(db, recoveryDb, policyGeneration, recoveryGeneration, cursor = null) {
+export async function scanKindeInactivityEnqueueStep(db, recoveryDb, policyGeneration, recoveryGeneration, cursor = null, traversalLease = null) {
   if (!db || !recoveryDb || db === recoveryDb
     || !Number.isSafeInteger(policyGeneration) || policyGeneration < 1
     || !Number.isSafeInteger(recoveryGeneration) || recoveryGeneration < 1
@@ -41,7 +42,7 @@ export async function scanKindeInactivityEnqueueStep(db, recoveryDb, policyGener
   }
   const candidate = page.candidates[0];
   const intent = candidate
-    ? await recordKindeInactivityErasureIntent(db, recoveryDb, candidate, recoveryGeneration)
+    ? await recordKindeInactivityErasureIntent(db, recoveryDb, candidate, recoveryGeneration, traversalLease)
     : null;
   await requireCurrentPolicy();
 

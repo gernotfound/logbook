@@ -1,15 +1,15 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
-> **25/11/2026:** consultare prima il [quadro operativo corrente](cloudflare-current-state.md), che sostituisce gli snapshot storici come fonte di stato. Ledger remoto applicativo 0011 e recovery 0004; codice candidato 0016 e 0005. Non confondere build/deploy con applicazione schema. La decisione atomica di inattività è candidata; scanner persistente e ingresso diagnostico non accodano. Il boundary marker HTTP è candidato, non chiamato dal browser. Nessun cron attivo.
+> **25/11/2026:** consultare prima il [quadro operativo corrente](cloudflare-current-state.md), che sostituisce gli snapshot storici come fonte di stato. Ledger remoto applicativo 0011 e recovery 0004; codice candidato 0017 e 0005. Non confondere build/deploy con applicazione schema. La decisione atomica di inattività è candidata; scanner persistente e ingresso diagnostico non accodano. Il boundary marker HTTP è candidato, non chiamato dal browser. Nessun cron attivo.
 
 ## CF-06 — Verificare lo schema candidato di cancellazione account
 
 - Il workflow applicativo manuale `cloudflare-d1-isolated-migrations.yml`
   verifica il `main` remoto, il gate del relativo SHA e l'impronta della
-  migrazioni additive `0012`–`0016`. Per la D1 EU già usata per collaudare
-  l'identità Kinde, `upgrade_existing_test_db_0016` richiede un prefisso
-  contiguo `0011`–`0016` e tabelle nuove ancora vuote. La 0014 aggiunge
-  il checkpoint dello scheduler; la 0015 aggiunge il contatore di assegnazione, inizialmente zero. La 0016 aggiunge il checkpoint diagnostico inizialmente inutilizzato, con lease e generazioni. Il preflight verifica il controllo inattività iniziale paused/1 anche per ogni prefisso già a 0013 o superiore, prima di qualsiasi scrittura. Nessuna attiva il cron.
+  migrazioni additive `0012`–`0017`. Per la D1 EU già usata per collaudare
+  l'identità Kinde, `upgrade_existing_test_db_0017` richiede un prefisso
+  contiguo `0011`–`0017` e tabelle nuove ancora vuote. La 0014 aggiunge
+  il checkpoint dello scheduler; la 0015 aggiunge il contatore di assegnazione, inizialmente zero. La 0016 aggiunge il checkpoint diagnostico inizialmente inutilizzato, con lease e generazioni. La 0017 aggiunge il checkpoint enqueue separato, anch'esso inizialmente inutilizzato; il preflight e readback rifiutano un checkpoint già usato. Nessun mount dello scanner enqueue. Il preflight verifica il controllo inattività iniziale paused/1 anche per ogni prefisso già a 0013 o superiore, prima di qualsiasi scrittura. Nessuna attiva il cron.
   Richiede bookmark Time Travel, repliche disabilitate, identità di
   collaudo presenti e zero consensi, ADK e job sanitari. Il percorso
   predefinito richiede una D1 vuota.
