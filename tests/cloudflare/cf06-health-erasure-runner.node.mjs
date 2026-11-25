@@ -497,6 +497,44 @@ void test('keyless never-issued and missing-issued-key jobs remain incomplete, d
   }
 });
 
+void test('job selection starts from the runnable index even with unrelated subjects and a key-only scan', async () => {
+  const f = fixture();
+  try {
+    for (let i = 0; i < 128; i += 1) owner(f, 'unrelated-' + i);
+    owner(f, 'owner-key');
+    withdraw(f, 'owner-key');
+    assert.deepEqual(await runOneHealthErasureStep(f.db), { outcome: 'awaiting-keys' });
+    expire(f, 'owner-key');
+    owner(f, 'owner-data');
+    withdraw(f, 'owner-data', Date.now() - 2000);
+    const plans = [];
+    const db = { withSession(mode) {
+      const primary = f.db.withSession(mode);
+      return { prepare(sql) {
+        const statement = primary.prepare(sql);
+        if (!sql.includes('ORDER BY MAX(j.requested_at_ms, j.lease_until_ms)')) return statement;
+        return { bind(...args) {
+          plans.push(f.sqlite.prepare('EXPLAIN QUERY PLAN ' + sql).all(...args).map(row => row.detail));
+          return statement.bind(...args);
+        } };
+      } };
+    } };
+    const key = await acquireOneHealthErasureKeyPhaseLease(db);
+    assert.equal(key.outcome, 'leased');
+    assert.equal(key.uid, 'owner-key');
+    assert.equal(job(f, 'owner-data').lease_epoch, 0);
+    assert.deepEqual(await runOneHealthErasureStep(db), { outcome: 'awaiting-keys' });
+    assert.equal(job(f, 'owner-data').lease_epoch, 1);
+    assert.equal(plans.length, 2);
+    for (const plan of plans) {
+      assert.ok(plan.some(line => /SEARCH j USING INDEX health_erasure_runnable .*lease_until_ms/.test(line)),
+        JSON.stringify(plan));
+      assert.ok(!plan.some(line => /SCAN s(?:\s|$)/.test(line)), JSON.stringify(plan));
+    }
+    assert.equal(f.sqlite.prepare("SELECT COUNT(*) AS n FROM sync_subjects WHERE status='active'").get().n, 128);
+  } finally { f.sqlite.close(); }
+});
+
 void test('an expired failed owner yields to waiting owners and retries without losing its request', async () => {
   const f = fixture();
   const registry = new DatabaseSync(':memory:');
