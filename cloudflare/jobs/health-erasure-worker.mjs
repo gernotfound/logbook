@@ -1,6 +1,6 @@
 import { D1_NOW_MS } from '../sql/d1-time.mjs';
 import {
-  recordVerifiedTerminalErasure, requireIndependentOwnerFence,
+  IndependentFenceUnavailableError, recordVerifiedTerminalErasure, requireIndependentOwnerFence,
 } from '../recovery/independent-owner-fence.mjs';
 import {
   armIndependentErasureCutoff, reconcileNextIndependentErasure,
@@ -382,7 +382,12 @@ export default {
     if (mode === 'account-application') {
       return await runKindeAccountErasureSweepTick(DB, RECOVERY_DB);
     }
-    await reconcileNextIndependentErasure(DB, RECOVERY_DB);
-    return await runApplicationHealthErasureStep(DB, RECOVERY_DB);
+    const reconciliation = await reconcileNextIndependentErasure(DB, RECOVERY_DB);
+    // A reserved cutoff retry cannot authorize or prevent another owner's
+    // independently fenced step. Preserve a failed invocation for diagnostics;
+    // no completion receipt is returned for the unresolved cutoff.
+    const result = await runApplicationHealthErasureStep(DB, RECOVERY_DB);
+    if (reconciliation === 'blocked') throw new IndependentFenceUnavailableError();
+    return result;
   },
 };

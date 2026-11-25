@@ -47,6 +47,10 @@ cron, account deletion o inattività.
   alla scadenza, anche se il passo fallisce. Le richieste già in attesa non
   vengono monopolizzate dal job più vecchio; il lease autorizzativo resta
   invariato. Non è un backoff esponenziale né una garanzia contro outage globali.
+  Un errore di riconciliazione dopo la prenotazione durevole del retry non
+  impedisce il passo sanitario separato, soggetto alle proprie fence. Il tick
+  resta fallito se la riconciliazione non è provata; un gate indisponibile o
+  una prenotazione ambigua interrompono invece il tick prima del passo.
 - `node scripts/check-cloudflare-erasure-candidate.mjs` verifica il contratto
   del manifesto; `tests/cloudflare/cf06-erasure-worker-config.node.mjs`
   contiene regressioni che rifiutano aperture accidentali.
