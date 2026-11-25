@@ -6,6 +6,13 @@ ALTER TABLE sync_replica_mutations ADD COLUMN retirement_mode TEXT NOT NULL DEFA
 DROP TRIGGER sync_replica_mutation_fence;
 CREATE TRIGGER sync_replica_mutation_fence BEFORE INSERT ON sync_replica_mutations
 BEGIN
+  -- BEFORE INSERT trigger ordering is not a contract. Preserve the immutable
+  -- receipt rejection before CAS even if this fence runs ahead of 0009.
+  SELECT CASE WHEN EXISTS (
+    SELECT 1 FROM sync_replica_mutations m
+    WHERE m.uid = NEW.uid AND m.mutation_id = NEW.mutation_id
+  ) THEN RAISE(ABORT, 'sync-replica-mutation-immutable') END;
+
   SELECT CASE WHEN NOT EXISTS (
     SELECT 1 FROM sync_subjects a
     JOIN sync_state s ON s.uid = a.uid

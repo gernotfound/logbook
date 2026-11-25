@@ -101,8 +101,17 @@ void test('explicit retirement is exact, session-fenced and replayable without d
   db.batch = original;
   const latest = (await call(db, 'control', {})).body.replicas.s00;
   const confirmed = { ...input, confirmation: { lastSeq: latest.lastSeq, checkpointAtMs: latest.checkpointAtMs, leaseUntilMs: latest.leaseUntilMs } };
+  db.batch = async statements => {
+    const result = await original(statements);
+    if (statements[0]?.sql.includes('INSERT INTO sync_replica_mutations')) {
+      throw new Error('synthetic explicit retirement response lost after commit');
+    }
+    return result;
+  };
   const removed = await call(db, 'replica/retire', confirmed);
+  db.batch = original;
   assert.equal(removed.status, 200);
+  assert.equal(removed.body.replayed, true);
   assert.equal(removed.body.action, 'retire');
   assert.equal(removed.body.baseSeq, lastSeq);
   assert.equal(removed.body.revision, 2);

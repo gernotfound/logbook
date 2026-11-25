@@ -46,7 +46,7 @@ const ENQUEUE_MIGRATION_SHA256 = 'f06694c04972493a7d788999ba8e71a8bb5017806fa513
 const CAPACITY_MIGRATION = '0018_active_replica_capacity.sql';
 const CAPACITY_MIGRATION_SHA256 = '639df0e6a152fca082306604bee1bbde0ed279baa05e3dbe74a6a20394ffb4a9';
 const RETIREMENT_MIGRATION = '0019_explicit_replica_retirement.sql';
-const RETIREMENT_MIGRATION_SHA256 = '6340997763dbef07752b563e1c1aa210421ccc5f9d3690d5626f168f42cd041c';
+const RETIREMENT_MIGRATION_SHA256 = 'f5b2d34278d57a9757f9370797b6e764e1d382c114e91947f86c461b1ba2ef27';
 const MIGRATION_DIR = new URL('../cloudflare/api/migrations/', import.meta.url);
 const EXISTING_TEST_TABLES = Object.freeze({
   subjects: 'sync_subjects',
