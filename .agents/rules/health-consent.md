@@ -194,7 +194,12 @@ condizioni autorizzative o produrre una ricevuta. La riconciliazione di un
 cutoff già prenotato può fallire senza bloccare il passo di un altro owner,
 che richiede la propria fence indipendente; il tick resta fallito, senza
 attribuire una ricevuta al cutoff. Gate globale o prenotazione non provati
-interrompono il tick prima di qualsiasi passo. L'enrollment e l'attestazione
+interrompono il tick prima di qualsiasi passo. Il tick sanitario cattura
+la generazione recovery aperta una sola volta; prenotazione e cutoff la
+verificano nella SQL e nel readback, la fence owner, i passi applicativi e
+la prova terminale la mantengono fino all'esito. Un cambio globale non è
+un errore isolabile per owner; un effetto già committato resta recuperabile
+senza ACK. La quiescenza prima del restore resta indispensabile. L'enrollment e l'attestazione
 iniziale runtime (`requireOpen`) e la pubblicazione del floor terminale
 vincolano la scrittura e la rilettura alla stessa generazione aperta del
 registro indipendente. Seal/reopen durante la prova invalida l'esito;

@@ -655,6 +655,88 @@ void test('a failed reserved cutoff retry does not block another independently f
   } finally { clock.close(); registry.close(); f.sqlite.close(); }
 });
 
+void test('one scheduled health tick cannot cross a recovery generation at a destructive boundary', async () => {
+  for (const interruption of ['reservation', 'selection', 'data-write', 'cutoff', 'terminal-write']) {
+    const f = fixture();
+    const registry = new DatabaseSync(':memory:');
+    try {
+      applyCurrentD1RecoverySchema(registry);
+      registry.exec("UPDATE recovery_control SET mode='open', generation=2");
+      const recovery = new D1Sqlite(registry);
+      await ownerWithWrappedKey(f, 'owner-a');
+      await enrollIndependentOwner(recovery, 'owner-a');
+      await armIndependentHealthWithdrawal(recovery,
+        await recordVerifiedInitialConsent(f.db, recovery, 'owner-a'));
+      const keyPhase = interruption === 'cutoff' || interruption === 'terminal-write';
+      if (!keyPhase) insertDocuments(f, 'owner-a', 5);
+      withdraw(f, 'owner-a');
+      const env = { DB: f.db, RECOVERY_DB: recovery, CF06_ERASURE_RUN_ENABLED: 'enabled' };
+      if (keyPhase) {
+        assert.deepEqual(await erasureWorker.scheduled({}, env), { outcome: 'awaiting-keys' });
+        expire(f, 'owner-a');
+      }
+      let interrupted = false;
+      const reopen = () => {
+        assert.equal(interrupted, false);
+        interrupted = true;
+        registry.exec("UPDATE recovery_control SET mode='sealed', generation=3");
+        registry.exec("UPDATE recovery_control SET mode='open', generation=4");
+      };
+      const intercept = (db, predicate, method) => ({
+        withSession(mode) {
+          const primary = db.withSession(mode);
+          return { prepare(sql) {
+            const statement = primary.prepare(sql);
+            if (!predicate(sql)) return statement;
+            const wrap = (bound) => ({
+              async first() {
+                const value = await bound.first();
+                if (method === 'first') reopen();
+                return value;
+              },
+              async run() {
+                const value = await bound.run();
+                if (method === 'run') reopen();
+                return value;
+              },
+            });
+            return { ...wrap(statement), bind(...args) { return wrap(statement.bind(...args)); } };
+          } };
+        },
+      });
+      if (interruption === 'reservation') {
+        env.RECOVERY_DB = intercept(recovery, sql => sql.includes('UPDATE recovery_erasure_cutoffs SET next_check_ms'), 'first');
+      } else if (interruption === 'selection') {
+        env.DB = intercept(f.db, sql => sql.includes('ORDER BY MAX(j.requested_at_ms'), 'first');
+      } else if (interruption === 'data-write') {
+        env.DB = intercept(f.db, sql => sql.startsWith('DELETE FROM sync_documents'), 'run');
+      } else if (interruption === 'cutoff') {
+        env.RECOVERY_DB = intercept(recovery, sql => sql.includes('INSERT INTO recovery_erasure_cutoffs'), 'run');
+      } else {
+        env.DB = intercept(f.db, sql => sql.includes('INSERT INTO health_erasure_finalizations'), 'first');
+      }
+      await assert.rejects(erasureWorker.scheduled({}, env), /independent-recovery-fence-unavailable/);
+      assert.equal(interrupted, true);
+      assert.equal(count(f, 'sync_documents', 'owner-a'), keyPhase ? 0 : interruption === 'data-write' ? 1 : 5);
+      assert.equal(count(f, 'cloud_account_keys', 'owner-a'), interruption === 'terminal-write' ? 0 : 1);
+      assert.equal(count(f, 'health_erasure_finalizations', 'owner-a'), interruption === 'terminal-write' ? 1 : 0);
+      const cutoff = registry.prepare('SELECT finalized FROM recovery_erasure_cutoffs WHERE uid=?').get('owner-a');
+      assert.equal(cutoff?.finalized ?? 0, 0);
+      if (interruption === 'reservation' || interruption === 'selection') assert.equal(job(f, 'owner-a').lease_epoch, 0);
+      // A fresh invocation can resume only under the new generation, with the
+      // original owner fence, durable cutoff and exact SQL lease.
+      if (keyPhase) {
+        // A completed job is immutable; only the incomplete cutoff path
+        // needs another lease. A terminal commit is reconciled separately.
+        if (interruption === 'cutoff') expire(f, 'owner-a');
+        await erasureWorker.scheduled({}, { ...env, DB: f.db, RECOVERY_DB: recovery });
+        assert.equal(count(f, 'health_erasure_finalizations', 'owner-a'), 1);
+        assert.equal(registry.prepare('SELECT finalized FROM recovery_erasure_cutoffs WHERE uid=?').get('owner-a').finalized, 1);
+      }
+    } finally { registry.close(); f.sqlite.close(); }
+  }
+});
+
 void test('scheduler has no public fetch endpoint and handles only one bounded step per tick', async () => {
   assert.equal(typeof erasureWorker.fetch, 'undefined');
   const f = fixture();

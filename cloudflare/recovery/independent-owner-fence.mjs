@@ -61,7 +61,7 @@ async function readRegistry(db, uid, checkRights = false) {
  * This function cannot grant access if the independent DB is sealed,
  * unavailable, lacks the owner, or differs from current main D1 evidence.
  */
-export async function requireIndependentOwnerFence(fenceDb, subject, purpose = 'fitness') {
+export async function requireIndependentOwnerFence(fenceDb, subject, purpose = 'fitness', expectedRecoveryGeneration = null) {
   try {
     if (!validFence(subject) || !['fitness', 'rights', 'erasure', 'terminal'].includes(purpose)) {
       throw new IndependentFenceUnavailableError();
@@ -70,6 +70,7 @@ export async function requireIndependentOwnerFence(fenceDb, subject, purpose = '
     const floor = current?.owner;
     const expected = purpose === 'erasure' && floor?.status === 'blocked'
       ? { ...subject, status: 'blocked' } : subject;
+    if (expectedRecoveryGeneration !== null) requireOpenGeneration(current, expectedRecoveryGeneration);
     if (current?.mode !== 'open' || !matches(floor, expected)) {
       throw new IndependentFenceUnavailableError();
     }

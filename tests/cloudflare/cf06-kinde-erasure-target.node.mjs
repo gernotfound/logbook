@@ -654,7 +654,7 @@ void test('alternating scheduled mode persists one lane per tick and survives lo
 
   // A failed health turn must not prevent the subsequent account turn.
   const failingRecovery = { withSession() { throw new Error('synthetic-recovery-failure'); } };
-  await assert.rejects(healthErasureWorker.scheduled({}, { ...env, RECOVERY_DB: failingRecovery }), /synthetic-recovery-failure/);
+  await assert.rejects(healthErasureWorker.scheduled({}, { ...env, RECOVERY_DB: failingRecovery }), /independent-recovery-fence-unavailable/);
   assert.equal(turn.get().turn, 3);
   assert.deepEqual(await healthErasureWorker.scheduled({}, env), {
     outcome: 'checkpointed', result: { outcome: 'idle' },
