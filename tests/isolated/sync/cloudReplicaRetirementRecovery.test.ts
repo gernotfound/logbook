@@ -242,20 +242,27 @@ describe('candidate D1 durable expired-replica retirement', () => {
         expect(replacement).toEqual({ ...intent, mutationId: replacement.mutationId, expectedRevision: 2 });
     });
 
-    it('preserves a committed retirement on cancellation and clears only a proven-uncommitted intent', async () => {
+    it('after a lost cancellation response, a winning retirement keeps its original intent for ordinary recovery', async () => {
         await commitLocal(owner, data(171), data(170));
-        const { intent, control } = await stagedRetirement();
+        const { intent, control, target } = await stagedRetirement();
         const before = (await readLocal(owner))!;
+        const remote = remoteRetirement(target);
         const sealed = await get(storage);
+        const lost = { cancelReplicaMutation: async () => { throw new Error('cancel response lost'); }, control: async () => ({ ...control, uid, revision: 1 }) };
+        await expect(cancelCloudflareReplicaMutation(owner, intent.mutationId, lost, 'session-csrf', () => true)).rejects.toThrow('cancel response lost');
+        const cancelSealed = await get(storage);
+        expect(cancelSealed).not.toBe(sealed);
+        await expect(resumeCloudflareReplicaRetirement(owner, remote, 'session-csrf', () => true)).resolves.toBe('reconciliation-required');
+        expect(remote.replayStoredRetirement).not.toHaveBeenCalled();
         const committed = { cancelReplicaMutation: async () => ({ outcome: 'committed' as const, currentRevision: 1 }), control: async () => ({ ...control, uid, revision: 1 }) };
         await expect(cancelCloudflareReplicaMutation(owner, intent.mutationId, committed, 'session-csrf', () => true)).resolves.toBe('committed');
-        expect(await get(storage)).toBe(sealed);
-        const cancel = { ...committed, cancelReplicaMutation: async () => ({ outcome: 'not-committed' as const, currentRevision: 1 }) };
-        await expect(cancelCloudflareReplicaMutation(owner, intent.mutationId, cancel, 'session-csrf', () => true)).resolves.toBe('cancelled');
         const after = (await readLocal(owner))!;
-        expect(after.cloudflareReplicaRetirement).toBeUndefined();
+        expect(after.cloudflareReplicaRetirement).toEqual(intent);
+        expect(after.cloudflareReplicaCancellation).toBeUndefined();
         expect(after.pending).toEqual(before.pending);
         expect(after.replica).toEqual(before.replica);
+        await expect(resumeCloudflareReplicaRetirement(owner, remote, 'session-csrf', () => true)).resolves.toBe('retired');
+        expect((await readLocal(owner))!.pending).toEqual(before.pending);
     });
 
     it('reuses exactly the saved mutation after a timeout rather than inventing another retirement', async () => {

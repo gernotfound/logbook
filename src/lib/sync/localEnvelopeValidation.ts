@@ -36,6 +36,8 @@ interface LocalEnvelopeV5 {
     cloudflareReplicaClaim?: CloudflareReplicaClaimIntent;
     // Candidate only: immutable replica retirement request (not an ACK).
     cloudflareReplicaRetirement?: CloudflareReplicaRetirementIntent;
+    // Durable decision to cancel exactly the saved membership mutation; never sent as part of its hash-bound body.
+    cloudflareReplicaCancellation?: string;
     revision: number;
     // Persistent owner-scoped barrier for unverified cloud snapshots.
     cloudIntegrityFence?: string;
@@ -187,6 +189,11 @@ export function validateLocalEnvelope(value: unknown, owner: string): LocalEnvel
     if ([record.cloudflareDelivery, record.cloudflareReplicaClaim, record.cloudflareReplicaRetirement]
         .filter(value => value !== undefined).length > 1) {
         throw new Error('Intenti D1 incompatibili: archivio locale preservato.');
+    }
+    const cancellation = record.cloudflareReplicaCancellation;
+    if (cancellation !== undefined && (typeof cancellation !== 'string'
+        || cancellation !== (cloudflareReplicaClaim ?? cloudflareReplicaRetirement)?.mutationId)) {
+        throw new Error('Annullamento replica D1 non valido: archivio locale preservato.');
     }
     const cloudflareDelivery = record.cloudflareDelivery === undefined ? undefined
         : parseCloudflareDeliveryIntent(record.cloudflareDelivery, canonicalOwner, pending, replica,

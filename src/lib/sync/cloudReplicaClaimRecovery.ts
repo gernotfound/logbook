@@ -102,7 +102,8 @@ async function replaceClaimIntent(
         current(guard);
         const saved = validateLocalEnvelope(raw, owner);
         if (!saved || saved.cloudIntegrityFence || saved.cloudflareDelivery
-            || saved.cloudflareReplicaRetirement || saved.consentRevision !== intent.consentRevision
+            || saved.cloudflareReplicaRetirement || saved.cloudflareReplicaCancellation
+            || saved.consentRevision !== intent.consentRevision
             || !equal(saved.cloudflareReplicaClaim, intent)
             || !equal(tuple(saved.replica), intent.currentReplica)) {
             throw new Error('Rebase claim D1 concorrente o non autorizzato: intent e journal preservati.');
@@ -182,6 +183,7 @@ export async function resumeCloudflareReplicaClaim(
     if (!before) throw new Error('Archivio locale assente: claim sospeso.');
     const intent = before.cloudflareReplicaClaim;
     if (!intent) return 'idle';
+    if (before.cloudflareReplicaCancellation) return 'reconciliation-required';
     if (before.cloudIntegrityFence || before.cloudflareDelivery || before.cloudflareReplicaRetirement
         || before.consentRevision !== intent.consentRevision) {
         throw new Error('Barriera integrità D1: claim sospeso.');

@@ -139,7 +139,8 @@ async function rebaseUncommittedRetirement(
         current(guard);
         const saved = validateLocalEnvelope(raw, owner);
         if (!saved || saved.cloudIntegrityFence || saved.cloudflareDelivery
-            || saved.cloudflareReplicaClaim || saved.consentRevision !== intent.consentRevision
+            || saved.cloudflareReplicaClaim || saved.cloudflareReplicaCancellation
+            || saved.consentRevision !== intent.consentRevision
             || !equal(saved.cloudflareReplicaRetirement, intent)
             || (saved.replica !== null && sameReplica(saved.replica, intent.replica))
             || !mayRetire(target, intent.confirmation)) {
@@ -174,6 +175,7 @@ export async function resumeCloudflareReplicaRetirement(
     if (!local) throw new Error('Archivio locale assente: retirement sospeso.');
     const intent = local.cloudflareReplicaRetirement;
     if (!intent) return 'idle';
+    if (local.cloudflareReplicaCancellation) return 'reconciliation-required';
     if (local.cloudIntegrityFence || local.cloudflareDelivery || local.cloudflareReplicaClaim
         || local.consentRevision !== intent.consentRevision
         || (local.replica !== null && sameReplica(local.replica, intent.replica))) {
@@ -230,7 +232,8 @@ export async function resumeCloudflareReplicaRetirement(
         current(guard);
         const saved = validateLocalEnvelope(raw, owner);
         if (!saved || saved.cloudIntegrityFence || saved.cloudflareDelivery
-            || saved.cloudflareReplicaClaim || saved.consentRevision !== intent.consentRevision
+            || saved.cloudflareReplicaClaim || saved.cloudflareReplicaCancellation
+            || saved.consentRevision !== intent.consentRevision
             || !equal(saved.cloudflareReplicaRetirement, intent)) {
             throw new Error('Retirement D1 variato durante il salvataggio: journal preservato.');
         }
