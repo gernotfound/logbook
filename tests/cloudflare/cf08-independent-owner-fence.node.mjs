@@ -420,6 +420,24 @@ void test('operator census detects rollback of an identity-only account decision
   assert.deepEqual(await inspectRestoredD1Census(new D1Sqlite(restored), recovery),
     { outcome: 'blocked', reason: 'account-erasure-coverage-mismatch' });
 
+  // The old application snapshot has zero decisions. A truncated successful
+  // listing from the independent registry must not make it look consistent.
+  class MissingDenialListing extends D1Sqlite {
+    prepare(sql) {
+      const statement = super.prepare(sql);
+      if (!sql.includes('SELECT d.uid, d.intent_digest')) return statement;
+      return { bind: (...args) => ({
+        all: async () => {
+          const reply = await statement.bind(...args).all();
+          return { ...reply, results: reply.results.slice(1) };
+        },
+      }) };
+    }
+  }
+  assert.equal(ledger.prepare('SELECT COUNT(*) AS n FROM recovery_account_erasure_denials').get().n, 1);
+  assert.deepEqual(await inspectRestoredD1Census(new D1Sqlite(restored), new MissingDenialListing(ledger)),
+    { outcome: 'blocked', reason: 'account-erasure-coverage-mismatch' });
+
   await armIndependentAccountErasureDenial(wrong, { ...intent, receiptHash: '8'.repeat(64) });
   wrongLedger.exec("UPDATE recovery_control SET mode='sealed', generation=3");
   assert.deepEqual(await inspectRestoredD1Census(db, wrong),
@@ -602,14 +620,19 @@ void test('operator census rejects failed D1 reads and malformed independent row
   }
 });
 
-void test('operator census rejects owner counts beyond its bounded D1 read budget', async () => {
+void test('operator census accepts 512 covered owners and rejects the 513th', async () => {
   const app = new DatabaseSync(':memory:');
   const ledger = new DatabaseSync(':memory:');
   try {
     app.exec('PRAGMA foreign_keys=ON');
     applyCurrentD1Schema(app);
     applyCurrentD1RecoverySchema(ledger);
+    const appDb = new D1Sqlite(app);
+    const fenceDb = new D1Sqlite(ledger);
     for (let i = 0; i < 513; i++) {
+      if (i === 512) {
+        assert.deepEqual(await inspectRestoredD1Census(appDb, fenceDb), { outcome: 'consistent-for-diagnostics-only' });
+      }
       const uid = 'owner-' + String(i).padStart(4, '0');
       addOwner(app, uid);
       ledger.prepare(`INSERT INTO recovery_owner_fences

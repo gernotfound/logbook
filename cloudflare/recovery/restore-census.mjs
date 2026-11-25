@@ -6,9 +6,15 @@ import { QUALIFIED_INTENT_COLUMNS, intentFromRow } from '../jobs/kinde-erasure-i
 // Bound the full-table reads so a large or ambiguous source fails closed instead
 // of exhausting D1 Free quotas or reporting an incomplete scan as successful.
 const MAX_OWNERS = 512;
+// One metadata read per database. Counts saturate at the first unsupported
+// row so a large installation cannot trigger an unbounded table scan here.
 const COUNTS = Object.freeze({
-  restored: 'SELECT COUNT(*) AS total FROM sync_subjects',
-  independent: 'SELECT COUNT(*) AS total FROM recovery_owner_fences',
+  restored: `SELECT
+    (SELECT COUNT(*) FROM (SELECT 1 FROM sync_subjects LIMIT ${MAX_OWNERS + 1})) AS owners,
+    (SELECT COUNT(*) FROM (SELECT 1 FROM kinde_account_erasure_intents LIMIT ${MAX_OWNERS + 1})) AS accounts`,
+  independent: `SELECT
+    (SELECT COUNT(*) FROM (SELECT 1 FROM recovery_owner_fences LIMIT ${MAX_OWNERS + 1})) AS owners,
+    (SELECT COUNT(*) FROM (SELECT 1 FROM recovery_account_erasure_denials LIMIT ${MAX_OWNERS + 1})) AS accounts`,
 });
 const RESTORED_SQL = `SELECT uid, status, consent_revision, fence_epoch,
   erased_before_revision FROM sync_subjects ORDER BY uid LIMIT ?`;
@@ -46,10 +52,10 @@ function firstPrimary(db) {
   requireEvidence(conn && typeof conn.prepare === 'function', 'scan-unavailable');
   return conn;
 }
-function count(row) {
-  requireEvidence(row && Number.isSafeInteger(row.total) && row.total >= 0,
-    'scan-invalid-count');
-  return row.total;
+function count(value) {
+  requireEvidence(Number.isSafeInteger(value) && value >= 0, 'scan-invalid-count');
+  requireEvidence(value <= MAX_OWNERS, 'coverage-limit-exceeded');
+  return value;
 }
 async function metadata(restored, independent) {
   const control = await independent.prepare(CONTROL_SQL).first();
@@ -60,13 +66,15 @@ async function metadata(restored, independent) {
     'SELECT uid FROM recovery_erasure_cutoffs WHERE finalized = 0 LIMIT 1',
   ).first();
   requireEvidence(cutoff === null, 'terminal-erasure-cutoff-pending');
-  const restoredCount = count(await restored.prepare(COUNTS.restored).first());
-  const independentCount = count(await independent.prepare(COUNTS.independent).first());
+  const app = await restored.prepare(COUNTS.restored).first();
+  const registry = await independent.prepare(COUNTS.independent).first();
+  const restoredCount = count(app?.owners);
+  const independentCount = count(registry?.owners);
   requireEvidence(restoredCount > 0 && independentCount > 0,
     'independent-coverage-empty');
   requireEvidence(restoredCount === independentCount, 'owner-coverage-mismatch');
-  requireEvidence(restoredCount <= MAX_OWNERS, 'coverage-limit-exceeded');
-  return { generation: control.generation, restoredCount, independentCount };
+  return { generation: control.generation, restoredCount, independentCount,
+    intentCount: count(app?.accounts), denialCount: count(registry?.accounts) };
 }
 function normalizedRows(rows, independent) {
   requireEvidence(Array.isArray(rows), 'scan-unavailable');
@@ -160,6 +168,9 @@ export async function inspectRestoredD1Census(restoredDb, independentDb) {
     requireEvidence(firstRestored.length === before.restoredCount
       && firstIndependent.length === before.independentCount, 'owner-coverage-mismatch');
 
+    requireEvidence(firstAccounts.intents.length === before.intentCount
+      && firstAccounts.denials.length === before.denialCount, 'account-erasure-coverage-mismatch');
+
     // A second full read detects ordinary concurrent insert/update/delete,
     // while the final control generation check detects seal/unseal changes.
     // It is not an atomic barrier across databases or even across D1 queries.
@@ -167,6 +178,8 @@ export async function inspectRestoredD1Census(restoredDb, independentDb) {
     const secondIndependent = await readRows(independent, INDEPENDENT_SQL, true);
     const secondAccounts = await readAccountSnapshot(restored, independent);
     const after = await metadata(restored, independent);
+    requireEvidence(secondAccounts.intents.length === after.intentCount
+      && secondAccounts.denials.length === after.denialCount, 'account-erasure-coverage-mismatch');
     requireEvidence(before.generation === after.generation
       && before.restoredCount === after.restoredCount
       && before.independentCount === after.independentCount
