@@ -7,6 +7,7 @@ import {
 } from '../recovery/terminal-erasure-cutoff.mjs';
 
 import { HEALTH_DATA_CLEANUP_TABLES } from './erasure-tables.mjs';
+import { runKindeAccountErasureSweepTick } from './kinde-account-erasure-scheduler.mjs';
 
 // Candidate-only D1 erasure worker. No public fetch, route or cron binding.
 // Terminal key erasure requires migration 0010: a single SQL INSERT atomically
@@ -354,7 +355,16 @@ export default {
     // Worker was deployed. The candidate manifest does not bind this flag.
     // Pausing leaves all queued jobs and their leases intact for recovery.
     if (env?.CF06_ERASURE_RUN_ENABLED !== 'enabled') return { outcome: 'paused' };
+    const mode = env.CF06_ERASURE_RUN_MODE;
+    // One bounded pipeline per invocation. Account processing is application-only
+    // until a separate, validated Management boundary is available.
+    if (mode !== undefined && mode !== 'health' && mode !== 'account-application') {
+      return { outcome: 'paused' };
+    }
     const { DB, RECOVERY_DB } = env;
+    if (mode === 'account-application') {
+      return await runKindeAccountErasureSweepTick(DB, RECOVERY_DB);
+    }
     await reconcileNextIndependentErasure(DB, RECOVERY_DB);
     return await runApplicationHealthErasureStep(DB, RECOVERY_DB);
   },

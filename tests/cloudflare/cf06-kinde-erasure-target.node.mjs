@@ -550,6 +550,39 @@ void test('sweep commits a durable cursor even after its write reply is lost, th
   assert.throws(() => sqlite.exec("UPDATE kinde_account_erasure_scheduler SET cursor_uid=NULL"), /scheduler-fenced/);
 });
 
+void test('scheduled account application mode resumes durable intents without Management', async (t) => {
+  const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
+  const recovery = openRecoveryFixture(t);
+  await write(db, identity);
+  assert.ok(await recordKindeAccountErasureIntent(db, deletionRequestProof(attempt)));
+  const env = {
+    CF06_ERASURE_RUN_ENABLED: 'enabled',
+    CF06_ERASURE_RUN_MODE: 'account-application',
+    DB: db,
+    RECOVERY_DB: recovery.db,
+  };
+  const checkpoint = sqlite.prepare('SELECT cursor_uid, lease_epoch, lease_until_ms FROM kinde_account_erasure_scheduler');
+  assert.deepEqual(await healthErasureWorker.scheduled({}, { ...env, CF06_ERASURE_RUN_ENABLED: 'disabled' }),
+    { outcome: 'paused' });
+  assert.deepEqual({ ...checkpoint.get() }, { cursor_uid: null, lease_epoch: 0, lease_until_ms: 0 });
+  assert.deepEqual(await healthErasureWorker.scheduled({}, env), {
+    outcome: 'checkpointed', result: { outcome: 'accepted' },
+  });
+  assert.deepEqual({ ...checkpoint.get() }, { cursor_uid: identity.uid, lease_epoch: 1, lease_until_ms: 0 });
+  assert.equal(sqlite.prepare('SELECT status FROM auth_principals WHERE uid=?').get(identity.uid).status, 'disabled');
+  await assert.rejects(requireIndependentAccountAccess(recovery.db, identity.uid), /independent-recovery-fence-unavailable/);
+  assert.deepEqual(await healthErasureWorker.scheduled({}, env), {
+    outcome: 'checkpointed', result: { outcome: 'idle' },
+  });
+  assert.deepEqual(await healthErasureWorker.scheduled({}, env), {
+    outcome: 'checkpointed', result: { outcome: 'progress', removed: 2 },
+  });
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_completions').get().n, 0);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_erasure_targets').get().n, 1);
+  await assert.rejects(healthErasureWorker.scheduled({}, { ...env, RECOVERY_DB: db }),
+    /kinde-erasure-scheduler-unavailable/);
+});
+
 function controlSchedulerClock(t, sqlite) {
   const clock = new DatabaseSync(':memory:');
   t.after(() => clock.close());
