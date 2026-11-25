@@ -36,10 +36,23 @@ void test('CF-06 scheduler stays inert without an exact, deliberate processing o
     }), { outcome: 'paused' });
   }
   for (const pin of [undefined, null, '', true, 2, '0', '-2', '02', '2.0', '2e0', ' 2', '2 ', '2\n', '0x2', '9007199254740992']) {
+    for (const mode of ['inactivity-dry-run', 'inactivity-enqueue']) {
+      assert.deepEqual(await erasureWorker.scheduled({}, {
+        CF06_ERASURE_RUN_ENABLED: 'enabled',
+        CF06_ERASURE_RUN_MODE: mode,
+        CF06_INACTIVITY_ENQUEUE_ENABLED: 'enabled',
+        CF06_INACTIVITY_RECOVERY_GENERATION: pin,
+        get DB() { throw new Error('unexpected-primary-read'); },
+        get RECOVERY_DB() { throw new Error('unexpected-recovery-read'); },
+      }), { outcome: 'paused' });
+    }
+  }
+  for (const gate of [undefined, null, '', true, '1', 'true', 'enabled ']) {
     assert.deepEqual(await erasureWorker.scheduled({}, {
       CF06_ERASURE_RUN_ENABLED: 'enabled',
-      CF06_ERASURE_RUN_MODE: 'inactivity-dry-run',
-      CF06_INACTIVITY_RECOVERY_GENERATION: pin,
+      CF06_ERASURE_RUN_MODE: 'inactivity-enqueue',
+      CF06_INACTIVITY_ENQUEUE_ENABLED: gate,
+      CF06_INACTIVITY_RECOVERY_GENERATION: '2',
       get DB() { throw new Error('unexpected-primary-read'); },
       get RECOVERY_DB() { throw new Error('unexpected-recovery-read'); },
     }), { outcome: 'paused' });
@@ -65,6 +78,7 @@ void test('CF-06 candidate rejects accidental cron activation, new routes, secre
     { vars: { CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_ERASURE_RUN_MODE: 'account-application' } },
     { vars: { CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_ERASURE_RUN_MODE: 'alternating-application' } },
     { vars: { CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_ERASURE_RUN_MODE: 'inactivity-dry-run', CF06_INACTIVITY_RECOVERY_GENERATION: '2' } },
+    { vars: { CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_ERASURE_RUN_MODE: 'inactivity-enqueue', CF06_INACTIVITY_ENQUEUE_ENABLED: 'enabled', CF06_INACTIVITY_RECOVERY_GENERATION: '2' } },
     { unsafe: { bindings: [] } },
     { d1_databases: [candidate.d1_databases[0]] },
     { d1_databases: [

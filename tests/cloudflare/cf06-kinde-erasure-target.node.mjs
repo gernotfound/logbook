@@ -1319,3 +1319,44 @@ void test('the enqueue scheduler fences expired leases and recovers an exact los
   assert.equal(checkpoint().recovery_generation, 4);
   assert.throws(() => sqlite.exec('DELETE FROM kinde_inactivity_enqueue_checkpoint'), /enqueue-checkpoint-immutable/);
 });
+
+void test('scheduled enqueue needs two exact opt-ins and a recovery pin, then freezes at most one owner without cleanup', async (t) => {
+  const { db, sqlite, identity, write, attempt } = await deletionAttemptFixture(t);
+  const recovery = openRecoveryFixture(t);
+  const clock = new DatabaseSync(':memory:');
+  t.after(() => clock.close());
+  const fmt = clock.prepare('SELECT strftime(?, ?) AS value');
+  let now = Date.now();
+  sqlite.function('strftime', (format, date) => fmt.get(format, date === 'now' ? new Date(now).toISOString() : date).value);
+  await write(db, identity);
+  assert.deepEqual(await recordKindeForegroundActivity(db, {
+    uid: identity.uid, sessionHash: attempt.sessionHash, fenceEpoch: 1,
+    authenticated: true, csrfVerified: true, rateGatePassed: true,
+  }), { outcome: 'recorded' });
+  now = earliestKindeInactivityErasureAt(now);
+  const checkpoint = () => ({ ...sqlite.prepare('SELECT * FROM kinde_inactivity_enqueue_checkpoint').get() });
+  const initial = checkpoint();
+  const diagnostic = { ...sqlite.prepare('SELECT * FROM kinde_inactivity_scan_checkpoint').get() };
+  const env = { CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_ERASURE_RUN_MODE: 'inactivity-enqueue',
+    CF06_INACTIVITY_ENQUEUE_ENABLED: 'enabled', CF06_INACTIVITY_RECOVERY_GENERATION: '2',
+    DB: db, RECOVERY_DB: recovery.db };
+  assert.deepEqual(await healthErasureWorker.scheduled({}, env), { outcome: 'not-claimed' });
+  assert.deepEqual(checkpoint(), initial);
+  sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=2");
+  await assert.rejects(healthErasureWorker.scheduled({}, {
+    ...env, CF06_INACTIVITY_RECOVERY_GENERATION: '1',
+  }), /independent-recovery-fence-unavailable/);
+  assert.deepEqual(checkpoint(), initial);
+  assert.deepEqual(await healthErasureWorker.scheduled({}, env),
+    { outcome: 'checkpointed', decision: 'recorded', endOfSweep: true });
+  assert.equal(sqlite.prepare('SELECT status FROM auth_principals WHERE uid=?').get(identity.uid).status, 'disabled');
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_intents').get().n, 1);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_requests').get().n, 0);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM health_erasure_jobs').get().n, 0);
+  assert.equal(recovery.sqlite.prepare('SELECT COUNT(*) AS n FROM recovery_account_erasure_denials').get().n, 0);
+  assert.deepEqual({ ...sqlite.prepare('SELECT * FROM kinde_inactivity_scan_checkpoint').get() }, diagnostic);
+  assert.equal(sqlite.prepare('SELECT turn FROM erasure_dispatch_control').get().turn, 0);
+  assert.deepEqual(await healthErasureWorker.scheduled({}, env),
+    { outcome: 'checkpointed', decision: 'none', endOfSweep: true });
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_intents').get().n, 1);
+});

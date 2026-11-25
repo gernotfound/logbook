@@ -1,6 +1,6 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
-> **25/11/2026:** consultare prima il [quadro operativo corrente](cloudflare-current-state.md), che sostituisce gli snapshot storici come fonte di stato. Ledger remoto applicativo 0011 e recovery 0004; codice candidato 0019 e 0005. Non confondere build/deploy con applicazione schema. La decisione atomica di inattività e lo scheduler enqueue persistente 0017 sono candidati, non montati; solo lo scanner diagnostico è senza enqueue. Il boundary marker HTTP è candidato, non chiamato dal browser. Nessun cron attivo.
+> **25/11/2026:** consultare prima il [quadro operativo corrente](cloudflare-current-state.md), che sostituisce gli snapshot storici come fonte di stato. Ledger remoto applicativo 0011 e recovery 0004; codice candidato 0019 e 0005. Non confondere build/deploy con applicazione schema. La decisione atomica di inattività e lo scheduler enqueue persistente 0017 sono candidati; il nuovo ingresso scheduled `inactivity-enqueue` richiede un secondo opt-in distinto da quello generale e il pin recovery esterno. Il manifesto non configura flag, cron o route. Il boundary marker HTTP è candidato, non chiamato dal browser. Nessun cron attivo.
 
 ## CF-06 — Verificare lo schema candidato di cancellazione account
 

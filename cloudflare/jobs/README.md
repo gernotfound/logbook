@@ -26,15 +26,18 @@ cron, account deletion o inattività.
   quando nessuna riga è eleggibile. Il candidato dry-run 0016 mantiene
   cursor/lease in D1, resetta su cambio policy o recovery, non espone UID
   e non esegue enqueue. Non riusare il suo checkpoint per cancellazioni.
-  `recordKindeInactivityErasureIntent` collega atomicamente l'enqueue al controllo, al marker attività, all'epoch e al target; non accoda con sessione corrente e blocca il principal senza inventare una riautenticazione. Il candidato `scanKindeInactivityEnqueueStep` legge una pagina bounded e prova al massimo una decisione per invocazione; non avanza oltre candidati non processati, ricontrolla policy e pin recovery e non restituisce cursore dopo un esito ambiguo. Il cursore separato porta entrambe le generazioni. Lo scheduler candidato `runKindeInactivityEnqueueTick` usa il checkpoint 0017 distinto da 0016, verifica il lease nella decisione SQL e richiede readback esatto del cursore. Un lease scaduto non autorizza una nuova decisione. Nessun ingresso scheduled, cleanup o Management. La futura
+  `recordKindeInactivityErasureIntent` collega atomicamente l'enqueue al controllo, al marker attività, all'epoch e al target; non accoda con sessione corrente e blocca il principal senza inventare una riautenticazione. Il candidato `scanKindeInactivityEnqueueStep` legge una pagina bounded e prova al massimo una decisione per invocazione; non avanza oltre candidati non processati, ricontrolla policy e pin recovery e non restituisce cursore dopo un esito ambiguo. Il cursore separato porta entrambe le generazioni. Lo scheduler candidato `runKindeInactivityEnqueueTick` usa il checkpoint 0017 distinto da 0016, verifica il lease nella decisione SQL e richiede readback esatto del cursore. Un lease scaduto non autorizza una nuova decisione. L'ingresso scheduled candidato resta disattivato dal manifesto, senza cleanup o Management. La futura
   abilitazione richiede revisione e autorizzazione specifica, senza
   modificare implicitamente il manifesto isolato. I test sintetici che
   chiamano `runOneHealthErasureStep` non eludono questo gate di runtime.
 - Con il processore esplicitamente abilitato, `CF06_ERASURE_RUN_MODE` seleziona
   un solo percorso per invocazione: `health` (anche se omesso),
-  `account-application`, `alternating-application` oppure `inactivity-dry-run`.
-  Altri valori mantengono la pausa prima di leggere D1. Il percorso diagnostico
-  richiede anche `CF06_INACTIVITY_RECOVERY_GENERATION` come stringa decimale
+  `account-application`, `alternating-application`, `inactivity-dry-run`
+  oppure `inactivity-enqueue`. Quest'ultima modalità può congelare un account:
+  richiede anche `CF06_INACTIVITY_ENQUEUE_ENABLED=enabled` esatto, oltre al
+  flag generale e al pin recovery. Il manifesto non contiene questa variabile,
+  la modalità o un cron. Altri valori mantengono la pausa prima di leggere D1.
+  Entrambi i percorsi inattività richiedono `CF06_INACTIVITY_RECOVERY_GENERATION` come stringa decimale
   canonica positiva e sicura, proveniente dalla configurazione trusted: non
   deriva il pin dal registro corrente e non entra nelle lane di erasure.
   Il pin mancante o malformato mantiene la pausa prima di accedere ai binding;
