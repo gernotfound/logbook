@@ -13,6 +13,7 @@ import { deriveKindeOwnerId } from '../../cloudflare/auth/kinde-owner-id.mjs';
 import { createKindeErasureTargetCodec } from '../../cloudflare/jobs/kinde-erasure-target.mjs';
 import { createKindeErasureTargetWriter } from '../../cloudflare/jobs/kinde-erasure-target-store.mjs';
 import { acceptKindeAccountErasure, recordKindeAccountErasureIntent } from '../../cloudflare/jobs/kinde-account-erasure-requests.mjs';
+import { runKindeAccountErasureProviderStep } from '../../cloudflare/jobs/kinde-account-erasure-provider-step.mjs';
 import {
   IndependentFenceUnavailableError, enrollIndependentOwner,
   recordVerifiedInitialConsent, armIndependentHealthWithdrawal,
@@ -281,7 +282,9 @@ void test('operator census detects rollback of an identity-only account decision
   const app = new DatabaseSync(':memory:');
   const ledger = new DatabaseSync(':memory:');
   const wrongLedger = new DatabaseSync(':memory:');
+  let restored;
   t.after(() => {
+    restored?.close();
     app.close();
     ledger.close();
     wrongLedger.close();
@@ -328,8 +331,7 @@ void test('operator census detects rollback of an identity-only account decision
   assert.equal(app.prepare('SELECT uid FROM sync_subjects WHERE uid=?').get(uid), undefined);
   assert.deepEqual(await inspectRestoredD1Census(db, recovery), { outcome: 'consistent-for-diagnostics-only' });
 
-  const restored = new DatabaseSync(snapshot);
-  t.after(() => restored.close());
+  restored = new DatabaseSync(snapshot);
   assert.equal(restored.prepare('SELECT status FROM auth_principals WHERE uid=?').get(uid).status, 'active');
   assert.deepEqual(await inspectRestoredD1Census(new D1Sqlite(restored), recovery),
     { outcome: 'blocked', reason: 'account-erasure-coverage-mismatch' });
@@ -338,6 +340,32 @@ void test('operator census detects rollback of an identity-only account decision
   wrongLedger.exec("UPDATE recovery_control SET mode='sealed', generation=3");
   assert.deepEqual(await inspectRestoredD1Census(db, wrong),
     { outcome: 'blocked', reason: 'account-erasure-denial-mismatch' });
+
+  // Complete the identity-only path through the real provider step with a
+  // synthetic provider. Its terminal receipt and independent deny remain.
+  ledger.exec("UPDATE recovery_control SET mode='open', generation=6");
+  let present = true;
+  const calls = [];
+  const dependencies = {
+    issuer, codec, accessToken: 'synthetic.worker.token',
+    async fetchImpl(request) {
+      calls.push(request.method);
+      if (request.method === 'DELETE') {
+        assert.equal(new URL(request.url).searchParams.get('id'), subject);
+        present = false;
+        return Response.json({ code: 'OK', message: 'Synthetic acknowledgement' });
+      }
+      return Response.json({ code: 'OK', message: 'Synthetic lookup', users: present ? [{ id: subject }] : [] });
+    },
+  };
+  assert.equal((await runKindeAccountErasureProviderStep(db, recovery, intent, dependencies)).outcome, 'progress');
+  assert.equal((await runKindeAccountErasureProviderStep(db, recovery, intent, dependencies)).outcome, 'provider-acknowledged');
+  assert.equal((await runKindeAccountErasureProviderStep(db, recovery, intent, dependencies)).outcome, 'complete');
+  assert.deepEqual(calls, ['GET', 'DELETE', 'GET']);
+  ledger.exec("UPDATE recovery_control SET mode='sealed', generation=7");
+  assert.deepEqual(await inspectRestoredD1Census(db, recovery), { outcome: 'consistent-for-diagnostics-only' });
+  assert.deepEqual(await inspectRestoredD1Census(new D1Sqlite(restored), recovery),
+    { outcome: 'blocked', reason: 'account-erasure-coverage-mismatch' });
 });
 
 void test('operator census rejects switching between registry histories with matching withdrawal fields', async () => {
