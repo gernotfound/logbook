@@ -62,7 +62,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
                                     <span>Ultimo checkpoint: {dateText(entry.checkpointAtMs)}</span>
                                     <span>Scadenza registrata: {dateText(entry.leaseUntilMs)}</span>
                                     <details>
-                                        <summary>Identificativo tecnico e sequenza</summary>
+                                        <summary className="disclosure-summary">Identificativo tecnico e sequenza</summary>
                                         <code>{entry.replicaId}</code>
                                         <span>Sequenza confermata: {entry.lastSeq}</span>
                                     </details>
