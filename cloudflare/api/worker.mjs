@@ -300,6 +300,7 @@ async function handler(request, env) {
     } else {
       throw new BadInput('invalid-input', 400);
     }
+    if (selected === 'capacity') throw new BadInput('replica-capacity', 409);
     if (!selected) throw new BadInput('replica-fenced-or-conflict', 409);
     const mutation = {
       ...selected, mutationId: input.mutationId, hash,
@@ -324,6 +325,9 @@ async function handler(request, env) {
       if (state.revision !== input.expectedRevision
         || /replica-control-fenced|replica-id-reuse|UNIQUE constraint|replica-regression/i.test(String(error?.message))) {
         throw new BadInput('replica-fenced-or-conflict', 409);
+      }
+      if (isClaim && String(error?.message).includes('replica-capacity')) {
+        throw new BadInput('replica-capacity', 409);
       }
       if (missingKey && state.revision === 0 && state.stored_keys === 0 && state.issued_keys === 0
         && state.documents === 0 && state.replicas === 0

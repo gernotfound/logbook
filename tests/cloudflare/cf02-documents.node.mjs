@@ -93,7 +93,7 @@ void test('a retired replica ID cannot rejoin after its slot is reused by a new 
   for (let i = 2; i < 16; i += 1) {
     db.sqlite.prepare('INSERT INTO sync_replicas (uid,slot,replica_id,generation,lease_until_ms,checkpoint_at_ms,checkpoint_clock_json,last_seq,status) VALUES (?,?,?,?,?,?,?,?,?)')
       .run(owner, `s${String(i).padStart(2, '0')}`, `occupied-device-${i}`, 1,
-        i === 2 ? now - 600000 : now + 86400000, now - 86400000, '{}', 0, 'active');
+        now - 600000, now - 86400000, '{}', 0, 'active');
   }
   const replacement = await call(db, 'replica/claim', claim('mutation0000000602', 2, 'successor-device-0001'));
   assert.equal(replacement.status, 200);
@@ -218,4 +218,43 @@ void test('same expected revision permits only one concurrent replica registrati
   assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 1);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 1);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replicas').get().n, 2);
+}));
+
+void test('five live memberships are atomic across two connections, preserve historical proof and fence direct writes', () => withFixture(async (db, second) => {
+  for (let i = 1; i <= 3; i += 1) {
+    const outcome = await call(db, 'replica/claim', claim('capacity-mutation-' + i, i - 1, 'capacity-device-' + i));
+    assert.equal(outcome.status, 200);
+  }
+  const fifth = [claim('capacity-race-first', 3, 'capacity-first-device'),
+    claim('capacity-race-second', 3, 'capacity-second-device')];
+  const outcomes = await Promise.all([call(db, 'replica/claim', fifth[0]), call(second, 'replica/claim', fifth[1])]);
+  assert.deepEqual(outcomes.map(r => r.status).sort(), [200, 409]);
+  const winner = outcomes.findIndex(r => r.status === 200);
+  const receipt = await call(db, 'replica/claim', fifth[winner]);
+  assert.equal(receipt.status, 200);
+  assert.equal(receipt.body.replayed, true);
+  const count = () => db.sqlite.prepare("SELECT COUNT(*) AS n FROM sync_replicas WHERE uid=? AND status='active' AND lease_until_ms+300000 >= ?").get(owner, Date.now()).n;
+  assert.equal(count(), 5);
+  const sixth = claim('capacity-sixth-attempt', 4, 'capacity-sixth-device');
+  assert.deepEqual(await call(second, 'replica/claim', sixth), { status: 409, body: { error: 'replica-capacity' } });
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 4);
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 4);
+  const renewed = await call(db, 'replica/claim', claim('capacity-renew-first', 4, fifth[winner].candidateReplicaId));
+  assert.equal(renewed.status, 200);
+  assert.equal(renewed.body.action, 'checkpoint');
+  assert.equal(count(), 5);
+  const now = Date.now();
+  const insert = db.sqlite.prepare("INSERT INTO sync_replicas VALUES (?, 's15', 'direct-capacity-device', 1, ?, ?, '{}', 0, ?)");
+  assert.throws(() => insert.run(owner, now + 86400000, now, 'active'), /replica-capacity/);
+  insert.run(owner, now - 600000, now - 86400000, 'active');
+  assert.throws(() => db.sqlite.prepare("UPDATE sync_replicas SET lease_until_ms=? WHERE uid=? AND slot='s15'").run(now + 86400000, owner), /replica-capacity/);
+  assert.equal(count(), 5);
+  // A lease beyond its skew margin frees a place; the historical actor stays.
+  db.sqlite.prepare("UPDATE sync_replicas SET lease_until_ms=? WHERE uid=? AND slot='s01'").run(now - 600000, owner);
+  assert.equal(count(), 4);
+  const replacement = await call(db, 'replica/claim', { ...sixth, mutationId: 'capacity-sixth-rebased', expectedRevision: 5 });
+  assert.equal(replacement.status, 200);
+  assert.equal(count(), 5);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM sync_replicas WHERE uid=? AND slot='s15'").get(owner).n, 1);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 6);
 }));

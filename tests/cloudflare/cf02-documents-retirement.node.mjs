@@ -17,7 +17,7 @@ void test('retirement requires elapsed lease plus skew; reused slot fences old j
   const now = Date.now();
   for (let i = 1; i < 16; i++) {
     db.sqlite.prepare('INSERT INTO sync_replicas (uid,slot,replica_id,generation,lease_until_ms,checkpoint_at_ms,checkpoint_clock_json,last_seq,status) VALUES (?,?,?,?,?,?,?,?,?)')
-      .run(owner, `s${String(i).padStart(2, '0')}`, `occupied-device-${i}`, 1, now + 86400000, now, '{}', 0, 'active');
+      .run(owner, `s${String(i).padStart(2, '0')}`, `occupied-device-${i}`, 1, now - 600000, now - 86400000, '{}', 0, 'active');
   }
   const again = await call(db, 'replica/claim', claim('mutation0000000010', 1, 'new-device'));
   assert.equal(again.status, 200);
