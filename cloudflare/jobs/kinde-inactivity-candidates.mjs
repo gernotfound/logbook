@@ -26,11 +26,20 @@ export async function readKindeInactivityCandidates(db, after = null) {
   }
   const cursorPredicate = after === null ? '' : 'AND (a.last_recorded_at_ms, a.uid) > (?, ?)';
   const cursorBindings = after === null ? [] : [after.lastRecordedAtMs, after.uid];
+  // Limit indexed activity rows before joining principals: filtering inactive
+  // owners first can scan arbitrarily many rows in a single invocation.
   const page = await db.withSession('first-primary').prepare(`
-    SELECT a.uid, p.auth_epoch, a.last_recorded_at_ms, control.generation, ${D1_NOW_MS} AS observed_at_ms
-    ${ELIGIBLE_SOURCE} AND a.last_recorded_at_ms <= ${D1_NOW_MS} - ?
-    ${cursorPredicate}
-    ORDER BY a.last_recorded_at_ms, a.uid LIMIT ${MAX_PAGE}
+    WITH activity_page AS MATERIALIZED (
+      SELECT a.uid, a.last_recorded_at_ms, control.generation, ${D1_NOW_MS} AS observed_at_ms
+      FROM kinde_inactivity_control control CROSS JOIN kinde_account_activity a
+      WHERE control.singleton = 1 AND control.mode = 'enabled'
+        AND a.last_recorded_at_ms <= ${D1_NOW_MS} - ?
+      ${cursorPredicate}
+      ORDER BY a.last_recorded_at_ms, a.uid LIMIT ${MAX_PAGE}
+    )
+    SELECT a.uid, p.auth_epoch, p.status AS principal_status, a.last_recorded_at_ms, a.generation, a.observed_at_ms
+    FROM activity_page a LEFT JOIN auth_principals p ON p.uid = a.uid
+    ORDER BY a.last_recorded_at_ms, a.uid
   `).bind(DAYS_365_MS, ...cursorBindings).all();
   if (page?.success !== true || !Array.isArray(page.results) || page.results.length > MAX_PAGE) {
     throw new Error('kinde-inactivity-candidates-unavailable');
@@ -39,13 +48,14 @@ export async function readKindeInactivityCandidates(db, after = null) {
   for (const row of page.results) {
     const eligibleAtMs = earliestKindeInactivityErasureAt(row.last_recorded_at_ms);
     if (!Number.isSafeInteger(row.observed_at_ms) || row.observed_at_ms <= 0
+      || !['active', 'disabled', 'deleted'].includes(row.principal_status)
       || !Number.isSafeInteger(row.auth_epoch) || row.auth_epoch < 1
       || !Number.isSafeInteger(row.generation) || row.generation < 1
       || !Number.isSafeInteger(row.last_recorded_at_ms) || row.last_recorded_at_ms <= 0
       || typeof row.uid !== 'string' || !UID.test(row.uid)) {
       throw new Error('kinde-inactivity-candidates-unavailable');
     }
-    if (eligibleAtMs !== null && eligibleAtMs <= row.observed_at_ms) {
+    if (row.principal_status === 'active' && eligibleAtMs !== null && eligibleAtMs <= row.observed_at_ms) {
       candidates.push({ uid: row.uid, authEpoch: row.auth_epoch, generation: row.generation,
         lastRecordedAtMs: row.last_recorded_at_ms, eligibleAtMs });
     }

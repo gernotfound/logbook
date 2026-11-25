@@ -21,7 +21,8 @@ cron, account deletion o inattività.
   un tick già avviato; i job e i lease restano persistiti per il recupero.
   Questo è un arresto del **processore**, distinto dal controllo candidato
   dell'inattività introdotto in 0013 (paused per default, generazione).
-  La selezione dry-run non accoda e avanza di una pagina SQL bounded anche
+  La selezione dry-run limita la pagina indicizzata a 16 marker prima
+  del join e del filtro sul principal; non accoda e avanza anche
   quando nessuna riga è eleggibile; il futuro scanner deve distinguere
   pagina senza candidati da fine scansione e ripartire a cambio generazione.
   `recordKindeInactivityErasureIntent` collega atomicamente l'enqueue al controllo, al marker attività, all'epoch e al target; non accoda con sessione corrente e blocca il principal senza inventare una riautenticazione. Lo scanner schedulato non è montato. La futura
