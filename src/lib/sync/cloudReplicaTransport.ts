@@ -118,6 +118,16 @@ export class CloudReplicaTransportError extends Error {
     }
 }
 
+/** Capacity is a refusal, not proof that an earlier request did not commit. */
+export class CloudReplicaCapacityError extends CloudReplicaTransportError {
+    readonly code = 'replica-capacity';
+    constructor() {
+        super(409);
+        this.name = 'CloudReplicaCapacityError';
+        this.message = 'Limite di cinque repliche attive raggiunto. Il journal locale resta disponibile per il recupero.';
+    }
+}
+
 /** No wrapped key or issuance marker exists for the authorized owner.
  * This is a precondition, never an ACK, grant or vault reset authority.
  */
@@ -297,20 +307,24 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
         } catch {
             throw new CloudReplicaTransportError(0);
         }
-        if (route === 'replica/claim' && response.status === 428) {
+        if (route === 'replica/claim' && (response.status === 428 || response.status === 409)) {
             const media = response.headers.get('content-type')?.toLowerCase() ?? '';
             const noStore = response.headers.get('cache-control')?.toLowerCase()
                 .split(',').some(item => item.trim() === 'no-store') ?? false;
             if ((media !== 'application/json' && !media.startsWith('application/json;'))
-                || !noStore) throw new CloudReplicaTransportError(428);
+                || !noStore) throw new CloudReplicaTransportError(response.status);
             let condition: unknown;
             try { condition = await readBoundedResponse(response, MAX_SMALL_RESPONSE_BYTES); }
-            catch { throw new CloudReplicaTransportError(428); }
-            if (isRecord(condition) && Object.keys(condition).length === 1
-                && condition.error === 'cloud-key-required') {
-                throw new CloudReplicaCloudKeyRequiredError();
+            catch { throw new CloudReplicaTransportError(response.status); }
+            if (isRecord(condition) && Object.keys(condition).length === 1) {
+                if (response.status === 428 && condition.error === 'cloud-key-required') {
+                    throw new CloudReplicaCloudKeyRequiredError();
+                }
+                if (response.status === 409 && condition.error === 'replica-capacity') {
+                    throw new CloudReplicaCapacityError();
+                }
             }
-            throw new CloudReplicaTransportError(428);
+            throw new CloudReplicaTransportError(response.status);
         }
         if (!response.ok) throw new CloudReplicaTransportError(response.status);
         const maxResponseBytes = route === 'read' || route === 'scan'

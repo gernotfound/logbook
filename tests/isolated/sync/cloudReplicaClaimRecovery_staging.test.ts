@@ -3,7 +3,7 @@ import { owner, uid, storage, key, data, prepare, transport } from './cloudRepli
 import { get } from 'idb-keyval';
 import { readAuthenticatedCloudflareCheckpoint } from '../../../src/lib/sync/cloudReplicaCheckpoint';
 import { stageCloudflareReplicaClaim, resumeCloudflareReplicaClaim } from '../../../src/lib/sync/cloudReplicaClaimRecovery';
-import { CloudReplicaCloudKeyRequiredError } from '../../../src/lib/sync/cloudReplicaTransport';
+import { CloudReplicaCapacityError, CloudReplicaCloudKeyRequiredError } from '../../../src/lib/sync/cloudReplicaTransport';
 import { readLocal, commitLocal } from '../../../src/lib/sync/localRepository';
 
 describe('D1 claim: durable staging and first replay', () => {
@@ -67,6 +67,20 @@ describe('D1 claim: durable staging and first replay', () => {
         expect(remote.replayStoredClaim.mock.calls[1][0]).toEqual(staged);
         expect((await readLocal(owner))!.pending.length).toBeGreaterThan(0);
         expect((await readLocal(owner))!.pending.every(op => op.actorId === 's01')).toBe(true);
+    });
+
+    it('preserves the exact staged claim and journal on capacity without automatic reconciliation', async () => {
+        const { staged, snapshot } = await prepare();
+        await commitLocal(owner, data(171), data(170));
+        const sealed = await get(storage);
+        const remote = transport(snapshot);
+        remote.replayStoredClaim.mockRejectedValueOnce(new CloudReplicaCapacityError());
+        await expect(resumeCloudflareReplicaClaim(owner, key, remote, 'session-csrf', () => true))
+            .rejects.toBeInstanceOf(CloudReplicaCapacityError);
+        expect(await get(storage)).toBe(sealed);
+        expect((await readLocal(owner))?.cloudflareReplicaClaim).toEqual(staged);
+        expect(remote.claimMutationOutcome).not.toHaveBeenCalled();
+        expect(remote.scanAll).not.toHaveBeenCalled();
     });
 
     it('preserves the sealed claim and journal when the cloud key is missing', async () => {

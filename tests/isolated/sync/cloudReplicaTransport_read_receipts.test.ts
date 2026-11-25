@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { replicaTransportBatch as batch } from './cloudReplicaTransportFixture';
-import { CloudReplicaCloudKeyRequiredError, CloudReplicaTransportError, createCloudflareReplicaTransport } from '../../../src/lib/sync/cloudReplicaTransport';
+import { CloudReplicaCapacityError, CloudReplicaCloudKeyRequiredError, CloudReplicaTransportError, createCloudflareReplicaTransport } from '../../../src/lib/sync/cloudReplicaTransport';
 
 describe('Cloudflare transport: read and exact receipt authentication', () => {
     it('sends credentialed same-origin reads and returns ciphertext without granting an ACK', async () => {
@@ -96,6 +96,26 @@ describe('Cloudflare transport: read and exact receipt authentication', () => {
             const client = createCloudflareReplicaTransport(vi.fn(async () => response) as typeof fetch);
             await expect(client.replayStoredClaim(claim, 'csrf'))
                 .rejects.not.toBeInstanceOf(CloudReplicaCloudKeyRequiredError);
+        }
+    });
+
+    it('distinguishes a bounded exact claim capacity refusal from other conflicts', async () => {
+        const claim = { mutationId: 'mutation0000000001', expectedRevision: 0,
+            expectedFenceEpoch: 1, consentRevision: 1, candidateReplicaId: 'device-a',
+            currentReplica: null, checkpointClock: {} };
+        const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
+        const exact = createCloudflareReplicaTransport(vi.fn(async () => new Response(
+            '{"error":"replica-capacity"}', { status: 409, headers },
+        )) as typeof fetch);
+        await expect(exact.replayStoredClaim(claim, 'csrf')).rejects.toBeInstanceOf(CloudReplicaCapacityError);
+        for (const response of [
+            new Response('{"error":"replica-capacity"}', { status: 409 }),
+            new Response('{"error":"replica-capacity","proof":true}', { status: 409, headers }),
+            new Response('{"error":"replica-capacity"}', { status: 428, headers }),
+            new Response('{"error":"replica-capacity"}', { status: 409, headers: { ...headers, 'Content-Length': String(16 * 1024 + 1) } }),
+        ]) {
+            const remote = createCloudflareReplicaTransport(vi.fn(async () => response) as typeof fetch);
+            await expect(remote.replayStoredClaim(claim, 'csrf')).rejects.not.toBeInstanceOf(CloudReplicaCapacityError);
         }
     });
 

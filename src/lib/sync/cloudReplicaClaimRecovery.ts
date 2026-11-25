@@ -2,7 +2,7 @@ import equal from 'fast-deep-equal';
 import type { AuthenticatedCloudflareCheckpoint } from './cloudReplicaCheckpoint';
 import { readAuthenticatedCloudflareCheckpoint } from './cloudReplicaCheckpoint';
 import {
-    CloudReplicaMutationReconciliationRequiredError, CloudReplicaTransportError,
+    CloudReplicaCapacityError, CloudReplicaMutationReconciliationRequiredError, CloudReplicaTransportError,
     type CloudReplicaControlSnapshot, type CloudReplicaMutationResult, type createCloudflareReplicaTransport,
 } from './cloudReplicaTransport';
 import { parseCloudflareReplicaClaimIntent, type CloudflareReplicaClaimIntent } from './cloudReplicaClaimRecord';
@@ -192,6 +192,7 @@ export async function resumeCloudflareReplicaClaim(
         receipt = await transport.replayStoredClaim(intent, csrfToken);
     } catch (error) {
         current(guard);
+        if (error instanceof CloudReplicaCapacityError) throw error;
         if (!(error instanceof CloudReplicaMutationReconciliationRequiredError)) {
             if (error instanceof CloudReplicaTransportError && error.status === 409) {
                 return rebaseUncommittedClaim(owner, uid, intent, accountKey, transport, csrfToken, guard);

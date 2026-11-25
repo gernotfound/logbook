@@ -5,6 +5,8 @@ import { activeSessionArgs, activeSessionPredicateSql, sessionFencedRequestHashS
 // Public cloud clocks are queryable without decrypting business or field guards.
 const SLOT = /^s(?:0[0-9]|1[0-5])$/;
 const SLOT_IDS = Array.from({ length: 16 }, (_, i) => `s${String(i).padStart(2, '0')}`);
+// Product membership cap is independent of the Protocol 3 clock dimension.
+const MAX_ACTIVE_REPLICAS = 5;
 const LEASE_MS = 360 * 24 * 60 * 60 * 1000;
 const SKEW_MS = 5 * 60 * 1000;
 
@@ -58,6 +60,8 @@ function chooseReplicaClaim(control, candidateId, current, checkpointClock, now)
   }
   // A retired/expired incarnation must not be resurrected with its old ID.
   if (Object.values(entries).some(entry => entry.replicaId === candidateId)) return null;
+
+  if (Object.values(entries).filter(isEligible).length >= MAX_ACTIVE_REPLICAS) return 'capacity';
 
   const available = SLOT_IDS.find(slot => !Object.hasOwn(entries, slot))
     ?? SLOT_IDS.find(slot => entries[slot].status === 'retired')
@@ -185,7 +189,7 @@ export async function writeReplicaMutation(db, uid, mutation) {
 export function prepareReplicaClaim(control, checkpointClock, candidateReplicaId, currentReplica) {
   const now = Date.now();
   const selected = chooseReplicaClaim(control, candidateReplicaId, currentReplica, checkpointClock, now);
-  if (!selected) return null;
+  if (!selected || selected === 'capacity') return selected;
   return {
     ...selected, checkpointAtMs: now, leaseUntilMs: now + LEASE_MS,
     checkpointClock,
