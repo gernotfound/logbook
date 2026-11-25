@@ -1,5 +1,11 @@
 # Storage e sincronizzazione — TheLogBook
 
+### CF-04 — Annullamento esplicito di claim/retirement sigillati (candidato 25/11/2026)
+
+La schermata candidata legge una richiesta già sigillata nell'archivio owner-scoped soltanto con sessione Kinde, consenso, cookie CSRF, epoch e vault device correnti. La conferma utente conserva la `mutationId` osservata; il bridge rilegge l'intento prima di chiamare il boundary `cancelCloudflareReplicaMutation()`. Non si crea un nuovo vault/claim e non si annulla un'altra operazione se una scheda concorrente ha sostituito l'intento.
+
+La decisione di annullamento viene resa durevole **prima** della rete. Soltanto la prova primaria del CAS remoto che rende impossibile il commit originale consente di rimuovere claim/retirement locale; una richiesta già committata richiede il recupero ordinario, non una cancellazione retroattiva. Risposta persa, cambio sessione/owner/consenso o prova incompleta preservano intento, marker e journal, senza ACK business. Il percorso pubblico `identityOnly` non espone l'azione. Test client/React e test isolati SQL sono verifiche distinte da un GO su dispositivi/provider reali.
+
 ### CF-04 — Ripresa di un invio D1 dopo una scrittura da un altro dispositivo (21/11/2026)
 
 Il bootstrap Kinde candidato riconcilia l'intento cifrato già in IndexedDB prima della hydration. Se D1 prova che il batch originale non è stato committato e il journal viene ristadiato sul nuovo checkpoint autenticato, uno svuotamento esplicito può tentare il batch sostitutivo una sola volta nella stessa richiesta. Conserva le operazioni causali e richiede la ricevuta esatta del batch consegnato. Un nuovo conflitto o errore lascia intatto il journal per una verifica successiva. Il collaudo sintetico conserva due vault e due sessioni distinti e verifica la convergenza dopo un HTTP 429 e una scrittura concorrente. Il percorso rimane candidato.
