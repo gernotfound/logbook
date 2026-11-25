@@ -14,7 +14,7 @@ const DATA_ROUTES = new Set([
   '/v1/cloud-key/sync', '/v1/cloud-key/rights-export', '/v1/rights/scan',
   '/v1/sync/control', '/v1/sync/read', '/v1/sync/scan',
   '/v1/sync/receipt', '/v1/sync/commit', '/v1/sync/commit/status',
-  '/v1/sync/replica/claim', '/v1/sync/replica/retire', '/v1/sync/replica/status',
+  '/v1/sync/replica/claim', '/v1/sync/replica/retire', '/v1/sync/replica/status', '/v1/sync/replica/cancel',
 ]);
 // Match the existing eight-document API cap. The private Worker also enforces
 // streaming body limits, including when Content-Length is missing or forged.

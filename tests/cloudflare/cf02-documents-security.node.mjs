@@ -87,6 +87,7 @@ void test('revoked Auth session after private gate cannot read snapshots, replic
     ['scan', { after: null, expectedRevision: null }],
     ['receipt', { batchId: original.batchId }],
     ['replica/status', claim('mutation0000000996')],
+    ['replica/cancel', claim('mutation0000000996')],
     ['replica/claim', claim('mutation0000000997')],
     ['commit', original],
   ];
@@ -280,4 +281,40 @@ void test('current independent registry enforces pending withdrawal and erasure 
   assert.throws(() => sqlite.prepare('DELETE FROM recovery_erasure_cutoffs WHERE uid=?').run(pendingUid),
     /recovery-erasure-cutoff-immutable/);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM recovery_erasure_cutoffs WHERE uid=?').get(pendingUid).n, 1);
+}));
+
+void test('logout immediately before cancellation SQL prevents revision advance', () => withFixture(async db => {
+  const intercepted = Object.create(db);
+  intercepted.prepare = sql => {
+    if (sql.startsWith('UPDATE sync_state SET revision = revision + 1')) {
+      db.sqlite.prepare('UPDATE auth_sessions SET revoked_at_ms = ? WHERE token_hash = ?')
+        .run(Date.now(), syntheticSessionHash);
+    }
+    return db.prepare(sql);
+  };
+  const response = await call(db, 'replica/cancel', claim('cancel-revoked-00001'), {
+    env: { ...makeEnv(db), DB: intercepted },
+  });
+  assert.deepEqual(response, { status: 403, body: { error: 'access-revoked' } });
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 0);
+}));
+
+void test('lost cancellation response after SQL write is recoverable only by primary proof', () => withFixture(async db => {
+  const input = claim('cancel-lost-ack-0001');
+  const intercepted = Object.create(db);
+  intercepted.prepare = sql => {
+    const statement = db.prepare(sql);
+    if (!sql.startsWith('UPDATE sync_state SET revision = revision + 1')) return statement;
+    return { bind(...args) { return { async run() {
+      await statement.bind(...args).run();
+      throw new Error('synthetic lost cancellation write response');
+    } }; } };
+  };
+  const response = await call(db, 'replica/cancel', input, { env: { ...makeEnv(db), DB: intercepted } });
+  assert.equal(response.status, 503);
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 1);
+  assert.deepEqual(await call(db, 'replica/cancel', input), { status: 200, body: { outcome: 'not-committed', currentRevision: 1 } });
+  assert.equal((await call(db, 'replica/claim', input)).status, 409);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 0);
 }));

@@ -289,7 +289,7 @@ async function collectCompleteScan(
  * validates identity, health consent and session-bound CSRF independently.
  */
 export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
-    async function post(route: 'read' | 'scan' | 'control' | 'replica/claim' | 'replica/retire' | 'replica/status' | 'commit' | 'commit/status' | 'receipt', body: unknown, csrfToken?: string): Promise<unknown> {
+    async function post(route: 'read' | 'scan' | 'control' | 'replica/claim' | 'replica/retire' | 'replica/status' | 'replica/cancel' | 'commit' | 'commit/status' | 'receipt', body: unknown, csrfToken?: string): Promise<unknown> {
         let response: Response;
         try {
             response = await send('/v1/sync/' + route, {
@@ -340,9 +340,10 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
     async function mutationOutcome(
         body: CloudReplicaClaimRequest | CloudReplicaRetirementRequest,
         csrfToken: string,
+        route: 'replica/status' | 'replica/cancel' = 'replica/status',
     ): Promise<CloudReplicaClaimMutationOutcome> {
         if (!csrfToken) throw new CloudReplicaTransportError(0);
-        const value = await post('replica/status', body, csrfToken);
+        const value = await post(route, body, csrfToken);
         if (!isRecord(value) || !safeRevision(value.currentRevision)
             || (value.outcome !== 'committed' && value.outcome !== 'not-committed'
                 && value.outcome !== 'inconclusive')
@@ -446,6 +447,12 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
             csrfToken: string,
         ): Promise<CloudReplicaClaimMutationOutcome> {
             return mutationOutcome(body, csrfToken);
+        },
+        async cancelReplicaMutation(
+            body: CloudReplicaClaimRequest | CloudReplicaRetirementRequest,
+            csrfToken: string,
+        ): Promise<CloudReplicaClaimMutationOutcome> {
+            return mutationOutcome(body, csrfToken, 'replica/cancel');
         },
         async retirementMutationOutcome(
             body: CloudReplicaRetirementRequest,

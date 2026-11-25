@@ -68,6 +68,7 @@ void test('each sync route rejects oversized JSON before D1 work without shrinki
     ['replica/claim', claim('mutation0000000901'), 4096],
     ['replica/retire', retire('mutation0000000902', 0), 4096],
     ['replica/status', claim('mutation0000000903'), 4096],
+    ['replica/cancel', claim('mutation0000000904'), 4096],
   ];
   for (const [route, body, max] of cases) {
     const padded = JSON.stringify(body).padEnd(max + 1, ' ');

@@ -258,3 +258,43 @@ void test('five live memberships are atomic across two connections, preserve his
   assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM sync_replicas WHERE uid=? AND slot='s15'").get(owner).n, 1);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 6);
 }));
+
+void test('capacity claim can be explicitly cancelled without changing membership, and delayed original CAS cannot commit', () => withFixture(async (db, other) => {
+  for (let i = 0; i < 4; i++) {
+    assert.equal((await call(db, 'replica/claim', claim('cancel-capacity-claim-' + i, i, 'capacity-device-' + i))).status, 200);
+  }
+  const input = claim('cancel-capacity-sixth', 4, 'capacity-sixth-device');
+  assert.deepEqual(await call(db, 'replica/claim', input), { status: 409, body: { error: 'replica-capacity' } });
+  assert.deepEqual(await call(db, 'replica/status', input), { status: 200, body: { outcome: 'inconclusive', currentRevision: 4 } });
+  const before = db.sqlite.prepare('SELECT * FROM sync_replicas ORDER BY slot').all();
+  assert.equal((await call(db, 'replica/cancel', input, { env: makeEnv(db, { csrfVerified: false }) })).status, 403);
+  assert.equal((await call(db, 'replica/cancel', { ...input, expectedFenceEpoch: 4 })).status, 403);
+  assert.equal((await call(db, 'replica/cancel', { ...input, uid: 'other' })).status, 400);
+  assert.deepEqual(await call(other, 'replica/cancel', input), { status: 200, body: { outcome: 'not-committed', currentRevision: 5 } });
+  assert.deepEqual(await call(db, 'replica/cancel', input), { status: 200, body: { outcome: 'not-committed', currentRevision: 5 } });
+  assert.deepEqual(db.sqlite.prepare('SELECT * FROM sync_replicas ORDER BY slot').all(), before);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 4);
+  const target = { slot: 's01', replicaId: before[1].replica_id, generation: before[1].generation };
+  const confirmation = { lastSeq: before[1].last_seq, checkpointAtMs: before[1].checkpoint_at_ms, leaseUntilMs: before[1].lease_until_ms };
+  assert.equal((await call(db, 'replica/retire', { ...retire('capacity-free-device-1', 5, target), confirmation })).status, 200);
+  assert.equal((await call(other, 'replica/claim', input)).status, 409);
+  assert.equal((await call(other, 'replica/claim', claim('capacity-new-claim-01', 6, input.candidateReplicaId))).status, 200);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM sync_replicas WHERE status='active'").get().n, 5);
+}));
+
+void test('cancellation racing the original registration yields only real receipt or irreversible non-commit', () => withFixture(async (db, other) => {
+  const input = claim('cancel-race-claim-01');
+  const [registered, cancelled] = await Promise.all([call(db, 'replica/claim', input), call(other, 'replica/cancel', input)]);
+  assert.equal(cancelled.status, 200);
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 1);
+  if (registered.status === 200) {
+    assert.equal(cancelled.body.outcome, 'committed');
+    assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 1);
+    assert.deepEqual(await call(other, 'replica/cancel', { ...input, candidateReplicaId: 'wrong' }), { status: 409, body: { error: 'mutation-id-conflict' } });
+  } else {
+    assert.equal(registered.status, 409);
+    assert.equal(cancelled.body.outcome, 'not-committed');
+    assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 0);
+    assert.equal((await call(db, 'replica/claim', input)).status, 409);
+  }
+}));

@@ -125,6 +125,22 @@ export async function readReplicaMutationOutcome(db, uid, consentRevision, fence
       ...activeSessionArgs(sessionHash, uid, fenceEpoch)).first();
 }
 
+// The original revision CAS and its receipt absence are checked in ONE SQL
+// statement. A zero-row update or lost response is never a cancellation proof;
+// the caller must reread the primary mutation outcome. No membership, clock,
+// receipt or business journal is changed by advancing the control revision.
+export async function fenceUncommittedReplicaMutation(db, uid, consentRevision, fenceEpoch, input, sessionHash) {
+  await db.prepare(`UPDATE sync_state SET revision = revision + 1
+    WHERE uid = ? AND revision = ? AND revision < 9007199254740991
+      AND NOT EXISTS (SELECT 1 FROM sync_replica_mutations m
+        WHERE m.uid = sync_state.uid AND m.mutation_id = ?)
+      AND EXISTS (SELECT 1 FROM sync_writable_cloud_key k
+        WHERE k.uid = sync_state.uid AND k.consent_revision = ?)
+      AND ${activeSessionPredicateSql}`)
+    .bind(uid, input.expectedRevision, input.mutationId, consentRevision,
+      ...activeSessionArgs(sessionHash, uid, fenceEpoch)).run();
+}
+
 export function mutationResponse(mutationId, receipt, replayed) {
   return {
     mutationId, action: receipt.action, revision: receipt.committed_revision,
