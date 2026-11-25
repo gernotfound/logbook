@@ -1,5 +1,6 @@
 import { D1_NOW_MS } from '../sql/d1-time.mjs';
-import { armIndependentAccountErasureDenial } from '../recovery/account-erasure-denials.mjs';
+import { readOpenRecoveryGeneration } from '../recovery/independent-owner-fence.mjs';
+import { armIndependentAccountErasureDenial, requireIndependentAccountErasureDenial } from '../recovery/account-erasure-denials.mjs';
 import { INTENT_SCOPE, intentScopeArgs, matchesErasureIntent, readErasureIntent } from './kinde-erasure-intent.mjs';
 
 const UID = /^k_[A-Za-z0-9_-]{43}$/;
@@ -120,6 +121,13 @@ export async function requestKindeAccountErasure(db, intent, proveIndependentDen
  */
 export function acceptKindeAccountErasure(db, recoveryDb, intent) {
   if (!db || !recoveryDb || db === recoveryDb) throw new Error('kinde-erasure-request-unavailable');
-  return requestKindeAccountErasure(db, intent, current =>
-    armIndependentAccountErasureDenial(recoveryDb, current));
+  return (async () => {
+    try {
+      const generation = await readOpenRecoveryGeneration(recoveryDb);
+      const accepted = await requestKindeAccountErasure(db, intent, current =>
+        armIndependentAccountErasureDenial(recoveryDb, current, generation));
+      if (accepted) await requireIndependentAccountErasureDenial(recoveryDb, intent, generation);
+      return accepted;
+    } catch { throw new Error('kinde-erasure-request-unavailable'); }
+  })();
 }

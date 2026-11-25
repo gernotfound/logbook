@@ -97,6 +97,17 @@ function requireOpenGeneration(registry, expected = null) {
   return registry.generation;
 }
 
+// Used by operations whose authority spans asynchronous application or
+// provider work. A fresh open state alone cannot validate an old proof.
+export async function readOpenRecoveryGeneration(db, expected = null) {
+  try {
+    const row = await primary(db).prepare('SELECT mode, generation FROM recovery_control WHERE singleton = 1').first();
+    return requireOpenGeneration(row, expected);
+  } catch {
+    throw new IndependentFenceUnavailableError();
+  }
+}
+
 async function applyTransition(db, before, after, generation = null) {
   const result = await primary(db).prepare(`UPDATE recovery_owner_fences SET
     status = ?, consent_revision = ?, fence_epoch = ?,

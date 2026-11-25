@@ -1,4 +1,4 @@
-import { IndependentFenceUnavailableError, requireIndependentOwnerFence } from './independent-owner-fence.mjs';
+import { IndependentFenceUnavailableError, readOpenRecoveryGeneration, requireIndependentOwnerFence } from './independent-owner-fence.mjs';
 
 import { INTENT_SCOPE, intentScopeArgs, validErasureIntent } from '../jobs/kinde-erasure-intent.mjs';
 
@@ -40,15 +40,17 @@ export async function digestForIntent(intent) {
   return Array.from(new Uint8Array(hashed), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-/** @param {any} recoveryDb @param {string} uid @param {string} digest */
-async function verifyStoredDenial(recoveryDb, uid, digest) {
+/** @param {any} recoveryDb @param {string} uid @param {string} digest @param {number | null} expected */
+async function verifyStoredDenial(recoveryDb, uid, digest, expected = null) {
   try {
     const stored = await recoveryDb.withSession('first-primary').prepare(`
-      SELECT d.uid, d.intent_digest FROM recovery_account_erasure_denials d
+      SELECT d.uid, d.intent_digest, r.generation FROM recovery_account_erasure_denials d
       CROSS JOIN recovery_control r
       WHERE d.uid = ? AND r.singleton = 1 AND r.mode = 'open'
     `).bind(uid).first();
-    if (stored?.uid === uid && stored.intent_digest === digest) return true;
+    if (stored?.uid === uid && stored.intent_digest === digest
+      && Number.isSafeInteger(stored.generation) && stored.generation >= 1
+      && (expected === null || stored.generation === expected)) return stored.generation;
   } catch {
     // A primary read failure cannot prove a denial.
   }
@@ -60,29 +62,42 @@ async function verifyStoredDenial(recoveryDb, uid, digest) {
  * the caller must pass the two primary D1 bindings with independent IAM.
  * @param {{ withSession: (policy: 'first-primary') => any }} recoveryDb
  * @param {Parameters<typeof digestForIntent>[0]} intent
+ * @param {number | null} [expected]
  */
-export async function armIndependentAccountErasureDenial(recoveryDb, intent) {
+export async function armIndependentAccountErasureDenial(recoveryDb, intent, expected = null) {
+  const generation = await readOpenRecoveryGeneration(recoveryDb, expected);
   const { uid } = intent;
   const digest = await digestForIntent(intent);
   try {
     await recoveryDb.withSession('first-primary').prepare(`
       INSERT INTO recovery_account_erasure_denials (uid, intent_digest)
-      SELECT ?, ? WHERE EXISTS (SELECT 1 FROM recovery_control WHERE singleton = 1 AND mode = 'open')
+      SELECT ?, ? WHERE EXISTS (SELECT 1 FROM recovery_control WHERE singleton = 1 AND mode = 'open' AND generation = ?)
         AND NOT EXISTS (SELECT 1 FROM recovery_account_erasure_denials WHERE uid = ?)
-    `).bind(uid, digest, uid).run();
+    `).bind(uid, digest, generation, uid).run();
   } catch {
     // A lost write response does not distinguish commit from failure.
   }
-  return verifyStoredDenial(recoveryDb, uid, digest);
+  await verifyStoredDenial(recoveryDb, uid, digest, generation);
+  return true;
 }
 
 /**
  * Read-only proof for a runner that is already processing the accepted job.
  * @param {Parameters<typeof armIndependentAccountErasureDenial>[0]} recoveryDb
  * @param {Parameters<typeof digestForIntent>[0]} intent
+ * @param {number | null} [expected]
  */
-export async function requireIndependentAccountErasureDenial(recoveryDb, intent) {
-  return verifyStoredDenial(recoveryDb, intent.uid, await digestForIntent(intent));
+export async function readIndependentAccountErasureGeneration(recoveryDb, intent, expected = null) {
+  return verifyStoredDenial(recoveryDb, intent.uid, await digestForIntent(intent), expected);
+}
+
+/** @param {Parameters<typeof readIndependentAccountErasureGeneration>[0]} recoveryDb
+ * @param {Parameters<typeof readIndependentAccountErasureGeneration>[1]} intent
+ * @param {number | null} [expected]
+ */
+export async function requireIndependentAccountErasureDenial(recoveryDb, intent, expected = null) {
+  await readIndependentAccountErasureGeneration(recoveryDb, intent, expected);
+  return true;
 }
 
 /**
@@ -94,12 +109,14 @@ export async function requireIndependentAccountErasureDenial(recoveryDb, intent)
  * @param {{ withSession: (policy: 'first-primary') => any }} appDb
  * @param {Parameters<typeof armIndependentAccountErasureDenial>[0]} recoveryDb
  * @param {Parameters<typeof digestForIntent>[0]} intent
+ * @param {number | null} [expected]
  */
-export async function reconcileAccountErasureHealthFence(appDb, recoveryDb, intent) {
+export async function reconcileAccountErasureHealthFence(appDb, recoveryDb, intent, expected = null) {
   if (!appDb || !recoveryDb || appDb === recoveryDb) throw new IndependentFenceUnavailableError();
   const { uid } = intent;
   const digest = await digestForIntent(intent);
   try {
+    const generation = await verifyStoredDenial(recoveryDb, uid, digest, expected);
     const subject = await appDb.withSession('first-primary').prepare(`
       SELECT s.uid, s.fence_epoch
       FROM kinde_account_erasure_requests r
@@ -124,8 +141,8 @@ export async function reconcileAccountErasureHealthFence(appDb, recoveryDb, inte
         WHERE uid = ? AND status = 'pending' AND consent_revision = 0
           AND fence_epoch = ? AND erased_before_revision = 0
           AND EXISTS (SELECT 1 FROM recovery_account_erasure_denials WHERE uid = ? AND intent_digest = ?)
-          AND EXISTS (SELECT 1 FROM recovery_control WHERE singleton = 1 AND mode = 'open')
-      `).bind(uid, subject.fence_epoch, uid, digest).run();
+          AND EXISTS (SELECT 1 FROM recovery_control WHERE singleton = 1 AND mode = 'open' AND generation = ?)
+      `).bind(uid, subject.fence_epoch, uid, digest, generation).run();
     } catch {
       // A lost reply may have committed the monotone denial transition.
     }
@@ -133,7 +150,7 @@ export async function reconcileAccountErasureHealthFence(appDb, recoveryDb, inte
       uid, status: 'withdrawn', consentRevision: 1, fenceEpoch: subject.fence_epoch,
       erasedBeforeRevision: 0,
     }, 'erasure');
-    await verifyStoredDenial(recoveryDb, uid, digest);
+    await verifyStoredDenial(recoveryDb, uid, digest, generation);
   } catch {
     throw new IndependentFenceUnavailableError();
   }

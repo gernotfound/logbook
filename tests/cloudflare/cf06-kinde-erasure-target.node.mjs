@@ -358,6 +358,35 @@ void test('the independent denial survives application failure while the primary
   assert.equal(registry.prepare('SELECT COUNT(*) AS n FROM recovery_account_erasure_denials').get().n, 1);
 });
 
+void test('account acceptance cannot use an independent deny from a different recovery generation', async (t) => {
+  const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
+  const recovery = openRecoveryFixture(t);
+  await write(db, identity);
+  const intent = await recordKindeAccountErasureIntent(db, deletionRequestProof(attempt));
+  const reopen = () => {
+    recovery.sqlite.exec("UPDATE recovery_control SET mode='sealed', generation=generation+1");
+    recovery.sqlite.exec("UPDATE recovery_control SET mode='open', generation=generation+1");
+  };
+  const denials = () => recovery.sqlite.prepare('SELECT COUNT(*) AS n FROM recovery_account_erasure_denials').get().n;
+  const requests = () => sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_requests').get().n;
+  const beforeWrite = d1For(recovery.sqlite, { beforeWrite(sql) {
+    if (sql.includes('INSERT INTO recovery_account_erasure_denials')) reopen();
+  } });
+  await assert.rejects(acceptKindeAccountErasure(db, beforeWrite, intent), /kinde-erasure-request-unavailable/);
+  assert.equal(denials(), 0);
+  assert.equal(requests(), 0);
+  const afterWrite = d1For(recovery.sqlite, { afterWrite(sql) {
+    if (sql.includes('INSERT INTO recovery_account_erasure_denials')) reopen();
+  } });
+  await assert.rejects(acceptKindeAccountErasure(db, afterWrite, intent), /kinde-erasure-request-unavailable/);
+  assert.equal(denials(), 1);
+  assert.equal(requests(), 0);
+  await assert.rejects(requireIndependentAccountAccess(recovery.db, identity.uid), /independent-recovery-fence-unavailable/);
+  assert.equal(await acceptKindeAccountErasure(db, recovery.db, intent), true);
+  assert.equal(requests(), 1);
+  assert.equal(denials(), 1);
+});
+
 void test('application erasure drains only the requesting owner’s sessions and attempts within one bounded step', async (t) => {
   const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
   const recovery = openRecoveryFixture(t);
@@ -749,6 +778,44 @@ void test('the provider runs last and the final receipt survives a lost D1 reply
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_erasure_targets').get().n, 0);
   assert.equal(sqlite.prepare('SELECT status FROM auth_principals WHERE uid=?').get(identity.uid).status, 'deleted');
   await assert.rejects(requireIndependentAccountAccess(recovery.db, identity.uid), /independent-recovery-fence-unavailable/);
+});
+
+void test('a recovery generation change during Management lookup withholds DELETE and permits a fresh retry', async (t) => {
+  const { db, sqlite, attempt, identity, write, codec } = await deletionAttemptFixture(t);
+  const recovery = openRecoveryFixture(t);
+  await write(db, identity);
+  const intent = await recordKindeAccountErasureIntent(db, deletionRequestProof(attempt));
+  assert.equal(await acceptKindeAccountErasure(db, recovery.db, intent), true);
+  assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'progress', removed: 2 });
+  let interrupt = true;
+  let present = true;
+  const calls = [];
+  const dependencies = {
+    issuer, codec, accessToken: 'synthetic.worker.token',
+    async fetchImpl(request) {
+      calls.push(request.method);
+      if (request.method === 'DELETE') {
+        present = false;
+        return Response.json({ code: 'OK', message: 'Synthetic delete' });
+      }
+      if (interrupt) {
+        recovery.sqlite.exec("UPDATE recovery_control SET mode='sealed', generation=3");
+        recovery.sqlite.exec("UPDATE recovery_control SET mode='open', generation=4");
+      }
+      return Response.json({ code: 'OK', message: 'Synthetic lookup', users: present ? [{ id: subject }] : [] });
+    },
+  };
+  await assert.rejects(runKindeAccountErasureProviderStep(db, recovery.db, intent, dependencies),
+    /independent-recovery-fence-unavailable/);
+  assert.deepEqual(calls, ['GET']);
+  assert.equal(sqlite.prepare('SELECT delete_started_at_ms FROM kinde_account_erasure_provider_progress').get().delete_started_at_ms, null);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_completions').get().n, 0);
+  sqlite.exec('UPDATE kinde_account_erasure_provider_progress SET lease_until_ms=1');
+  interrupt = false;
+  assert.deepEqual(await runKindeAccountErasureProviderStep(db, recovery.db, intent, dependencies),
+    { outcome: 'provider-acknowledged' });
+  assert.equal((await runKindeAccountErasureProviderStep(db, recovery.db, intent, dependencies)).outcome, 'complete');
+  assert.deepEqual(calls, ['GET', 'GET', 'DELETE', 'GET']);
 });
 
 void test('a lost Management acknowledgement and lookup absence alone cannot finalize account erasure', async (t) => {
