@@ -1,6 +1,6 @@
 import { IndependentFenceUnavailableError, readOpenRecoveryGeneration, requireIndependentOwnerFence } from './independent-owner-fence.mjs';
 
-import { INTENT_SCOPE, intentScopeArgs, validErasureIntent } from '../jobs/kinde-erasure-intent.mjs';
+import { INTENT_SCOPE, inactivityReceiptHash, intentScopeArgs, validErasureIntent } from '../jobs/kinde-erasure-intent.mjs';
 
 const UID = /^k_[A-Za-z0-9_-]{43}$/;
 
@@ -68,6 +68,15 @@ export async function armIndependentAccountErasureDenial(recoveryDb, intent, exp
   const generation = await readOpenRecoveryGeneration(recoveryDb, expected);
   const { uid } = intent;
   const digest = await digestForIntent(intent);
+  // A restored automatic intent cannot establish a new denial under a
+  // different registry generation. A denial already committed independently
+  // is irreversible and can still be reconciled using its exact digest.
+  if (intent.inactivity && intent.receiptHash !== await inactivityReceiptHash(
+    uid, intent.authEpoch, intent.inactivity, generation,
+  )) {
+    await verifyStoredDenial(recoveryDb, uid, digest, generation);
+    return true;
+  }
   try {
     await recoveryDb.withSession('first-primary').prepare(`
       INSERT INTO recovery_account_erasure_denials (uid, intent_digest)

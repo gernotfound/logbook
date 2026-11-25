@@ -1,26 +1,25 @@
 import { D1_NOW_MS } from '../sql/d1-time.mjs';
 import { earliestKindeInactivityErasureAt } from './kinde-inactivity-time.mjs';
-import { INTENT_COLUMNS, intentFromRow, readErasureIntent } from './kinde-erasure-intent.mjs';
+import { INTENT_COLUMNS, inactivityReceiptHash, intentFromRow, readErasureIntent } from './kinde-erasure-intent.mjs';
+import { readOpenRecoveryGeneration } from '../recovery/independent-owner-fence.mjs';
 
 const UID = /^k_[A-Za-z0-9_-]{43}$/;
-
-/** @param {Awaited<ReturnType<typeof import('./kinde-inactivity-candidates.mjs').readKindeInactivityCandidates>>['candidates'][number]} candidate */
-async function receiptFor(candidate) {
-  const bytes = new TextEncoder().encode(JSON.stringify(['thelogbook:inactivity-decision:v1',
-    candidate.uid, candidate.authEpoch, candidate.generation, candidate.lastRecordedAtMs, candidate.eligibleAtMs]));
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
-}
 
 /**
  * Trusted scanner only. SQL rechecks the observation and freezes access in
  * the same transaction as recording the decision. The independent deny is
  * still required for acceptance and cleanup. Pause never undoes a commit.
+ * The expected recovery generation must come from trusted configuration,
+ * not from the restorable D1 or an automatically refreshed registry read.
  * @param {{withSession: (policy: 'first-primary') => any}} db
- * @param {Parameters<typeof receiptFor>[0]} candidate
+ * @param {Parameters<typeof readOpenRecoveryGeneration>[0]} recoveryDb
+ * @param {Awaited<ReturnType<typeof import('./kinde-inactivity-candidates.mjs').readKindeInactivityCandidates>>['candidates'][number]} candidate
+ * @param {number} expectedRecoveryGeneration
  */
-export async function recordKindeInactivityErasureIntent(db, candidate) {
-  if (!candidate || typeof candidate.uid !== 'string' || !UID.test(candidate.uid)
+export async function recordKindeInactivityErasureIntent(db, recoveryDb, candidate, expectedRecoveryGeneration) {
+  if (!db || !recoveryDb || db === recoveryDb
+    || !Number.isSafeInteger(expectedRecoveryGeneration) || expectedRecoveryGeneration < 1
+    || !candidate || typeof candidate.uid !== 'string' || !UID.test(candidate.uid)
     || !Number.isSafeInteger(candidate.authEpoch) || candidate.authEpoch < 1 || candidate.authEpoch >= Number.MAX_SAFE_INTEGER
     || !Number.isSafeInteger(candidate.generation) || candidate.generation < 1
     || !Number.isSafeInteger(candidate.eligibleAtMs)
@@ -28,7 +27,9 @@ export async function recordKindeInactivityErasureIntent(db, candidate) {
     throw new TypeError('invalid-kinde-inactivity-decision');
   }
   const { uid, authEpoch, generation, lastRecordedAtMs, eligibleAtMs } = candidate;
-  const receiptHash = await receiptFor(candidate);
+  const receiptHash = await inactivityReceiptHash(uid, authEpoch, candidate, expectedRecoveryGeneration);
+  try { await readOpenRecoveryGeneration(recoveryDb, expectedRecoveryGeneration); }
+  catch { throw new Error('kinde-inactivity-decision-unavailable'); }
   let uncertain = false;
   try {
     const result = await db.withSession('first-primary').prepare(`
@@ -54,10 +55,16 @@ export async function recordKindeInactivityErasureIntent(db, candidate) {
       const principal = await db.withSession('first-primary').prepare(`
         SELECT status FROM auth_principals WHERE uid = ? AND auth_epoch >= ?
       `).bind(uid, authEpoch).first();
-      if (principal?.status === 'disabled' || principal?.status === 'deleted') return intent;
+      if (principal?.status === 'disabled' || principal?.status === 'deleted') {
+        await readOpenRecoveryGeneration(recoveryDb, expectedRecoveryGeneration);
+        return intent;
+      }
       throw new Error('unproven-freeze');
     }
-    if (!uncertain) return null;
+    if (!uncertain) {
+      await readOpenRecoveryGeneration(recoveryDb, expectedRecoveryGeneration);
+      return null;
+    }
   } catch {
     // Without current primary evidence, no decision receipt is returned.
   }
