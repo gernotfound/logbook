@@ -51,6 +51,10 @@ cron, account deletion o inattività.
   impedisce il passo sanitario separato, soggetto alle proprie fence. Il tick
   resta fallito se la riconciliazione non è provata; un gate indisponibile o
   una prenotazione ambigua interrompono invece il tick prima del passo.
+  La pubblicazione terminale verifica la generazione aperta prima della
+  prova applicativa, nel CAS del registro e nel readback. Un cambio durante
+  la prova nega l'ACK senza annullare un floor già committato. Il restore
+  richiede comunque quiescenza verificata: nessuna transazione cross-D1.
 - `node scripts/check-cloudflare-erasure-candidate.mjs` verifica il contratto
   del manifesto; `tests/cloudflare/cf06-erasure-worker-config.node.mjs`
   contiene regressioni che rifiutano aperture accidentali.
