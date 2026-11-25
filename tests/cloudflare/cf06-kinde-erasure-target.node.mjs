@@ -1360,3 +1360,106 @@ void test('scheduled enqueue needs two exact opt-ins and a recovery pin, then fr
     { outcome: 'checkpointed', decision: 'none', endOfSweep: true });
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_intents').get().n, 1);
 });
+
+void test('scheduled inactivity enqueue fails closed at every D1 quota boundary and resumes without duplicate intents', async (t) => {
+  async function fixture(scope) {
+    const { sqlite, db, identity, write, attempt } = await deletionAttemptFixture(scope);
+    const recovery = openRecoveryFixture(scope);
+    const clock = new DatabaseSync(':memory:');
+    scope.after(() => clock.close());
+    const fmt = clock.prepare('SELECT strftime(?, ?) AS value');
+    let now = Date.now();
+    sqlite.function('strftime', (format, date) => fmt.get(format,
+      date === 'now' ? new Date(now).toISOString() : date).value);
+    await write(db, identity);
+    assert.deepEqual(await recordKindeForegroundActivity(db, {
+      uid: identity.uid, sessionHash: attempt.sessionHash, fenceEpoch: 1,
+      authenticated: true, csrfVerified: true, rateGatePassed: true,
+    }), { outcome: 'recorded' });
+    now = earliestKindeInactivityErasureAt(now);
+    sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=2");
+
+    const calls = [];
+    let failFrom = Infinity;
+    function guarded(source, database) {
+      return {
+        withSession(policy) {
+          const session = source.withSession(policy);
+          return { prepare(sql) {
+            function wrap(statement) {
+              return { bind(...args) { return wrap(statement.bind(...args)); },
+                ...Object.fromEntries(['first', 'all', 'run'].map(method => [method, async () => {
+                calls.push({ database, method, sql });
+                if (calls.length >= failFrom) throw Error('synthetic D1 Free quota exceeded');
+                return await statement[method]();
+              }])) };
+            }
+            return wrap(session.prepare(sql));
+          } };
+        },
+      };
+    }
+    const env = {
+      CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_ERASURE_RUN_MODE: 'inactivity-enqueue',
+      CF06_INACTIVITY_ENQUEUE_ENABLED: 'enabled', CF06_INACTIVITY_RECOVERY_GENERATION: '2',
+      DB: guarded(db, 'primary'), RECOVERY_DB: guarded(recovery.db, 'recovery'),
+    };
+    const checkpoint = () => ({ ...sqlite.prepare('SELECT * FROM kinde_inactivity_enqueue_checkpoint').get() });
+    return {
+      sqlite, recovery, identity, calls, env, checkpoint,
+      failAt(index) { calls.length = 0; failFrom = index; },
+      afterQuotaReset() {
+        calls.length = 0;
+        failFrom = Infinity;
+        // D1 Free daily allowances reset at midnight UTC; also expire the
+        // existing 60-second lease before allowing the next scheduled tick.
+        now += 24 * 60 * 60 * 1000 + 60_001;
+      },
+    };
+  }
+
+  let successfulStatements = 0;
+  await t.test('successful bounded tick establishes the SQL operation budget', async (scope) => {
+    const f = await fixture(scope);
+    assert.deepEqual(await healthErasureWorker.scheduled({}, f.env),
+      { outcome: 'checkpointed', decision: 'recorded', endOfSweep: true });
+    assert.equal(f.calls.filter(c => c.method === 'all').length, 1);
+    assert.ok(f.calls.some(c => c.database === 'primary'));
+    assert.ok(f.calls.some(c => c.database === 'recovery'));
+    assert.equal(f.calls.filter(c => c.method === 'run' && c.sql.includes('INSERT INTO kinde_account_erasure_intents')).length, 1);
+    assert.ok(f.calls.length > 0 && f.calls.length <= 24);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_intents').get().n, 1);
+    successfulStatements = f.calls.length;
+  });
+
+  // Each failure starts from a fresh valid schema. The injected D1 outage is
+  // persistent after the boundary, like a Free daily quota exhaustion.
+  for (let at = 1; at <= successfulStatements; at++) {
+    await t.test(`quota exhausted at D1 operation ${at}`, async (scope) => {
+      const f = await fixture(scope);
+      const diagnostic = { ...f.sqlite.prepare('SELECT * FROM kinde_inactivity_scan_checkpoint').get() };
+      f.failAt(at);
+      await assert.rejects(healthErasureWorker.scheduled({}, f.env));
+      assert.ok(f.calls.length >= at);
+      const intentCount = f.sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_intents').get().n;
+      assert.ok(intentCount === 0 || intentCount === 1);
+      assert.equal(f.sqlite.prepare('SELECT status FROM auth_principals WHERE uid=?').get(f.identity.uid).status,
+        intentCount === 1 ? 'disabled' : 'active');
+      if (intentCount === 0) assert.equal(f.checkpoint().cursor_uid, null);
+      assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_requests').get().n, 0);
+      assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM health_erasure_jobs').get().n, 0);
+      assert.equal(f.recovery.sqlite.prepare('SELECT COUNT(*) AS n FROM recovery_account_erasure_denials').get().n, 0);
+      assert.deepEqual({ ...f.sqlite.prepare('SELECT * FROM kinde_inactivity_scan_checkpoint').get() }, diagnostic);
+      // A non-acknowledged tick may have committed its intent or checkpoint.
+      // A later healthy invocation must reconcile that durable state exactly.
+      f.afterQuotaReset();
+      const retry = await healthErasureWorker.scheduled({}, f.env);
+      assert.equal(retry.outcome, 'checkpointed');
+      assert.equal(f.checkpoint().lease_until_ms, 0);
+      assert.equal(f.sqlite.prepare('SELECT status FROM auth_principals WHERE uid=?').get(f.identity.uid).status,
+        'disabled');
+      assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_intents').get().n, 1);
+      assert.equal(f.recovery.sqlite.prepare('SELECT COUNT(*) AS n FROM recovery_account_erasure_denials').get().n, 0);
+    });
+  }
+});
