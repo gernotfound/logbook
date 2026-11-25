@@ -39,6 +39,13 @@ cron, account deletion o inattività.
 - I test SQL della suite CF-06 usano dati sintetici e l'intero schema; non
   autorizzano esecuzioni sul DB condiviso o ripristini di segreti reali.
 
+Il dispatcher candidato `runOneKindeAccountErasureStep` seleziona un solo
+intento per tick con cursore UID, riconcilia l'accettazione cross-D1 e
+delega ai passi esistenti. Un owner bloccato non deve fermare la scansione;
+una riga terminale già presente viene saltata senza attribuire una nuova
+ricevuta. Il cursore durevole dello scheduler, le quote, il retry e la
+configurazione Management restano da integrare e collaudare.
+
 **Prima di un futuro deployment e di un cron:** provare il Worker con la
 versione Wrangler adottata dalla CI, schema e quote Cloudflare Free effettivi,
 lease e recovery cross-D1 in un ambiente autonomo, kill-switch non distruttivo,

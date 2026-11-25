@@ -8,6 +8,7 @@ import { deriveKindeOwnerId } from '../../cloudflare/auth/kinde-owner-id.mjs';
 import healthErasureWorker from '../../cloudflare/jobs/health-erasure-worker.mjs';
 import { runKindeAccountErasureAppStep } from '../../cloudflare/jobs/kinde-account-erasure-app-step.mjs';
 import { runKindeAccountErasureProviderStep } from '../../cloudflare/jobs/kinde-account-erasure-provider-step.mjs';
+import { runOneKindeAccountErasureStep } from '../../cloudflare/jobs/kinde-account-erasure-runner.mjs';
 import { acceptKindeAccountErasure, recordKindeAccountErasureIntent, requestKindeAccountErasure } from '../../cloudflare/jobs/kinde-account-erasure-requests.mjs';
 import { createKindeErasureManagement } from '../../cloudflare/jobs/kinde-erasure-management.mjs';
 import { createKindeErasureTargetCodec } from '../../cloudflare/jobs/kinde-erasure-target.mjs';
@@ -447,6 +448,74 @@ void test('account erasure recovers a committed consent whose independent floor 
   assert.equal(recovery.sqlite.prepare('SELECT finalized FROM recovery_erasure_cutoffs').get().finalized, 1);
 });
 
+void test('dispatcher recovers a durable intent without a live session and never claims terminal erasure', async (t) => {
+  const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
+  const recovery = openRecoveryFixture(t);
+  await write(db, identity);
+  const intent = await recordKindeAccountErasureIntent(db, deletionRequestProof(attempt));
+  assert.ok(intent);
+  sqlite.prepare('DELETE FROM auth_sessions WHERE uid=?').run(identity.uid);
+  const lostReply = d1For(recovery.sqlite, { afterWrite(sql) {
+    if (sql.includes('INSERT INTO recovery_account_erasure_denials')) throw new Error('synthetic lost denial reply');
+  } });
+  assert.deepEqual(await runOneKindeAccountErasureStep(db, lostReply), {
+    nextCursor: identity.uid, result: { outcome: 'accepted' },
+  });
+  assert.equal(sqlite.prepare('SELECT status FROM auth_principals WHERE uid=?').get(identity.uid).status, 'disabled');
+  await assert.rejects(requireIndependentAccountAccess(recovery.db, identity.uid), /independent-recovery-fence-unavailable/);
+  assert.deepEqual(await runOneKindeAccountErasureStep(db, recovery.db, identity.uid), {
+    nextCursor: null, result: { outcome: 'idle' },
+  });
+  assert.deepEqual(await runOneKindeAccountErasureStep(db, recovery.db), {
+    nextCursor: identity.uid, result: { outcome: 'application-complete' },
+  });
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_completions').get().n, 0);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_erasure_targets').get().n, 1);
+  await assert.rejects(runOneKindeAccountErasureStep(db, recovery.db, 'invalid'), /invalid-kinde-erasure-runner-cursor/);
+  await assert.rejects(runOneKindeAccountErasureStep(db, db), /kinde-erasure-runner-unavailable/);
+});
+
+void test('a blocked intent does not starve the next owner and a new sweep retries it', async (t) => {
+  const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
+  const recovery = openRecoveryFixture(t);
+  await write(db, identity);
+  assert.ok(await recordKindeAccountErasureIntent(db, deletionRequestProof(attempt)));
+  const secondSubject = 'kp_synthetic-second-intent';
+  const secondUid = await deriveKindeOwnerId(issuer, secondSubject);
+  const issued = Date.now() - 1000;
+  sqlite.prepare("INSERT INTO auth_principals VALUES (?, 'active', ?, 1)").run(secondUid, issued);
+  const secondSession = '8'.repeat(64);
+  sqlite.prepare('INSERT INTO auth_sessions VALUES (?, ?, 1, ?, ?, ?, ?, NULL)')
+    .run(secondSession, secondUid, '7'.repeat(64), issued, issued + 30_000, issued + 60_000);
+  await write(db, { uid: secondUid, subject: secondSubject, authEpoch: 1 });
+  assert.ok(await recordKindeAccountErasureIntent(db, {
+    ...deletionRequestProof({ ...attempt, uid: secondUid, sessionHash: secondSession }),
+    receiptHash: '6'.repeat(64),
+  }));
+  const [first, second] = [identity.uid, secondUid].sort();
+  const failing = d1For(recovery.sqlite, { beforeWrite(sql, args) {
+    if (sql.includes('INSERT INTO recovery_account_erasure_denials') && args[0] === first) {
+      throw new Error('synthetic denial failure');
+    }
+  } });
+  assert.deepEqual(await runOneKindeAccountErasureStep(db, failing), {
+    nextCursor: first, result: { outcome: 'blocked' },
+  });
+  assert.deepEqual(await runOneKindeAccountErasureStep(db, failing, first), {
+    nextCursor: second, result: { outcome: 'accepted' },
+  });
+  const status = sqlite.prepare('SELECT status FROM auth_principals WHERE uid=?');
+  assert.equal(status.get(first).status, 'active');
+  assert.equal(status.get(second).status, 'disabled');
+  assert.deepEqual(await runOneKindeAccountErasureStep(db, failing, second), {
+    nextCursor: null, result: { outcome: 'idle' },
+  });
+  assert.deepEqual(await runOneKindeAccountErasureStep(db, recovery.db), {
+    nextCursor: first, result: { outcome: 'accepted' },
+  });
+  assert.equal(status.get(first).status, 'disabled');
+});
+
 void test('the provider runs last and the final receipt survives a lost D1 reply after commit', async (t) => {
   const { db, sqlite, attempt, identity, write, codec } = await deletionAttemptFixture(t);
   const recovery = openRecoveryFixture(t);
@@ -473,7 +542,9 @@ void test('the provider runs last and the final receipt survives a lost D1 reply
       return Response.json({ code: 'OK', message: 'Synthetic lookup', users: present ? [{ id: subject }] : [] });
     },
   };
-  assert.deepEqual(await runKindeAccountErasureProviderStep(db, recovery.db, intent, dependencies), { outcome: 'progress', removed: 2 });
+  assert.deepEqual(await runOneKindeAccountErasureStep(db, recovery.db, null, dependencies), {
+    nextCursor: identity.uid, result: { outcome: 'progress', removed: 2 },
+  });
   assert.deepEqual(calls, []);
   assert.deepEqual(await runKindeAccountErasureProviderStep(db, recovery.db, intent, dependencies), { outcome: 'provider-acknowledged' });
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_completions').get().n, 0);
@@ -489,6 +560,9 @@ void test('the provider runs last and the final receipt survives a lost D1 reply
   assert.equal(completed.outcome, 'complete');
   assert.ok(Number.isSafeInteger(completed.completedAtMs));
   assert.deepEqual(await runKindeAccountErasureProviderStep(db, recovery.db, intent, dependencies), completed);
+  assert.deepEqual(await runOneKindeAccountErasureStep(db, recovery.db, null, dependencies), {
+    nextCursor: identity.uid, result: { outcome: 'already-recorded' },
+  });
   assert.deepEqual(calls, ['GET', 'DELETE', 'GET', 'GET']);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_completions').get().n, 1);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_erasure_targets').get().n, 0);
