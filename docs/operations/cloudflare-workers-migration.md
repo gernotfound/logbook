@@ -15,7 +15,7 @@
   predefinito richiede una D1 vuota.
 - Il controllo dopo Wrangler verifica schema e ledger, tabelle nuove
   vuote, controllo inattività paused/generation 1, checkpoint scheduler
-  iniziale non utilizzato e inventario invariato
+  iniziale non utilizzato, contatore dispatch a zero e inventario invariato
   di identità, sessioni e replica sintetica.
   Se i conteggi cambiano o l'esito è incerto, il workflow si ferma e il
   ledger va riletto prima di ritentare.
