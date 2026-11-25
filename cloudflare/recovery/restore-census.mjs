@@ -1,4 +1,5 @@
 import { inspectRestoredOwnerCoverage } from './restore-preflight.mjs';
+import { digestForIntent } from './account-erasure-denials.mjs';
 
 // Operator-only diagnostic. Never mount this as an HTTP authorization endpoint.
 // Bound the full-table reads so a large or ambiguous source fails closed instead
@@ -13,6 +14,21 @@ const RESTORED_SQL = `SELECT uid, status, consent_revision, fence_epoch,
 const INDEPENDENT_SQL = `SELECT uid, status, consent_revision, fence_epoch,
   erased_before_revision, change_seq FROM recovery_owner_fences
   ORDER BY uid LIMIT ?`;
+// The account census is independent of consent: a denied identity may never
+// have created a sync_subjects row. Read only proof metadata, not credentials.
+const ACCOUNT_SQL = `SELECT i.uid, i.auth_epoch, i.receipt_hash,
+  i.reauthenticated_at_ms, i.confirmed_at_ms, p.status AS principal_status,
+  p.auth_epoch AS principal_epoch, r.uid AS request_uid, r.prior_auth_epoch,
+  r.receipt_hash AS request_hash, r.reauthenticated_at_ms AS request_auth_ms,
+  r.requested_at_ms, c.uid AS completion_uid, c.completed_at_ms,
+  EXISTS (SELECT 1 FROM kinde_erasure_targets t WHERE t.uid = i.uid) AS target_present
+  FROM kinde_account_erasure_intents i
+  LEFT JOIN auth_principals p ON p.uid = i.uid
+  LEFT JOIN kinde_account_erasure_requests r ON r.uid = i.uid
+  LEFT JOIN kinde_account_erasure_completions c ON c.uid = i.uid
+  ORDER BY i.uid LIMIT ?`;
+const DENIAL_SQL = `SELECT d.uid, d.intent_digest FROM recovery_account_erasure_denials d
+  ORDER BY d.uid LIMIT ?`;
 const CONTROL_SQL = `SELECT singleton, mode, generation
   FROM recovery_control WHERE singleton = 1`;
 
@@ -73,12 +89,55 @@ function normalizedRows(rows, independent) {
     };
   });
 }
-async function readRows(conn, sql, independent) {
+async function readBoundedRows(conn, sql) {
   const response = await conn.prepare(sql).bind(MAX_OWNERS + 1).all();
   requireEvidence(response?.success === true && Array.isArray(response.results),
     'scan-unavailable');
   requireEvidence(response.results.length <= MAX_OWNERS, 'coverage-limit-exceeded');
-  return normalizedRows(response.results, independent);
+  return response.results;
+}
+async function readRows(conn, sql, independent) {
+  return normalizedRows(await readBoundedRows(conn, sql), independent);
+}
+async function readAccountSnapshot(restored, independent) {
+  return {
+    intents: await readBoundedRows(restored, ACCOUNT_SQL),
+    denials: await readBoundedRows(independent, DENIAL_SQL),
+  };
+}
+
+async function inspectAccountCoverage({ intents, denials }) {
+  // A local decision awaiting independent denial or acceptance is not safe
+  // to discard on restore. Reconcile it separately; never synthesize proof.
+  requireEvidence(intents.every(row => row && row.request_uid !== null), 'account-erasure-intent-pending');
+  requireEvidence(intents.length === denials.length, 'account-erasure-coverage-mismatch');
+  let previous = '';
+  for (let index = 0; index < intents.length; index += 1) {
+    const row = intents[index];
+    const deny = denials[index];
+    requireEvidence(typeof row.uid === 'string' && /^k_[A-Za-z0-9_-]{43}$/.test(row.uid)
+      && row.uid > previous && deny?.uid === row.uid, 'account-erasure-coverage-mismatch');
+    previous = row.uid;
+    const digest = await digestForIntent({
+      uid: row.uid, authEpoch: row.auth_epoch, receiptHash: row.receipt_hash,
+      authenticatedAtMs: row.reauthenticated_at_ms, confirmedAtMs: row.confirmed_at_ms,
+    });
+    requireEvidence(deny.intent_digest === digest, 'account-erasure-denial-mismatch');
+    requireEvidence(row.request_uid === row.uid
+      && row.request_hash === row.receipt_hash && row.request_auth_ms === row.reauthenticated_at_ms
+      && row.requested_at_ms === row.confirmed_at_ms
+      && Number.isSafeInteger(row.prior_auth_epoch) && row.prior_auth_epoch >= row.auth_epoch
+      && Number.isSafeInteger(row.principal_epoch) && row.principal_epoch === row.prior_auth_epoch + 1,
+      'account-erasure-request-inconsistent');
+    if (row.completion_uid === null) {
+      requireEvidence(row.principal_status === 'disabled' && row.target_present === 1
+        && row.completed_at_ms === null, 'account-erasure-request-inconsistent');
+    } else {
+      requireEvidence(row.completion_uid === row.uid && row.principal_status === 'deleted'
+        && row.target_present === 0 && Number.isSafeInteger(row.completed_at_ms)
+        && row.completed_at_ms >= row.confirmed_at_ms, 'account-erasure-completion-inconsistent');
+    }
+  }
 }
 
 /**
@@ -98,6 +157,7 @@ export async function inspectRestoredD1Census(restoredDb, independentDb) {
     const before = await metadata(restored, independent);
     const firstRestored = await readRows(restored, RESTORED_SQL, false);
     const firstIndependent = await readRows(independent, INDEPENDENT_SQL, true);
+    const firstAccounts = await readAccountSnapshot(restored, independent);
     requireEvidence(firstRestored.length === before.restoredCount
       && firstIndependent.length === before.independentCount, 'owner-coverage-mismatch');
 
@@ -106,14 +166,17 @@ export async function inspectRestoredD1Census(restoredDb, independentDb) {
     // It is not an atomic barrier across databases or even across D1 queries.
     const secondRestored = await readRows(restored, RESTORED_SQL, false);
     const secondIndependent = await readRows(independent, INDEPENDENT_SQL, true);
+    const secondAccounts = await readAccountSnapshot(restored, independent);
     const after = await metadata(restored, independent);
     requireEvidence(before.generation === after.generation
       && before.restoredCount === after.restoredCount
       && before.independentCount === after.independentCount
       && JSON.stringify(firstRestored) === JSON.stringify(secondRestored)
-      && JSON.stringify(firstIndependent) === JSON.stringify(secondIndependent),
+      && JSON.stringify(firstIndependent) === JSON.stringify(secondIndependent)
+      && JSON.stringify(firstAccounts) === JSON.stringify(secondAccounts),
     'coverage-changed-during-scan');
 
+    await inspectAccountCoverage(secondAccounts);
     return inspectRestoredOwnerCoverage(secondRestored, secondIndependent);
   } catch (error) {
     return blocked(error instanceof CensusFailure ? error.reason : 'scan-unavailable');
