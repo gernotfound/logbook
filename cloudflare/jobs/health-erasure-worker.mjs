@@ -349,19 +349,34 @@ export function runOneHealthErasureStep(db) {
   return runApplicationHealthErasureStep(db);
 }
 
+// Assignment is durable before either pipeline starts. A lost reply skips
+// at most an assignment, not an owner cursor; the next tick serves the other
+// lane. Per-owner leases and independent fences still authorize all erasure.
+async function claimErasureLane(db, recoveryDb) {
+  if (!db || !recoveryDb || db === recoveryDb) throw new Error('erasure-dispatch-unavailable');
+  const row = await db.withSession('first-primary').prepare(`
+    UPDATE erasure_dispatch_control SET turn = turn + 1
+    WHERE singleton = 1 AND turn < 9007199254740991
+    RETURNING turn
+  `).bind().first();
+  if (!Number.isSafeInteger(row?.turn) || row.turn < 1) throw new Error('erasure-dispatch-unavailable');
+  return row.turn % 2 === 1 ? 'health' : 'account-application';
+}
+
 export default {
   async scheduled(_event, env) {
     // A future cron must not start irreversible erasure merely because the
     // Worker was deployed. The candidate manifest does not bind this flag.
     // Pausing leaves all queued jobs and their leases intact for recovery.
     if (env?.CF06_ERASURE_RUN_ENABLED !== 'enabled') return { outcome: 'paused' };
-    const mode = env.CF06_ERASURE_RUN_MODE;
+    let mode = env.CF06_ERASURE_RUN_MODE;
     // One bounded pipeline per invocation. Account processing is application-only
     // until a separate, validated Management boundary is available.
-    if (mode !== undefined && mode !== 'health' && mode !== 'account-application') {
+    if (mode !== undefined && mode !== 'health' && mode !== 'account-application' && mode !== 'alternating-application') {
       return { outcome: 'paused' };
     }
     const { DB, RECOVERY_DB } = env;
+    if (mode === 'alternating-application') mode = await claimErasureLane(DB, RECOVERY_DB);
     if (mode === 'account-application') {
       return await runKindeAccountErasureSweepTick(DB, RECOVERY_DB);
     }

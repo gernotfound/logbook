@@ -6,10 +6,10 @@
 
 - Il workflow applicativo manuale `cloudflare-d1-isolated-migrations.yml`
   verifica il `main` remoto, il gate del relativo SHA e l'impronta della
-  migrazioni additive `0012`–`0014`. Per la D1 EU già usata per collaudare
-  l'identità Kinde, `upgrade_existing_test_db_0014` richiede un prefisso
-  contiguo `0011`–`0014` e tabelle nuove ancora vuote. La 0014 aggiunge
-  il checkpoint dello scheduler, senza attivarlo.
+  migrazioni additive `0012`–`0015`. Per la D1 EU già usata per collaudare
+  l'identità Kinde, `upgrade_existing_test_db_0015` richiede un prefisso
+  contiguo `0011`–`0015` e tabelle nuove ancora vuote. La 0014 aggiunge
+  il checkpoint dello scheduler; la 0015 aggiunge il contatore di assegnazione, inizialmente zero. Nessuna delle due attiva il cron.
   Richiede bookmark Time Travel, repliche disabilitate, identità di
   collaudo presenti e zero consensi, ADK e job sanitari. Il percorso
   predefinito richiede una D1 vuota.

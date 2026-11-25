@@ -27,7 +27,7 @@ void test('CF-06 scheduler stays inert without an exact, deliberate processing o
     assert.deepEqual(await erasureWorker.scheduled({}, env), { outcome: 'paused' });
   }
   assert.deepEqual(await erasureWorker.scheduled({}, undefined), { outcome: 'paused' });
-  for (const mode of [null, '', true, 'account', 'account-application ', 'provider', 'inactivity']) {
+  for (const mode of [null, '', true, 'account', 'account-application ', 'alternating-application ', 'provider', 'inactivity']) {
     assert.deepEqual(await erasureWorker.scheduled({}, {
       CF06_ERASURE_RUN_ENABLED: 'enabled',
       CF06_ERASURE_RUN_MODE: mode,
@@ -54,6 +54,7 @@ void test('CF-06 candidate rejects accidental cron activation, new routes, secre
     { services: [{ binding: 'KINDE_HTTP', service: 'thelogbook-cf03-kinde-http-isolated' }] },
     { vars: { CLOUD_ACCOUNT_KEK_V1: 'forbidden' } },
     { vars: { CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_ERASURE_RUN_MODE: 'account-application' } },
+    { vars: { CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_ERASURE_RUN_MODE: 'alternating-application' } },
     { unsafe: { bindings: [] } },
     { d1_databases: [candidate.d1_databases[0]] },
     { d1_databases: [

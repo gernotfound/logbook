@@ -185,6 +185,14 @@
       "Singleton paused/generation; no owner data.",
       "Never enable on restore without explicit policy validation."
     ],
+    "erasure_dispatch_control": [
+      "none",
+      "control",
+      "not-applicable",
+      "control",
+      "Monotonic lane assignment counter; no owner data or erasure proof.",
+      "Restart/replay safely; never authorize erasure from the counter."
+    ],
     "kinde_account_erasure_scheduler": [
       "cursor_uid",
       "control-with-owner-cursor",
