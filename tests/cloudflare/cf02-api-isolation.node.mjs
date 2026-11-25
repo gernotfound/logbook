@@ -121,6 +121,8 @@ void test('private main-only deployments cover every local module in their stati
   for (const [pattern, source] of [
     ['cloudflare/recovery/**', 'cloudflare/recovery/runtime-sync-fence.mjs'],
     ['cloudflare/sql/**', 'cloudflare/sql/d1-time.mjs'],
+    ['cloudflare/jobs/kinde-erasure-intent.mjs', 'cloudflare/jobs/kinde-erasure-intent.mjs'],
+    ['cloudflare/jobs/kinde-inactivity-time.mjs', 'cloudflare/jobs/kinde-inactivity-time.mjs'],
     ['cloudflare/http/**', 'cloudflare/http/strict-empty-post.mjs'],
   ]) {
     assert.ok(apiSources.includes(source), source + ': no longer reached by private API');
@@ -155,6 +157,7 @@ void test('version-only releases skip private redeploy, but dependency or import
     previousPackage, currentPackage, previousLock, currentLock };
   assert.equal(mustDeployPrivateWorker(base), false);
   for (const file of ['cloudflare/api/worker.mjs', 'cloudflare/recovery/runtime-sync-fence.mjs',
+    'cloudflare/jobs/kinde-erasure-intent.mjs', 'cloudflare/jobs/kinde-inactivity-time.mjs',
     'scripts/verify-cloudflare-api-provider.mjs']) {
     assert.equal(mustDeployPrivateWorker({ ...base, changed: [...base.changed, file] }), true);
   }

@@ -8,6 +8,9 @@ import {
 } from '../../cloudflare/jobs/kinde-inactivity-time.mjs';
 import { runKindeInactivityDryRunTick } from '../../cloudflare/jobs/kinde-inactivity-dry-run.mjs';
 import erasureWorker from '../../cloudflare/jobs/health-erasure-worker.mjs';
+import apiWorker from '../../cloudflare/api/worker.mjs';
+import gate, { hashSessionSecret } from '../../cloudflare/auth/session-gate.mjs';
+import { routeCandidateFirstPartyApi } from '../../cloudflare/first-party-api-candidate.mjs';
 import { applyCurrentD1RecoverySchema, applyCurrentD1Schema } from './current-d1-schema.mjs';
 
 const VISIT = Date.parse('2026-11-24T16:38:00.000Z');
@@ -19,7 +22,7 @@ const claims = {
   uid: UID, fenceEpoch: 1, sessionHash: HASH, authenticated: true, rateGatePassed: true, csrfVerified: true,
 };
 
-function fixture(t, rejectAfterWrite = false, hooks = {}) {
+function fixture(t, rejectAfterWrite = false, hooks = {}, { emailVerified = true } = {}) {
   const sqlite = new DatabaseSync(':memory:');
   const clock = new DatabaseSync(':memory:');
   t.after(() => { sqlite.close(); clock.close(); });
@@ -30,7 +33,7 @@ function fixture(t, rejectAfterWrite = false, hooks = {}) {
   sqlite.function('strftime', (format, date) =>
     formatTime.get(format, date === 'now' ? new Date(observedAt).toISOString() : date).value);
   const addPrincipal = sqlite.prepare("INSERT INTO auth_principals VALUES (?, 'active', ?, 1)");
-  addPrincipal.run(UID, VISIT - 1000);
+  addPrincipal.run(UID, emailVerified ? VISIT - 1000 : null);
   addPrincipal.run(OTHER_UID, VISIT - 1000);
   sqlite.prepare('INSERT INTO auth_sessions VALUES (?, ?, 1, ?, ?, ?, ?, NULL)')
     .run(HASH, UID, 'd'.repeat(64), VISIT - 1000, VISIT + IDLE_TTL, VISIT + IDLE_TTL);
@@ -358,4 +361,94 @@ void test('scheduled diagnostic mode requires an external recovery pin and never
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_activity').get().n, 1);
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM auth_principals WHERE status='active'").get().n, 2);
   assert.equal(registry.prepare('SELECT COUNT(*) AS n FROM recovery_account_erasure_denials').get().n, 0);
+});
+
+void test('candidate activity HTTP boundary uses real AuthGate, identity-only session and independent denial, never health consent', async (t) => {
+  const hooks = {};
+  const { db, sqlite, advance } = fixture(t, false, hooks, { emailVerified: false });
+  const registry = new DatabaseSync(':memory:');
+  t.after(() => registry.close());
+  applyCurrentD1RecoverySchema(registry);
+  registry.exec("UPDATE recovery_control SET mode='open', generation=2");
+  const recovery = { withSession(mode) {
+    assert.equal(mode, 'first-primary');
+    return { prepare(sql) { return { async first() { return registry.prepare(sql).get() ?? null; },
+      bind(...args) { return { async first() { return registry.prepare(sql).get(...args) ?? null; } }; } }; } };
+  } };
+  const origin = 'https://app.example.invalid';
+  const cookie = Buffer.alloc(32, 43).toString('base64url');
+  const csrf = Buffer.alloc(32, 44).toString('base64url');
+  const sessionHash = await hashSessionSecret(cookie);
+  sqlite.prepare('INSERT INTO auth_sessions VALUES (?, ?, 1, ?, ?, ?, ?, NULL)')
+    .run(sessionHash, UID, await hashSessionSecret(csrf), VISIT - 1000, VISIT + 4 * IDLE_TTL, VISIT + 4 * IDLE_TTL);
+  let rateAllowed = true;
+  let gateCalls = 0;
+  const env = { DB: db, RECOVERY_DB: recovery, API_ORIGIN: origin,
+    CF06_FOREGROUND_ACTIVITY_ENABLED: 'enabled', AUTH_GATE: {
+      async fetch(request) {
+        gateCalls += 1;
+        return gate.fetch(request, { DB: db, API_ORIGIN: origin,
+          API_RATE_LIMITER: { async limit() { return { success: rateAllowed }; } } });
+      },
+    },
+  };
+  const request = ({ body = '{}', headers = {}, query = '', method = 'POST' } = {}) => new Request(
+    origin + '/v1/account/activity' + query, {
+      method, headers: { origin, 'sec-fetch-site': 'same-origin', 'content-type': 'application/json',
+        cookie: '__Host-logbook_session=' + cookie, 'x-csrf-token': csrf, ...headers },
+      ...(method === 'GET' ? {} : { body }),
+    });
+  const fetch = (opts, apiEnv = env) => routeCandidateFirstPartyApi(request(opts), {
+    APP_ORIGIN: origin, D1_API: { fetch: req => apiWorker.fetch(req, apiEnv) },
+  });
+  const markers = () => sqlite.prepare('SELECT * FROM kinde_account_activity').all();
+  assert.equal((await fetch({}, { ...env, CF06_FOREGROUND_ACTIVITY_ENABLED: undefined })).status, 503);
+  assert.equal(gateCalls, 0);
+  assert.equal((await fetch({ headers: { origin: 'https://evil.invalid' } })).status, 403);
+  assert.equal((await fetch({ method: 'GET' })).status, 405);
+  assert.equal((await fetch({ query: '?uid=other' })).status, 400);
+  assert.equal((await fetch({ headers: { 'x-csrf-token': '' } })).status, 403);
+  assert.equal((await fetch({ headers: { cookie: '' } })).status, 401);
+  assert.equal((await fetch({ body: JSON.stringify({ uid: OTHER_UID, timestamp: 1 }) })).status, 400);
+  assert.equal((await fetch({ body: ' '.repeat(129) })).status, 413);
+  rateAllowed = false;
+  assert.equal((await fetch()).status, 429);
+  rateAllowed = true;
+  assert.equal(markers().length, 0);
+  registry.exec("UPDATE recovery_control SET mode='sealed', generation=3");
+  assert.equal((await fetch()).status, 503);
+  assert.equal(markers().length, 0);
+  registry.exec("UPDATE recovery_control SET mode='open', generation=4");
+  // A genuine identity session need not have verified email or health consent.
+  assert.equal(sqlite.prepare('SELECT verified_at_ms FROM auth_principals WHERE uid=?').get(UID).verified_at_ms, null);
+  const response = await fetch();
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.deepEqual(await response.json(), { outcome: 'recorded' });
+  assert.deepEqual(markers().map(row => ({ ...row })), [
+    { uid: UID, first_observed_at_ms: VISIT, last_recorded_at_ms: VISIT },
+  ]);
+  assert.deepEqual(await (await fetch()).json(), { outcome: 'observed' });
+  advance(ACTIVITY_WRITE_INTERVAL_MS);
+  hooks.afterFirst = sql => {
+    if (sql.includes('INSERT INTO kinde_account_activity')) {
+      registry.exec("UPDATE recovery_control SET mode='sealed', generation=5");
+      registry.exec("UPDATE recovery_control SET mode='open', generation=6");
+    }
+  };
+  assert.equal((await fetch()).status, 503);
+  delete hooks.afterFirst;
+  assert.equal(markers()[0].last_recorded_at_ms, VISIT + ACTIVITY_WRITE_INTERVAL_MS);
+  // Synthetic restored application: the independent denial survives but the
+  // application still presents an active principal and unrevoked session.
+  registry.prepare('INSERT INTO recovery_account_erasure_denials VALUES (?, ?)').run(UID, 'f'.repeat(64));
+  advance(ACTIVITY_WRITE_INTERVAL_MS);
+  assert.equal((await fetch()).status, 503);
+  assert.equal(markers()[0].last_recorded_at_ms, VISIT + ACTIVITY_WRITE_INTERVAL_MS);
+  sqlite.prepare('UPDATE auth_sessions SET revoked_at_ms=? WHERE token_hash=?')
+    .run(VISIT + 2 * ACTIVITY_WRITE_INTERVAL_MS, sessionHash);
+  assert.equal((await fetch()).status, 401);
+  assert.equal(markers().length, 1);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM health_consent_acceptances').get().n, 0);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_intents').get().n, 0);
 });

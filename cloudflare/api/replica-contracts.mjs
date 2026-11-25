@@ -8,6 +8,7 @@ const MAX_BODY_BYTES = 8 * MAX_DOCUMENT_BYTES + 8192;
 // commit budget: parsing megabytes of otherwise valid JSON wastes Workers CPU.
 // These ceilings include JSON whitespace and are above the strict schemas' maxima.
 const BODY_LIMIT_BYTES = new Map([
+  ['/v1/account/activity', 128],
   ['/v1/sync/control', 128],
   ['/v1/sync/read', 512],
   ['/v1/sync/scan', 256],
@@ -83,6 +84,9 @@ const authClaims = z.strictObject({
   sessionHash: z.string().regex(/^[a-f0-9]{64}$/),
 });
 
+// Activity is identity-only; do not weaken the existing fitness claims schema.
+const activityAuthClaims = authClaims.extend({ healthConsentRevision: safeInt });
+
 class BadInput extends Error {
   constructor(code, status) { super(code); this.status = status; }
 }
@@ -107,4 +111,4 @@ function validateSealedBatch(input) {
   }
 }
 
-export { BODY_LIMIT_BYTES, BadInput, id, claimInput, retireInput, readInput, pageInput, commitInput, commitStatusInput, authClaims, uniquePaths, validateSealedBatch };
+export { BODY_LIMIT_BYTES, BadInput, id, claimInput, retireInput, readInput, pageInput, commitInput, commitStatusInput, authClaims, activityAuthClaims, uniquePaths, validateSealedBatch };

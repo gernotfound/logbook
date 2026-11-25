@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
     KindeCandidateBoundaryError, inspectKindeCandidateReplicaControl, readKindeCandidateAccess,
-    readKindeCandidateJson,
+    readKindeCandidateJson, reportKindeCandidateForegroundActivity,
     revokeKindeCandidateSession, submitKindeHostedSignIn,
 } from './kindeCandidateClient';
 
@@ -546,5 +546,86 @@ describe('Kinde bounded status-response reader', () => {
             'Cache-Control': 'private, no-store',
         } });
         await expect(readKindeCandidateJson(response)).resolves.toEqual(session());
+    });
+});
+
+describe('candidate foreground activity transport', () => {
+    const token = 'A'.repeat(43);
+    const report = (send: typeof fetch, options: {
+        expectedCsrfToken?: string; stillCurrent?: () => boolean; browserCookies?: () => string;
+    } = {}) => reportKindeCandidateForegroundActivity({
+        send, expectedCsrfToken: token, stillCurrent: () => true, browserCookies: cookie, ...options,
+    });
+
+    it('sends only the empty same-origin CSRF-protected mutation on explicit invocation', async () => {
+        vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+        vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+        for (const outcome of ['recorded', 'observed']) {
+            const send = responses(reply({ outcome }));
+            expect(send).not.toHaveBeenCalled();
+            await expect(report(send)).resolves.toBe(outcome);
+            expect(send).toHaveBeenCalledTimes(1);
+            expect(send).toHaveBeenCalledWith('/v1/account/activity', {
+                method: 'POST', credentials: 'same-origin', mode: 'same-origin',
+                cache: 'no-store', redirect: 'error',
+                headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-Token': token },
+                body: '{}', signal: expect.any(AbortSignal),
+            });
+        }
+    });
+
+    it('does not send when hidden, offline, signed out or fenced to an older session', async () => {
+        const visible = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+        const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+        const send = responses();
+        await expect(report(send)).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        visible.mockReturnValue('visible');
+        online.mockReturnValue(false);
+        await expect(report(send)).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        online.mockReturnValue(true);
+        for (const options of [
+            { stillCurrent: () => false }, { browserCookies: () => '' },
+            { expectedCsrfToken: 'B'.repeat(43) },
+        ]) {
+            await expect(report(send, options)).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        }
+        expect(send).not.toHaveBeenCalled();
+    });
+
+    it('does not acknowledge a late receipt after session or foreground changes', async () => {
+        const visible = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+        vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+        for (const change of ['generation', 'cookie', 'visibility']) {
+            let current = true;
+            let cookies = cookie();
+            visible.mockReturnValue('visible');
+            const send = vi.fn<typeof fetch>().mockImplementation(async () => {
+                if (change === 'generation') current = false;
+                if (change === 'cookie') cookies = '__Host-logbook_csrf=' + 'B'.repeat(43);
+                if (change === 'visibility') visible.mockReturnValue('hidden');
+                return reply({ outcome: 'recorded' });
+            });
+            await expect(report(send, { stillCurrent: () => current, browserCookies: () => cookies }))
+                .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+            expect(send).toHaveBeenCalledTimes(1);
+        }
+    });
+
+    it('rejects denied, malformed, cached and lost receipts without retrying', async () => {
+        vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+        vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+        for (const response of [
+            reply({ outcome: 'recorded' }, 503), reply({ error: 'unauthorized' }, 401),
+            reply({ error: 'rate-limited' }, 429), reply({ outcome: 'unavailable' }),
+            reply({ outcome: 'recorded', uid: A }), reply(null),
+            new Response('{"outcome":"recorded"}', { headers: { 'Content-Type': 'application/json' } }),
+        ]) {
+            const send = responses(response);
+            await expect(report(send)).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+            expect(send).toHaveBeenCalledTimes(1);
+        }
+        const lost = responses();
+        await expect(report(lost)).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        expect(lost).toHaveBeenCalledTimes(1);
     });
 });

@@ -10,7 +10,7 @@ const KINDE_ROUTES = new Map([
   ['/api/auth/logout', 'POST'],
 ]);
 const DATA_ROUTES = new Set([
-  '/v1/consent/status', '/v1/consent/initial', '/v1/consent/withdraw',
+  '/v1/consent/status', '/v1/consent/initial', '/v1/consent/withdraw', '/v1/account/activity',
   '/v1/cloud-key/sync', '/v1/cloud-key/rights-export', '/v1/rights/scan',
   '/v1/sync/control', '/v1/sync/read', '/v1/sync/scan',
   '/v1/sync/receipt', '/v1/sync/commit', '/v1/sync/commit/status',
