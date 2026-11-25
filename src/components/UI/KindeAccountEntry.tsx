@@ -13,6 +13,8 @@ const KindeCandidateRightsPanel = lazy(async () =>
     ({ default: (await import('./KindeCandidateRightsPanel')).KindeCandidateRightsPanel }));
 const KindeCandidateFitnessPanel = lazy(async () =>
     ({ default: (await import('./KindeCandidateFitnessPanel')).KindeCandidateFitnessPanel }));
+const KindeCandidateReplicaRegistryPanel = lazy(async () =>
+    ({ default: (await import('./KindeCandidateReplicaRegistryPanel')).KindeCandidateReplicaRegistryPanel }));
 
 type Phase = ReturnType<typeof useKindeAccountSession>['view']['phase'];
 type AcceptConsent = ReturnType<typeof useKindeAccountSession>['acceptConsent'];
@@ -154,6 +156,9 @@ function KindeAccountEntryView({
     const titleId = useId();
     const management = (
         <>
+            <Suspense fallback={<p role="status">Caricamento gestione repliche…</p>}>
+                <KindeCandidateReplicaRegistryPanel session={session} />
+            </Suspense>
             {candidateLifecycleEnabled
                 ? <Suspense fallback={<p role="status">Caricamento dei diritti account…</p>}>
                     <KindeCandidateWithdrawalPanel session={session} />
