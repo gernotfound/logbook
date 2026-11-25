@@ -726,7 +726,9 @@ void test('one scheduled health tick cannot cross a recovery generation at a des
       // A fresh invocation can resume only under the new generation, with the
       // original owner fence, durable cutoff and exact SQL lease.
       if (keyPhase) {
-        expire(f, 'owner-a');
+        // A completed job is immutable; only the incomplete cutoff path
+        // needs another lease. A terminal commit is reconciled separately.
+        if (interruption === 'cutoff') expire(f, 'owner-a');
         await erasureWorker.scheduled({}, { ...env, DB: f.db, RECOVERY_DB: recovery });
         assert.equal(count(f, 'health_erasure_finalizations', 'owner-a'), 1);
         assert.equal(registry.prepare('SELECT finalized FROM recovery_erasure_cutoffs WHERE uid=?').get('owner-a').finalized, 1);
