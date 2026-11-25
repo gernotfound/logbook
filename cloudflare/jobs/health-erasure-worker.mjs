@@ -53,11 +53,15 @@ function deleteBoundedSql(table) {
   ].join('\n');
 }
 
+// Start with the runnable-job index (migration 0006), not all sync subjects.
+// Both phase values are exhaustive by the schema; the explicit IN predicate
+// gives SQLite the phase/status/lease index range even for the all-phase scan.
 const FIND_JOB = [
   'SELECT j.uid, j.consent_revision, j.fence_epoch, j.phase',
   'FROM health_erasure_jobs j',
-  'JOIN sync_subjects s ON s.uid = j.uid',
-  "WHERE (? IS NULL OR j.phase = ?) AND j.status IN ('pending', 'processing')",
+  'CROSS JOIN sync_subjects s ON s.uid = j.uid',
+  "WHERE j.phase IN ('data', 'awaiting-keys') AND (? IS NULL OR j.phase = ?)",
+  "  AND j.status IN ('pending', 'processing')",
   '  AND j.lease_until_ms <= ' + SERVER_NOW,
   "  AND s.status = 'withdrawn'",
   '  AND s.consent_revision = j.consent_revision AND s.fence_epoch = j.fence_epoch',
