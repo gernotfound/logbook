@@ -35,6 +35,15 @@ void test('CF-06 scheduler stays inert without an exact, deliberate processing o
       get RECOVERY_DB() { throw new Error('unexpected-recovery-read'); },
     }), { outcome: 'paused' });
   }
+  for (const pin of [undefined, null, '', true, 2, '0', '-2', '02', '2.0', '2e0', ' 2', '2 ', '2\n', '0x2', '9007199254740992']) {
+    assert.deepEqual(await erasureWorker.scheduled({}, {
+      CF06_ERASURE_RUN_ENABLED: 'enabled',
+      CF06_ERASURE_RUN_MODE: 'inactivity-dry-run',
+      CF06_INACTIVITY_RECOVERY_GENERATION: pin,
+      get DB() { throw new Error('unexpected-primary-read'); },
+      get RECOVERY_DB() { throw new Error('unexpected-recovery-read'); },
+    }), { outcome: 'paused' });
+  }
   let requestedPrimary = false;
   await assert.rejects(erasureWorker.scheduled({}, {
     CF06_ERASURE_RUN_ENABLED: 'enabled',
@@ -55,6 +64,7 @@ void test('CF-06 candidate rejects accidental cron activation, new routes, secre
     { vars: { CLOUD_ACCOUNT_KEK_V1: 'forbidden' } },
     { vars: { CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_ERASURE_RUN_MODE: 'account-application' } },
     { vars: { CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_ERASURE_RUN_MODE: 'alternating-application' } },
+    { vars: { CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_ERASURE_RUN_MODE: 'inactivity-dry-run', CF06_INACTIVITY_RECOVERY_GENERATION: '2' } },
     { unsafe: { bindings: [] } },
     { d1_databases: [candidate.d1_databases[0]] },
     { d1_databases: [

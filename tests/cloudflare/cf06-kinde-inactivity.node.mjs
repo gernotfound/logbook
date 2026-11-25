@@ -7,6 +7,7 @@ import {
   ACTIVITY_WRITE_INTERVAL_MS, earliestKindeInactivityErasureAt,
 } from '../../cloudflare/jobs/kinde-inactivity-time.mjs';
 import { runKindeInactivityDryRunTick } from '../../cloudflare/jobs/kinde-inactivity-dry-run.mjs';
+import erasureWorker from '../../cloudflare/jobs/health-erasure-worker.mjs';
 import { applyCurrentD1RecoverySchema, applyCurrentD1Schema } from './current-d1-schema.mjs';
 
 const VISIT = Date.parse('2026-11-24T16:38:00.000Z');
@@ -321,5 +322,40 @@ void test('persistent dry run checkpoints empty pages, retries ambiguous writes 
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_activity').get().n, 17);
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM auth_principals WHERE status='disabled'").get().n, 16);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_intents').get().n, 0);
+  assert.equal(registry.prepare('SELECT COUNT(*) AS n FROM recovery_account_erasure_denials').get().n, 0);
+});
+
+void test('scheduled diagnostic mode requires an external recovery pin and never enters the erasure lanes', async (t) => {
+  const { db, sqlite, advance } = fixture(t);
+  const registry = new DatabaseSync(':memory:');
+  t.after(() => registry.close());
+  applyCurrentD1RecoverySchema(registry);
+  registry.exec("UPDATE recovery_control SET mode='open', generation=2");
+  const recovery = { withSession(mode) {
+    assert.equal(mode, 'first-primary');
+    return { prepare(sql) { return { async first() { return registry.prepare(sql).get() ?? null; } }; } };
+  } };
+  const env = { CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_ERASURE_RUN_MODE: 'inactivity-dry-run',
+    CF06_INACTIVITY_RECOVERY_GENERATION: '2', DB: db, RECOVERY_DB: recovery };
+  const checkpoint = () => ({ ...sqlite.prepare('SELECT * FROM kinde_inactivity_scan_checkpoint').get() });
+  await recordKindeForegroundActivity(db, claims);
+  advance(earliestKindeInactivityErasureAt(VISIT) - VISIT);
+  const initial = checkpoint();
+  assert.deepEqual(await erasureWorker.scheduled({}, env), { outcome: 'not-claimed' });
+  assert.deepEqual(checkpoint(), initial);
+  sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=2");
+  await assert.rejects(erasureWorker.scheduled({}, { ...env, CF06_INACTIVITY_RECOVERY_GENERATION: '1' }),
+    /independent-recovery-fence-unavailable/);
+  assert.deepEqual(checkpoint(), initial);
+  assert.deepEqual(await erasureWorker.scheduled({}, env),
+    { outcome: 'checkpointed', candidateCount: 1, endOfSweep: true });
+  assert.equal(checkpoint().lease_epoch, 1);
+  assert.equal(checkpoint().recovery_generation, 2);
+  assert.equal(sqlite.prepare('SELECT turn FROM erasure_dispatch_control').get().turn, 0);
+  assert.equal(sqlite.prepare('SELECT lease_epoch FROM kinde_account_erasure_scheduler').get().lease_epoch, 0);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_intents').get().n, 0);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM health_erasure_jobs').get().n, 0);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_activity').get().n, 1);
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM auth_principals WHERE status='active'").get().n, 2);
   assert.equal(registry.prepare('SELECT COUNT(*) AS n FROM recovery_account_erasure_denials').get().n, 0);
 });

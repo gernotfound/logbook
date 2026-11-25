@@ -218,6 +218,15 @@ export async function verifyRemoteIsolatedD1({
     if (phase === 'after') assert.deepEqual(inventory, priorInventory, 'existing test inventory changed');
   }
 
+  // An already-applied 0013 prefix must be inert before any schema write,
+  // not merely checked after the migration has run.
+  if (applied >= 13) {
+    const controls = unpackQuery(await call('/query',
+      'SELECT singleton, mode, generation FROM kinde_inactivity_control ORDER BY singleton LIMIT 2'));
+    assert.deepEqual(controls, [{ singleton: 1, mode: 'paused', generation: 1 }],
+      'new inactivity scanner must remain paused');
+  }
+
   if (applied >= 14) {
     const checkpoint = unpackQuery(await call('/query',
       'SELECT singleton, cursor_uid, lease_epoch, lease_token, lease_until_ms FROM kinde_account_erasure_scheduler ORDER BY singleton LIMIT 2'));
@@ -300,10 +309,6 @@ export async function verifyRemoteIsolatedD1({
       ['kinde_inactivity_scan_checkpoint_transition', 'trigger'],
       ['sync_writable_cloud_key', 'view'],
     ], 'final D1 schema objects missing');
-    const controls = unpackQuery(await call('/query',
-      'SELECT singleton, mode, generation FROM kinde_inactivity_control ORDER BY singleton LIMIT 2'));
-    assert.deepEqual(controls, [{ singleton: 1, mode: 'paused', generation: 1 }],
-      'new inactivity scanner must remain paused');
     for (const row of schema.filter(({ name }) => name === 'cloud_key_first_issuance' || name === 'sync_writable_cloud_key')) {
       assert.ok(typeof row.sql === 'string' && row.sql.includes(D1_NOW_MS), 'missing integer consent clock in ' + row.name);
       assert.doesNotMatch(row.sql, /julianday/i, 'legacy consent clock in ' + row.name);
