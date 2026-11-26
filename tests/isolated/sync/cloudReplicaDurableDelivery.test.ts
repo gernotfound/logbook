@@ -5,8 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const catalogSource = vi.hoisted(() => ({ read: vi.fn() }));
 vi.mock('../../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: catalogSource.read }));
 
-import type { UserData, CachedGlobalCatalog } from '../../../src/types';
+import type { UserData, CachedGlobalCatalog, LegalConsent } from '../../../src/types';
 import { UserDataSchema } from '../../../src/lib/schema';
+import { LEGAL_VERSIONS } from '../../../src/lib/legalVersions';
 import { adoptReplicaCheckpoint, acknowledgeThrough, commitLocal, initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
 import { stageCloudflareDelivery, resumeCloudflareDelivery } from '../../../src/lib/sync/cloudReplicaDurableDelivery';
 import { stageCloudflareReplicaClaim } from '../../../src/lib/sync/cloudReplicaClaimRecovery';
@@ -28,8 +29,12 @@ const catalog: CachedGlobalCatalog = {
         itemCounts: { exercises: 0, foods: 0 } },
     exercises: [], foods: [], cachedAt: 0,
 };
-const profile = (height: number) =>
-    UserDataSchema.parse({ profile: { height: String(height) } }) as unknown as UserData;
+const profile = (height: number, consent?: LegalConsent) =>
+    UserDataSchema.parse({ profile: { height: String(height) }, ...(consent ? { legalConsent: consent } : {}) }) as unknown as UserData;
+const consent: LegalConsent = {
+    hasAcceptedTerms: true, hasAcceptedHealthData: true,
+    acceptedAt: '2026-11-13T10:00:00.000Z', privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
+};
 
 beforeEach(async () => {
     await clear();
@@ -48,8 +53,8 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
-async function seed() {
-    const initial = profile(170);
+async function seed(legalConsent?: LegalConsent) {
+    const initial = profile(170, legalConsent);
     await initializeLocal(owner, initial);
     const now = Date.now();
     const replica = {
@@ -58,7 +63,7 @@ async function seed() {
     };
     await adoptReplicaCheckpoint(owner, { identity: replica, baseSeq: 0 },
         { clock: {}, syncMetaByDocument: {} });
-    await commitLocal(owner, profile(171), initial);
+    await commitLocal(owner, profile(171, legalConsent), initial);
     const envelope = await readLocal(owner);
     if (!envelope || !envelope.pending.length) throw new Error('Local test journal absent');
     const snapshot: CloudReplicaSnapshot = {
@@ -73,8 +78,8 @@ async function seed() {
     };
     return { initial, replica, snapshot, control, envelope };
 }
-async function stage() {
-    const initial = await seed();
+async function stage(legalConsent?: LegalConsent) {
+    const initial = await seed(legalConsent);
     await stageCloudflareDelivery(owner, initial.envelope.pending, initial.snapshot,
         initial.control, initial.replica, 'batch000000000191', adk, () => true);
     return initial;
@@ -96,6 +101,83 @@ function deliveryTransport() {
 }
 
 describe('candidate D1 delivery: encrypted IndexedDB intent and exact ACK', () => {
+    it('rejects an unsolicited D1 batch ID when no durable encrypted intent exists', async () => {
+        const { envelope, replica } = await seed();
+        const ciphertext = await get(storeKey);
+        await expect(acknowledgeThrough(owner, envelope.pending.at(-1)!.seq, profile(171), [], {}, {
+            operations: envelope.pending, replica, cloudflareBatchId: 'batch000000000196',
+        })).rejects.toThrow('Acknowledgement D1 senza intento durevole');
+        expect(await get(storeKey)).toBe(ciphertext);
+        expect(await readLocal(owner)).toEqual(envelope);
+    });
+
+    it('does not accept a batch ID that differs from the encrypted intent, even with the same pending prefix', async () => {
+        const { envelope, replica } = await stage();
+        const before = await readLocal(owner);
+        const ciphertext = await get(storeKey);
+        await expect(acknowledgeThrough(owner, envelope.pending.at(-1)!.seq, profile(171), [], {}, {
+            operations: envelope.pending, replica, cloudflareBatchId: 'batch000000000196',
+        })).rejects.toThrow('Acknowledgement D1');
+        expect(await get(storeKey)).toBe(ciphertext);
+        expect(await readLocal(owner)).toEqual(before);
+    });
+
+    it('rejects a forged D1 delivery prefix before changing its encrypted intent', async () => {
+        const { envelope, replica } = await stage();
+        const before = await readLocal(owner);
+        const ciphertext = await get(storeKey);
+        const forged = structuredClone(envelope.pending);
+        forged[0].value = 'forged';
+        await expect(acknowledgeThrough(owner, envelope.pending.at(-1)!.seq, profile(171), [], {}, {
+            operations: forged, replica, cloudflareBatchId: before!.cloudflareDelivery!.batch.batchId,
+        })).rejects.toThrow('Acknowledgement D1');
+        expect(await get(storeKey)).toBe(ciphertext);
+        expect(await readLocal(owner)).toEqual(before);
+    });
+
+    it('keeps the receipt and journal pending when the authoritative D1 consent changed before ACK', async () => {
+        await stage(consent);
+        const before = await readLocal(owner);
+        const ciphertext = await get(storeKey);
+        const transport = deliveryTransport();
+        const changedConsent = { ...consent, acceptedAt: '2026-11-13T11:00:00.000Z' };
+
+        await expect(resumeCloudflareDelivery(owner, adk, transport, 'csrf-session', () => true, changedConsent))
+            .rejects.toThrow('Consenso D1 modificato durante ACK');
+        expect(transport.commit).toHaveBeenCalledOnce();
+        expect(await get(storeKey)).toBe(ciphertext);
+        expect(await readLocal(owner)).toEqual(before);
+    });
+
+    it('preserves authoritative D1 consent when ACK data carries a conflicting consent snapshot', async () => {
+        const { envelope, replica } = await stage(consent);
+        const changedConsent = { ...consent, acceptedAt: '2026-11-13T11:00:00.000Z' };
+        const pending = (await readLocal(owner))!;
+        await acknowledgeThrough(owner, envelope.pending.at(-1)!.seq,
+            profile(171, changedConsent), [], {}, {
+                operations: envelope.pending, replica,
+                cloudflareBatchId: pending.cloudflareDelivery!.batch.batchId,
+                trustedLegalConsent: consent,
+            });
+        const acknowledged = (await readLocal(owner))!;
+        expect(acknowledged.data.legalConsent).toEqual(consent);
+        expect(acknowledged.baseline.legalConsent).toEqual(consent);
+        expect(acknowledged.pending).toEqual([]);
+        expect(acknowledged.cloudflareDelivery).toBeUndefined();
+    });
+
+    it('retires a D1 intent only after a receipt with the same authoritative consent', async () => {
+        await stage(consent);
+        const transport = deliveryTransport();
+        expect(await resumeCloudflareDelivery(owner, adk, transport, 'csrf-session', () => true, consent))
+            .toBe('acknowledged');
+        const after = (await readLocal(owner))!;
+        expect(after.data.legalConsent).toEqual(consent);
+        expect(after.baseline.legalConsent).toEqual(consent);
+        expect(after.pending).toEqual([]);
+        expect(after.cloudflareDelivery).toBeUndefined();
+    });
+
     it('stores immutable AEAD bytes before network and clears them in the same journal ACK', async () => {
         await stage();
         const sealed = await get<unknown>(storeKey);
