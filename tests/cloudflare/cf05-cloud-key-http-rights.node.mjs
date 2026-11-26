@@ -166,7 +166,7 @@ void test('terminal runner requires a durable independent cutoff before destroyi
     await f.consent('owner-a');
     assert.equal((await f.call('owner-a', SYNC)).response.status, 200);
     await f.withdraw('owner-a');
-    assert.equal((await erasureWorker.scheduled({}, { ...f.env, CF06_ERASURE_RUN_ENABLED: 'enabled' })).outcome, 'awaiting-keys');
+    assert.equal((await erasureWorker.scheduled({}, { ...f.env, CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_RECOVERY_GENERATION: '2' })).outcome, 'awaiting-keys');
     assert.throws(() => f.registry.exec(`
       INSERT INTO recovery_erasure_cutoffs(uid, consent_revision, fence_epoch)
       VALUES ('owner-a', 1, 2)
@@ -176,7 +176,7 @@ void test('terminal runner requires a durable independent cutoff before destroyi
     expire();
     f.registry.exec(`CREATE TRIGGER deny_cutoff BEFORE INSERT ON recovery_erasure_cutoffs
       BEGIN SELECT RAISE(ABORT, 'synthetic-insert-unavailable'); END`);
-    await assert.rejects(erasureWorker.scheduled({}, { ...f.env, CF06_ERASURE_RUN_ENABLED: 'enabled' }), /independent-recovery-fence-unavailable/);
+    await assert.rejects(erasureWorker.scheduled({}, { ...f.env, CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_RECOVERY_GENERATION: '2' }), /independent-recovery-fence-unavailable/);
     assert.equal(f.count('health_erasure_finalizations', 'owner-a'), 0);
     assert.equal(f.count('cloud_account_keys', 'owner-a'), 1);
     assert.equal((await f.call('owner-a', RIGHTS)).response.status, 200);
@@ -195,7 +195,7 @@ void test('terminal runner requires a durable independent cutoff before destroyi
         } }; } };
       } };
     } };
-    assert.deepEqual(await erasureWorker.scheduled({}, { ...f.env, DB: paused, CF06_ERASURE_RUN_ENABLED: 'enabled' }),
+    assert.deepEqual(await erasureWorker.scheduled({}, { ...f.env, DB: paused, CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_RECOVERY_GENERATION: '2' }),
       { outcome: 'complete', keyDisposition: 'destroyed' });
     assert.equal(f.count('cloud_account_keys', 'owner-a'), 0);
     assert.equal(f.registry.prepare('SELECT finalized FROM recovery_erasure_cutoffs').get().finalized, 1);
@@ -215,7 +215,7 @@ void test('a lost terminal registry update blocks a physical application restore
     await f.consent('owner-a');
     assert.equal((await f.call('owner-a', SYNC)).response.status, 200);
     await f.withdraw('owner-a');
-    assert.equal((await erasureWorker.scheduled({}, { ...f.env, CF06_ERASURE_RUN_ENABLED: 'enabled' })).outcome, 'awaiting-keys');
+    assert.equal((await erasureWorker.scheduled({}, { ...f.env, CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_RECOVERY_GENERATION: '2' })).outcome, 'awaiting-keys');
     const snapshotPath = join(dir, 'before-finalization.sqlite');
     await backup(f.sqlite, snapshotPath);
     snapshot = new DatabaseSync(snapshotPath);
@@ -226,7 +226,7 @@ void test('a lost terminal registry update blocks a physical application restore
     f.sqlite.prepare('UPDATE health_erasure_jobs SET lease_until_ms = ?').run(Date.now() - 1000);
     f.registry.exec(`CREATE TRIGGER terminal_unavailable BEFORE UPDATE ON recovery_owner_fences
       WHEN NEW.erased_before_revision > 0 BEGIN SELECT RAISE(ABORT, 'synthetic-terminal-outage'); END`);
-    await assert.rejects(erasureWorker.scheduled({}, { ...f.env, CF06_ERASURE_RUN_ENABLED: 'enabled' }), /independent-recovery-fence-unavailable/);
+    await assert.rejects(erasureWorker.scheduled({}, { ...f.env, CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_RECOVERY_GENERATION: '2' }), /independent-recovery-fence-unavailable/);
     assert.equal(f.count('health_erasure_finalizations', 'owner-a'), 1);
     assert.equal(f.count('cloud_account_keys', 'owner-a'), 0);
     assert.deepEqual((await f.call('owner-a', RIGHTS, { env: restoredEnv })).body, { error: 'unavailable' });
@@ -236,7 +236,9 @@ void test('a lost terminal registry update blocks a physical application restore
       { outcome: 'blocked', reason: 'terminal-erasure-cutoff-pending' });
     f.registry.exec("UPDATE recovery_control SET mode='open', generation=4 WHERE singleton=1");
     f.registry.exec('DROP TRIGGER terminal_unavailable');
-    assert.equal((await erasureWorker.scheduled({}, { ...f.env, CF06_ERASURE_RUN_ENABLED: 'enabled' })).outcome, 'idle');
+    await assert.rejects(erasureWorker.scheduled({}, { ...f.env, CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_RECOVERY_GENERATION: '2' }),
+      /independent-recovery-fence-unavailable/);
+    assert.equal((await erasureWorker.scheduled({}, { ...f.env, CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_RECOVERY_GENERATION: '4' })).outcome, 'idle');
     assert.equal(f.registry.prepare('SELECT finalized FROM recovery_erasure_cutoffs').get().finalized, 1);
     assert.deepEqual((await f.call('owner-a', '/v1/consent/status')).body,
       { uid: 'owner-a', status: 'withdrawn', revision: 2, fenceEpoch: 2 });

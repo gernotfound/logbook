@@ -339,7 +339,7 @@ void test('scheduled diagnostic mode requires an external recovery pin and never
     return { prepare(sql) { return { async first() { return registry.prepare(sql).get() ?? null; } }; } };
   } };
   const env = { CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_ERASURE_RUN_MODE: 'inactivity-dry-run',
-    CF06_INACTIVITY_RECOVERY_GENERATION: '2', DB: db, RECOVERY_DB: recovery };
+    CF06_RECOVERY_GENERATION: '2', DB: db, RECOVERY_DB: recovery };
   const checkpoint = () => ({ ...sqlite.prepare('SELECT * FROM kinde_inactivity_scan_checkpoint').get() });
   await recordKindeForegroundActivity(db, claims);
   advance(earliestKindeInactivityErasureAt(VISIT) - VISIT);
@@ -347,7 +347,7 @@ void test('scheduled diagnostic mode requires an external recovery pin and never
   assert.deepEqual(await erasureWorker.scheduled({}, env), { outcome: 'not-claimed' });
   assert.deepEqual(checkpoint(), initial);
   sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=2");
-  await assert.rejects(erasureWorker.scheduled({}, { ...env, CF06_INACTIVITY_RECOVERY_GENERATION: '1' }),
+  await assert.rejects(erasureWorker.scheduled({}, { ...env, CF06_RECOVERY_GENERATION: '1' }),
     /independent-recovery-fence-unavailable/);
   assert.deepEqual(checkpoint(), initial);
   assert.deepEqual(await erasureWorker.scheduled({}, env),

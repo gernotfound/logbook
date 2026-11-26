@@ -41,7 +41,7 @@ void test('CF-06 scheduler stays inert without an exact, deliberate processing o
         CF06_ERASURE_RUN_ENABLED: 'enabled',
         CF06_ERASURE_RUN_MODE: mode,
         CF06_INACTIVITY_ENQUEUE_ENABLED: 'enabled',
-        CF06_INACTIVITY_RECOVERY_GENERATION: pin,
+        CF06_RECOVERY_GENERATION: pin,
         get DB() { throw new Error('unexpected-primary-read'); },
         get RECOVERY_DB() { throw new Error('unexpected-recovery-read'); },
       }), { outcome: 'paused' });
@@ -52,7 +52,7 @@ void test('CF-06 scheduler stays inert without an exact, deliberate processing o
       CF06_ERASURE_RUN_ENABLED: 'enabled',
       CF06_ERASURE_RUN_MODE: 'inactivity-enqueue',
       CF06_INACTIVITY_ENQUEUE_ENABLED: gate,
-      CF06_INACTIVITY_RECOVERY_GENERATION: '2',
+      CF06_RECOVERY_GENERATION: '2',
       get DB() { throw new Error('unexpected-primary-read'); },
       get RECOVERY_DB() { throw new Error('unexpected-recovery-read'); },
     }), { outcome: 'paused' });
@@ -60,9 +60,11 @@ void test('CF-06 scheduler stays inert without an exact, deliberate processing o
   let requestedPrimary = false;
   await assert.rejects(erasureWorker.scheduled({}, {
     CF06_ERASURE_RUN_ENABLED: 'enabled',
+    CF06_RECOVERY_GENERATION: '2',
+    get RECOVERY_DB() { throw new Error('synthetic-recovery-binding'); },
     get DB() { requestedPrimary = true; throw new Error('synthetic-primary-binding'); },
-  }), /synthetic-primary-binding/);
-  assert.equal(requestedPrimary, true);
+  }), /synthetic-recovery-binding/);
+  assert.equal(requestedPrimary, false);
 });
 
 void test('CF-06 candidate rejects accidental cron activation, new routes, secrets or incorrect database bindings', () => {
@@ -76,9 +78,10 @@ void test('CF-06 candidate rejects accidental cron activation, new routes, secre
     { services: [{ binding: 'KINDE_HTTP', service: 'thelogbook-cf03-kinde-http-isolated' }] },
     { vars: { CLOUD_ACCOUNT_KEK_V1: 'forbidden' } },
     { vars: { CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_ERASURE_RUN_MODE: 'account-application' } },
+    { vars: { CF06_RECOVERY_GENERATION: '2' } },
     { vars: { CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_ERASURE_RUN_MODE: 'alternating-application' } },
-    { vars: { CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_ERASURE_RUN_MODE: 'inactivity-dry-run', CF06_INACTIVITY_RECOVERY_GENERATION: '2' } },
-    { vars: { CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_ERASURE_RUN_MODE: 'inactivity-enqueue', CF06_INACTIVITY_ENQUEUE_ENABLED: 'enabled', CF06_INACTIVITY_RECOVERY_GENERATION: '2' } },
+    { vars: { CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_ERASURE_RUN_MODE: 'inactivity-dry-run', CF06_RECOVERY_GENERATION: '2' } },
+    { vars: { CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_ERASURE_RUN_MODE: 'inactivity-enqueue', CF06_INACTIVITY_ENQUEUE_ENABLED: 'enabled', CF06_RECOVERY_GENERATION: '2' } },
     { unsafe: { bindings: [] } },
     { d1_databases: [candidate.d1_databases[0]] },
     { d1_databases: [

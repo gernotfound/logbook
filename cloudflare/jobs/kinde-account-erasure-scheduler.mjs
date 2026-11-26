@@ -73,11 +73,13 @@ function newLeaseToken() {
  *
  * @param {Parameters<typeof runOneKindeAccountErasureStep>[0]} db
  * @param {Parameters<typeof runOneKindeAccountErasureStep>[1]} recoveryDb
+ * @param {number} expectedRecoveryGeneration trusted external pin; never inferred from restorable D1
  * @param {Parameters<typeof runOneKindeAccountErasureStep>[3]} [provider]
  */
-export async function runKindeAccountErasureSweepTick(db, recoveryDb, provider = null) {
-  if (!db || !recoveryDb || db === recoveryDb) throw new Error('kinde-erasure-scheduler-unavailable');
-  const generation = await readOpenRecoveryGeneration(recoveryDb);
+export async function runKindeAccountErasureSweepTick(db, recoveryDb, expectedRecoveryGeneration, provider = null) {
+  if (!db || !recoveryDb || db === recoveryDb || !Number.isSafeInteger(expectedRecoveryGeneration)
+    || expectedRecoveryGeneration < 1) throw new Error('kinde-erasure-scheduler-unavailable');
+  const generation = await readOpenRecoveryGeneration(recoveryDb, expectedRecoveryGeneration);
   const token = newLeaseToken();
   const primary = db.withSession('first-primary');
   const lease = await primary.prepare(`

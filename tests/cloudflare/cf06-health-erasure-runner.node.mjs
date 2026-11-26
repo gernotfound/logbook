@@ -559,7 +559,7 @@ void test('an expired failed owner yields to waiting owners and retries without 
     f.sqlite.exec(`CREATE TRIGGER synthetic_owner_failure BEFORE DELETE ON sync_documents
       WHEN OLD.uid = 'owner-a'
       BEGIN SELECT RAISE(ABORT, 'synthetic-owner-failure'); END`);
-    const env = { DB: f.db, RECOVERY_DB: recovery, CF06_ERASURE_RUN_ENABLED: 'enabled' };
+    const env = { DB: f.db, RECOVERY_DB: recovery, CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_RECOVERY_GENERATION: '2' };
     const tick = () => erasureWorker.scheduled({}, env);
     await assert.rejects(tick(), /synthetic-owner-failure/);
     assert.equal(job(f, 'owner-a').lease_epoch, 1);
@@ -601,7 +601,7 @@ void test('a failed reserved cutoff retry does not block another independently f
     applyCurrentD1RecoverySchema(registry);
     registry.exec("UPDATE recovery_control SET mode='open', generation=2 WHERE singleton=1");
     const recovery = new D1Sqlite(registry);
-    const env = { DB: f.db, RECOVERY_DB: recovery, CF06_ERASURE_RUN_ENABLED: 'enabled' };
+    const env = { DB: f.db, RECOVERY_DB: recovery, CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_RECOVERY_GENERATION: '2' };
     const tick = () => erasureWorker.scheduled({}, env);
     await ownerWithWrappedKey(f, 'owner-a');
     await enrollIndependentOwner(recovery, 'owner-a');
@@ -643,11 +643,13 @@ void test('a failed reserved cutoff retry does not block another independently f
 
     registry.exec("UPDATE recovery_control SET mode='open', generation=4 WHERE singleton=1");
     registry.exec('DROP TRIGGER synthetic_terminal_failure');
+    await assert.rejects(tick(), /independent-recovery-fence-unavailable/);
     const deadline = cutoff().next_check_ms;
     const formatTime = clock.prepare('SELECT strftime(?, ?) AS value');
     registry.function('strftime', (format, date) =>
       formatTime.get(format, date === 'now' ? new Date(deadline).toISOString() : date).value);
-    assert.deepEqual(await tick(), { outcome: 'progress', phase: 'data', removed: 1, table: 'sync_documents' });
+    assert.deepEqual(await erasureWorker.scheduled({}, { ...env, CF06_RECOVERY_GENERATION: '4' }),
+      { outcome: 'progress', phase: 'data', removed: 1, table: 'sync_documents' });
     assert.equal(cutoff().finalized, 1);
     assert.equal(count(f, 'health_erasure_finalizations', 'owner-a'), 1);
     assert.equal(count(f, 'cloud_account_keys', 'owner-b'), 1);
@@ -670,7 +672,7 @@ void test('one scheduled health tick cannot cross a recovery generation at a des
       const keyPhase = interruption === 'cutoff' || interruption === 'terminal-write';
       if (!keyPhase) insertDocuments(f, 'owner-a', 5);
       withdraw(f, 'owner-a');
-      const env = { DB: f.db, RECOVERY_DB: recovery, CF06_ERASURE_RUN_ENABLED: 'enabled' };
+      const env = { DB: f.db, RECOVERY_DB: recovery, CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_RECOVERY_GENERATION: '2' };
       if (keyPhase) {
         assert.deepEqual(await erasureWorker.scheduled({}, env), { outcome: 'awaiting-keys' });
         expire(f, 'owner-a');
@@ -729,7 +731,10 @@ void test('one scheduled health tick cannot cross a recovery generation at a des
         // A completed job is immutable; only the incomplete cutoff path
         // needs another lease. A terminal commit is reconciled separately.
         if (interruption === 'cutoff') expire(f, 'owner-a');
-        await erasureWorker.scheduled({}, { ...env, DB: f.db, RECOVERY_DB: recovery });
+        await assert.rejects(erasureWorker.scheduled({}, { ...env, DB: f.db, RECOVERY_DB: recovery }),
+          /independent-recovery-fence-unavailable/);
+        await erasureWorker.scheduled({}, { ...env, DB: f.db, RECOVERY_DB: recovery,
+          CF06_RECOVERY_GENERATION: '4' });
         assert.equal(count(f, 'health_erasure_finalizations', 'owner-a'), 1);
         assert.equal(registry.prepare('SELECT finalized FROM recovery_erasure_cutoffs WHERE uid=?').get('owner-a').finalized, 1);
       }
@@ -752,11 +757,11 @@ void test('scheduler has no public fetch endpoint and handles only one bounded s
       await recordVerifiedInitialConsent(f.db, recovery, 'owner-a'));
     withdraw(f, 'owner-a');
     for (const RECOVERY_DB of [undefined, f.db]) {
-      await assert.rejects(erasureWorker.scheduled({}, { DB: f.db, RECOVERY_DB, CF06_ERASURE_RUN_ENABLED: 'enabled' }),
+      await assert.rejects(erasureWorker.scheduled({}, { DB: f.db, RECOVERY_DB, CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_RECOVERY_GENERATION: '2' }),
         /independent-recovery-fence-unavailable/);
       assert.equal(count(f, 'sync_documents', 'owner-a'), 6);
     }
-    await erasureWorker.scheduled({}, { DB: f.db, RECOVERY_DB: recovery, CF06_ERASURE_RUN_ENABLED: 'enabled' });
+    await erasureWorker.scheduled({}, { DB: f.db, RECOVERY_DB: recovery, CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_RECOVERY_GENERATION: '2' });
     assert.equal(count(f, 'sync_documents', 'owner-a'), 2);
     assert.equal(job(f, 'owner-a').phase, 'data');
   } finally { registry.close(); f.sqlite.close(); }
