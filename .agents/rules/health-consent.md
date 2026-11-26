@@ -1,12 +1,12 @@
 # Consenso salute, diritti e cancellazione dei dati — TheLogBook
 
 **Quando leggere:** primo consenso trusted, revoca/riaccettazione, generazioni offline, export diritti e health-data erasure.
+
 **Non inferire:** cache locale, consenso guest o sola uguaglianza UID non attestano un'autorizzazione cloud corrente.
 
 **Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
 **Stato:** i checkpoint datati descrivono il candidato e non certificano il runtime pubblico; usare [quadro operativo Cloudflare](../../docs/operations/cloudflare-current-state.md) per l'ultimo readback documentato.
-
 
 ## CF-06 — Confine fra revoca salute e cancellazione account
 

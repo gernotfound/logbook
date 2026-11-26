@@ -1,12 +1,12 @@
 # Ciclo account, Auth e guest — TheLogBook
 
 **Quando leggere:** email verificata, accesso guest→account, sessioni, account deletion, logout e purge.
+
 **Non inferire:** Auth assente, timeout o tombstone scaduto non provano cancellazione completa né autorizzano purge locale.
 
 **Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
 **Stato:** i checkpoint datati descrivono il candidato e non certificano il runtime pubblico; usare [quadro operativo Cloudflare](../../docs/operations/cloudflare-current-state.md) per l'ultimo readback documentato.
-
 
 > **Checkpoint 24/11:** gli incrementi datati qui sotto descrivono anche stadi storici. La [mappa corrente](../../docs/operations/cloudflare-current-state.md) distingue le funzioni candidate già integrate da quelle mancanti. Il pubblico resta identity-only.
 

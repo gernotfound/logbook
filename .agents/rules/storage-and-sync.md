@@ -1,12 +1,12 @@
 # Storage e sincronizzazione — TheLogBook
 
 **Quando leggere:** IndexedDB, journal, versioni, hydration, replica, bootstrap e PWA update/reload.
+
 **Non inferire:** stato memoria, durabilità locale, ACK cloud e recupero completo sono prove distinte.
 
 **Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
 **Stato:** i checkpoint datati descrivono il candidato e non certificano il runtime pubblico; usare [quadro operativo Cloudflare](../../docs/operations/cloudflare-current-state.md) per l'ultimo readback documentato.
-
 
 ### CF-04 — Annullamento esplicito di claim/retirement sigillati (candidato 25/11/2026)
 

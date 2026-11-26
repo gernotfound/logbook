@@ -31,7 +31,8 @@
 | Trasferimenti extra SEE | Vedi `vendor-transfer-register.md`; `[TO_VERIFY]` |
 | Retention | Vedi `retention-schedule.md` |
 | Misure | Vedi `technical-organizational-measures.md` |
-| Sistemi — legacy | Browser/PWA; IndexedDB/localStorage; Firebase Authentication/Firestore/App Check; Vercel Functions; Firebase Hosting disabilitato secondo checkpoint storico |\n| Sistemi — target da validare | Browser/PWA; Kinde per identità; Cloudflare Workers Static Assets, Worker API e D1 per dati cifrati. Fitness account pubblico non ancora attivato |
+| Sistemi — legacy | Browser/PWA; IndexedDB/localStorage; Firebase Authentication/Firestore/App Check; Vercel Functions; Firebase Hosting disabilitato secondo checkpoint storico |
+| Sistemi — target da validare | Browser/PWA; Kinde per identità; Cloudflare Workers Static Assets, Worker API e D1 per dati cifrati. Fitness account pubblico non ancora attivato |
 
 ## Attività 2 — Autenticazione e gestione account
 
@@ -62,7 +63,8 @@
 | Finalità | Cancellazione sicura, idempotenza e recovery cross-device |
 | Dati | Job tecnico, timestamp/stato, hash non reversibile della receipt; nessun dato fitness nel tombstone finale |
 | Retention | 30 giorni per il tombstone tecnico, poi purge giornaliero previsto |
-| Sistema — legacy | Vercel Functions + Firebase Admin + Firestore/Auth |\n| Sistema — target | Worker trusted/D1 + Kinde Management dopo erasure verificata; non attestato come percorso account pubblico |
+| Sistema — legacy | Vercel Functions + Firebase Admin + Firestore/Auth |
+| Sistema — target | Worker trusted/D1 + Kinde Management dopo erasure verificata; non attestato come percorso account pubblico |
 | Accesso | Server-only |
 
 ## Attività 5 — Richieste privacy e supporto
