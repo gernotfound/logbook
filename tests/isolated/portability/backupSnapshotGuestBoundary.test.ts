@@ -6,6 +6,19 @@ vi.mock('../../../src/lib/firebase', () => {
     throw new Error('Device-only backup must not initialize Firebase');
 });
 
+const legacyLoad = vi.hoisted(() => ({
+    opened: 0,
+    entered: null as null | (() => void),
+    wait: null as null | Promise<void>,
+    collect: vi.fn(),
+}));
+vi.mock('../../../src/lib/db/backupSnapshotLegacy', async () => {
+    legacyLoad.opened += 1;
+    legacyLoad.entered?.();
+    if (legacyLoad.wait) await legacyLoad.wait;
+    return { collectBackupSnapshot: legacyLoad.collect };
+});
+
 const readGate = vi.hoisted(() => ({
     entered: null as null | (() => void),
     wait: null as null | Promise<void>,
@@ -35,6 +48,8 @@ const data = UserDataSchema.parse({ profile: { height: '174' } });
 beforeEach(async () => {
     readGate.entered = null;
     readGate.wait = null;
+    legacyLoad.entered = null;
+    legacyLoad.wait = null;
     await clear();
     localStorage.clear();
     lockAllVaults();
@@ -91,9 +106,21 @@ describe('Device-only backup without Firebase', () => {
         await expect(pending).rejects.toThrow();
     });
 
-    it('loads the legacy transport only for an explicitly cloud-inclusive export', async () => {
-        // Vitest wraps a deliberately throwing mock factory. Only an explicit
-        // cloud export should reach that factory.
-        await expect(collectBackupSnapshot(data, true)).rejects.toThrow(/error when mocking a module/);
+    it('rejects a stale session while the cloud-only transport is loading', async () => {
+        expect(legacyLoad.opened).toBe(0);
+        let enter!: () => void;
+        let release!: () => void;
+        const entered = new Promise<void>(resolve => { enter = resolve; });
+        legacyLoad.wait = new Promise<void>(resolve => { release = resolve; });
+        legacyLoad.entered = enter;
+
+        const pending = collectBackupSnapshot(data, true);
+        await entered;
+        revokeGuestSession();
+        release();
+
+        await expect(pending).rejects.toThrow('Sessione cambiata durante il backup.');
+        expect(legacyLoad.opened).toBe(1);
+        expect(legacyLoad.collect).not.toHaveBeenCalled();
     });
 });

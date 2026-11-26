@@ -10,12 +10,15 @@ export { hasDeviceRecoveryBackupSource } from '../backupDeviceSnapshot';
 // Device-only exports must never initialize the Firebase transport. The
 // authenticated reader retains its own server consistency and ADK checks.
 export async function collectBackupSnapshot(fallback: UserData, includeCloud: boolean, consistencyAttempt = 0, accountKey?: Uint8Array) {
+    const session = captureSession();
     if (includeCloud) {
         const { collectBackupSnapshot: collectLegacySnapshot } = await import('./backupSnapshotLegacy');
+        // Importing the legacy reader yields: an account switch (including
+        // A→B→A) must not rebind a pending export to a newer owner/epoch.
+        if (!isCurrentSession(session)) throw new Error('Sessione cambiata durante il backup.');
         return collectLegacySnapshot(fallback, true, consistencyAttempt, accountKey);
     }
 
-    const session = captureSession();
     const assertCurrent = () => {
         if (!isCurrentSession(session)) throw new Error('Sessione cambiata durante il backup.');
     };
