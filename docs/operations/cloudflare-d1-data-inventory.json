@@ -216,6 +216,14 @@
       "control",
       "Singleton traversal cursor and lease; can temporarily reference a completed owner; not a receipt, retention minimization open.",
       "Restart/replay safely; validate owner and independent deny separately."
+    ],
+    "kinde_account_erasure_retries": [
+      "uid",
+      "retry-control",
+      "not-applicable",
+      "retain-until-complete",
+      "Bounded owner-specific retry count and due time only; deleted on acknowledged completion or a later successful step, never an erasure proof.",
+      "A restored due time does not authorize cleanup; recheck the scheduler lease, intent and independent denial."
     ]
   },
   "recovery": {

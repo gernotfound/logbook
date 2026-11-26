@@ -57,7 +57,12 @@ cron, account deletion o inattività.
   0015 prima di ogni passo: dispari salute, pari account. Un ACK di
   assegnazione perso non autorizza lavoro, ma il turno seguente può
   avanzare l'altra pipeline. Non è una fence owner né un ACK erasure.
-  Backoff per owner e budget del futuro cron restano da collaudare.
+  Il backoff per owner candidato usa la migrazione 0020: dopo un esito
+  non progressivo il prossimo sweep ignora l'owner fino alla scadenza SQL,
+  con attesa crescente di 1–60 minuti e stato cancellato al progresso.
+  Lo scheduler può aggiornare il retry soltanto con lease corrente; un ACK
+  mancante non autorizza un checkpoint. Il futuro budget/cron e il costo
+  D1 effettivo restano da collaudare.
 - Un tick sanitario prova al massimo una riconciliazione del
   cutoff e un passo con lease D1, prima della fase finale atomica. Il Worker
   deve fallire senza dichiarare una cancellazione riuscita se il registro
@@ -89,9 +94,9 @@ delega ai passi esistenti. Un owner bloccato non deve fermare la scansione;
 una riga terminale già presente viene saltata senza attribuire una nuova
 ricevuta. `runKindeAccountErasureSweepTick` conserva il checkpoint D1
 (0014) con lease ed epoch/token esatti, senza alterare le fence owner.
-Un lease scaduto non avanza il cursore; una nuova scansione ritenta il
-lavoro. Ingresso application-only collegato nel candidato, non schedulato;
-quote, retry/backoff e configurazione
+Un lease scaduto non avanza il cursore; una nuova scansione può ritentare
+l'owner solo alla scadenza del backoff 0020. Ingresso application-only
+collegato nel candidato, non schedulato; quote, budget cron e configurazione
 Management restano da integrare e collaudare.
 
 **Prima di un futuro deployment e di un cron:** provare il Worker con la
