@@ -1,6 +1,7 @@
 // Candidate trusted consent endpoint. No public deployment until real Auth,
 // rights-only export and the durable erasure-job executor are integrated.
 import { strictlyEmptyPost } from '../http/strict-empty-post.mjs';
+import { candidateApiRoutePolicy } from '../api-route-policy.mjs';
 import { D1_NOW_MS } from '../sql/d1-time.mjs';
 import {
   armIndependentHealthWithdrawal, enrollIndependentOwner,
@@ -8,7 +9,6 @@ import {
 } from '../recovery/independent-owner-fence.mjs';
 
 const INTERNAL = 'https://auth-gate.internal/__internal/authorize';
-const MAX_BODY_BYTES = 2048;
 const HASH = /^[a-f0-9]{64}$/;
 const VERSION = /^[A-Za-z0-9._-]{1,32}$/;
 
@@ -164,12 +164,13 @@ async function confirmActiveConsent(env, claims, result, includeSessionExpiry = 
   return readback;
 }
 
-async function boundedJson(request) {
+async function boundedJson(request, maxBodyBytes) {
+  if (!Number.isSafeInteger(maxBodyBytes) || maxBodyBytes <= 0) throw new TypeError('invalid-body-budget');
   if (!request.body || request.headers.get('content-type')?.split(';')[0]?.trim() !== 'application/json') {
     throw new TypeError('invalid-body');
   }
   const length = request.headers.get('content-length');
-  if (length !== null && (!/^\d+$/.test(length) || Number(length) > MAX_BODY_BYTES)) {
+  if (length !== null && (!/^\d+$/.test(length) || Number(length) > maxBodyBytes)) {
     throw new TypeError('invalid-body');
   }
   const chunks = [];
@@ -191,7 +192,7 @@ async function boundedJson(request) {
       }
       if (next.value.length === 0) continue;
       lengthRead += next.value.length;
-      if (lengthRead > MAX_BODY_BYTES) throw new TypeError('invalid-body');
+      if (lengthRead > maxBodyBytes) throw new TypeError('invalid-body');
       chunks.push(next.value);
     }
     throw new TypeError('invalid-body');
@@ -357,7 +358,7 @@ export default {
       }
       let body;
       if (acceptRoute || withdrawRoute) {
-        try { body = await boundedJson(request); }
+        try { body = await boundedJson(request, candidateApiRoutePolicy(url.pathname)?.maxBodyBytes); }
         catch { return json({ error: 'invalid-body' }, 400); }
         if (acceptRoute && !validAcceptance(body, env)) {
           return json({ error: 'invalid-acceptance' }, 400);

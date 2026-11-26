@@ -10,9 +10,6 @@ const KINDE_ROUTES = new Map([
   ['/api/auth/session', 'POST'],
   ['/api/auth/logout', 'POST'],
 ]);
-// Match the existing eight-document API cap. The private Worker also enforces
-// streaming body limits, including when Content-Length is missing or forged.
-const MAX_DECLARED_BYTES = 8 * 950_000 + 8_192;
 const MAX_CALLBACK_QUERY_BYTES = 4_096;
 const FORWARDED = [
   'accept', 'accept-language', 'content-type', 'cookie', 'origin',
@@ -38,8 +35,10 @@ function configuredOrigin(env) {
 }
 
 function permittedRoute(path) {
-  if (KINDE_ROUTES.has(path)) return { binding: 'KINDE_HTTP', method: KINDE_ROUTES.get(path) };
-  if (candidateApiRoutePolicy(path)?.public === true) return { binding: 'D1_API', method: 'POST' };
+  if (KINDE_ROUTES.has(path)) return { binding: 'KINDE_HTTP', method: KINDE_ROUTES.get(path), maxBodyBytes: 0 };
+  const policy = candidateApiRoutePolicy(path);
+  if (policy?.public === true && Number.isSafeInteger(policy.maxBodyBytes)
+    && policy.maxBodyBytes >= 0) return { binding: 'D1_API', method: 'POST', maxBodyBytes: policy.maxBodyBytes };
   return null;
 }
 
@@ -74,7 +73,7 @@ export async function routeCandidateFirstPartyApi(request, env) {
 
   const declared = request.headers.get('content-length');
   if (declared !== null) {
-    if (!/^\d+$/.test(declared) || Number(declared) > MAX_DECLARED_BYTES) return denied(413);
+    if (!/^\d+$/.test(declared) || Number(declared) > route.maxBodyBytes) return denied(413);
   }
   const service = env[route.binding];
   if (!service || typeof service.fetch !== 'function') return denied(503);

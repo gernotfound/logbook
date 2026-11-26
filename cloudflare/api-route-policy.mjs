@@ -14,25 +14,29 @@ const INITIAL_CONSENT = Object.freeze({ public: true, identityOnly: true,
 const INTERNAL_IDENTITY_WRITE = Object.freeze({ public: false, identityOnly: true,
   csrfRequired: true, emailVerifiedRequired: false });
 
+export const MAX_CANDIDATE_DOCUMENT_BYTES = 950_000;
+const BATCH_BYTES = 8 * MAX_CANDIDATE_DOCUMENT_BYTES + 8_192;
+const withBodyCap = (scope, maxBodyBytes) => Object.freeze({ ...scope, maxBodyBytes });
+
 const ROUTES = Object.freeze({
-  '/v1/sync/control': FITNESS_READ,
-  '/v1/sync/read': FITNESS_READ,
-  '/v1/sync/scan': FITNESS_READ,
-  '/v1/sync/receipt': FITNESS_READ,
-  '/v1/sync/commit': FITNESS_WRITE,
-  '/v1/sync/commit/status': FITNESS_WRITE,
-  '/v1/sync/replica/claim': FITNESS_WRITE,
-  '/v1/sync/replica/retire': FITNESS_WRITE,
-  '/v1/sync/replica/status': FITNESS_WRITE,
-  '/v1/sync/replica/cancel': FITNESS_WRITE,
-  '/v1/cloud-key/sync': FITNESS_WRITE,
-  '/v1/consent/status': IDENTITY_READ,
-  '/v1/consent/initial': INITIAL_CONSENT,
-  '/v1/consent/withdraw': IDENTITY_WRITE,
-  '/v1/cloud-key/rights-export': IDENTITY_WRITE,
-  '/v1/rights/scan': IDENTITY_WRITE,
-  '/v1/account/activity': IDENTITY_WRITE,
-  '/v1/auth/logout': INTERNAL_IDENTITY_WRITE,
+  '/v1/sync/control': withBodyCap(FITNESS_READ, 128),
+  '/v1/sync/read': withBodyCap(FITNESS_READ, 512),
+  '/v1/sync/scan': withBodyCap(FITNESS_READ, 256),
+  '/v1/sync/receipt': withBodyCap(FITNESS_READ, 256),
+  '/v1/sync/commit': withBodyCap(FITNESS_WRITE, BATCH_BYTES),
+  '/v1/sync/commit/status': withBodyCap(FITNESS_WRITE, 512),
+  '/v1/sync/replica/claim': withBodyCap(FITNESS_WRITE, 4_096),
+  '/v1/sync/replica/retire': withBodyCap(FITNESS_WRITE, 4_096),
+  '/v1/sync/replica/status': withBodyCap(FITNESS_WRITE, 4_096),
+  '/v1/sync/replica/cancel': withBodyCap(FITNESS_WRITE, 4_096),
+  '/v1/cloud-key/sync': withBodyCap(FITNESS_WRITE, 0),
+  '/v1/consent/status': withBodyCap(IDENTITY_READ, 0),
+  '/v1/consent/initial': withBodyCap(INITIAL_CONSENT, 2_048),
+  '/v1/consent/withdraw': withBodyCap(IDENTITY_WRITE, 2_048),
+  '/v1/cloud-key/rights-export': withBodyCap(IDENTITY_WRITE, 0),
+  '/v1/rights/scan': withBodyCap(IDENTITY_WRITE, 256),
+  '/v1/account/activity': withBodyCap(IDENTITY_WRITE, 128),
+  '/v1/auth/logout': withBodyCap(INTERNAL_IDENTITY_WRITE, 0),
 });
 export const CANDIDATE_API_ROUTE_PATHS = Object.freeze(Object.keys(ROUTES));
 
