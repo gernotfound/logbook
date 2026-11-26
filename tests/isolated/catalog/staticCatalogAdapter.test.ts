@@ -4,7 +4,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { clearCatalogCache, getCachedCatalog, getSeedCatalog, saveCatalogToCache } from '../../../src/lib/catalog/catalogService';
 import { syncStaticCatalog } from '../../../src/lib/catalog/staticCatalogAdapter';
 
-const exercise = { id: 'synthetic-ex', name: 'Synthetic squat', trackingType: 'weight_reps' };
+const exercise = { id: 'synthetic-ex', name: 'Synthetic squat', trackingType: 'weight_reps' as const };
 const food = { id: 'synthetic-food', name: 'Synthetic oats', kcal: 110, pro: 4, carbs: 17, fat: 2 };
 const version = 'v2';
 
@@ -35,7 +35,7 @@ function response(body: string, init?: ResponseInit) {
 }
 
 function serve(mapping: Map<string, string>) {
-  const fetchMock = vi.fn(async (url: string) => response(mapping.get(url) ?? 'Not Found',
+  const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => response(mapping.get(url) ?? 'Not Found',
     mapping.has(url) ? undefined : { status: 404 }));
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
@@ -60,9 +60,9 @@ it('verifies immutable bytes before saving, then refreshes only the manifest for
   expect(fetchMock).toHaveBeenCalledTimes(3);
   for (const [url, init] of fetchMock.mock.calls) {
     expect(url).toMatch(/^\/catalog\//);
-    expect(init.credentials).toBe('omit');
-    expect(init.redirect).toBe('error');
-    expect(init.cache).toBe(url.endsWith('/manifest.json') ? 'no-store' : 'force-cache');
+    expect(init?.credentials).toBe('omit');
+    expect(init?.redirect).toBe('error');
+    expect(init?.cache).toBe(url.endsWith('/manifest.json') ? 'no-store' : 'force-cache');
   }
   const second = await syncStaticCatalog();
   expect(second.updated).toBe(false);
