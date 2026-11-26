@@ -72,7 +72,7 @@ Riferimenti: [Garante — Data breach](https://www.garanteprivacy.it/data-breach
 - revoca/rotazione delle credenziali coinvolte; per una chiave di cifratura non sovrascrivere o dismettere l'unica chiave esistente: preservare materiale ed evidenze, contenere gli accessi e seguire il processo versionato di rewrap/verifica di [Cifratura](../../.agents/rules/secure-storage.md); la rotazione di credenziali Auth non equivale alla rotazione di `CLOUD_ACCOUNT_KEK_V1`;
 - chiusura accessi non necessari;
 - correzione root cause via branch/PR/CI, senza bypass dei guardrail;
-- verifica post-fix su GitHub, Vercel e Firebase/Google Cloud pertinenti;
+- verifica post-fix sui provider pertinenti realmente in uso (GitHub, Cloudflare Workers/D1, Kinde/Google OAuth e, finché residui, Vercel e Firebase/Google Cloud), distinguendo codice, configurazione live, log e dati;
 - restore solo da backup verificato;
 - smoke test su isolamento account, sync, deletion e accessi interessati.
 

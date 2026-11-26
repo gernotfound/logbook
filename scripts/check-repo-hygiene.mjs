@@ -20,6 +20,14 @@ const tracked = execFileSync('git', ['ls-files', '-z'])
   .split('\0')
   .filter(Boolean);
 
+// Reserve room below Codex's default 32 KiB combined project-guidance cap
+// for future nested AGENTS.md files, not just the repository root.
+const agentsGuideBytes = readFileSync('AGENTS.md').byteLength;
+const agentsGuideBudget = 26 * 1024;
+if (agentsGuideBytes > agentsGuideBudget) {
+  failures.push(`AGENTS.md exceeds the ${agentsGuideBudget}-byte guidance budget (${agentsGuideBytes} bytes)`);
+}
+
 const markdownFiles = tracked.filter(path => path.endsWith('.md'));
 const linkFailures = checkMarkdownLinks(markdownFiles, {
   read: path => readFileSync(path, 'utf8'),

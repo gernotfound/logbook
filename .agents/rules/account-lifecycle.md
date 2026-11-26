@@ -1,5 +1,13 @@
 # Ciclo account, Auth e guest — TheLogBook
 
+**Quando leggere:** email verificata, accesso guest→account, sessioni, account deletion, logout e purge.
+
+**Non inferire:** Auth assente, timeout o tombstone scaduto non provano cancellazione completa né autorizzano purge locale.
+
+**Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
+
+**Stato:** i checkpoint datati descrivono il candidato e non certificano il runtime pubblico; usare [quadro operativo Cloudflare](../../docs/operations/cloudflare-current-state.md) per l'ultimo readback documentato.
+
 > **Checkpoint 24/11:** gli incrementi datati qui sotto descrivono anche stadi storici. La [mappa corrente](../../docs/operations/cloudflare-current-state.md) distingue le funzioni candidate già integrate da quelle mancanti. Il pubblico resta identity-only.
 
 ### CF-06 — Cancellazione account e inattività candidate
@@ -389,10 +397,6 @@ Il candidato `prepareKindeCandidateOwner()` compone verifica fidata email/consen
 
 La nuova `claimKindeCandidateReplica()` presuppone sessione e consenso attivi, vault device già creato e sbloccato per lo stesso UID, baseline legale server-derived e generazione sincrona del chiamante; non installa il reader Auth e non concede un account fitness. Blocca mutazioni se l'owner del controllo D1, il cookie CSRF, il consenso, il vault o la replica non coincidono, e conserva gli intent cifrati recuperabili dopo risposta remota ambigua. Serve ancora la composizione runtime di identità, lifecycle consenso/diritti/erasure, replica/journal e verifica API/provider prima di eliminare il blocco `identityOnly`.
 
-**Quando leggere:** email verificata, accesso guest→account, sessioni, account deletion, logout e purge.
-**Non inferire:** Auth assente, timeout o tombstone scaduto non provano cancellazione completa né autorizzano purge locale.
-
-**Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
 ### Isolamento del lettore UID Firebase non montato (18/11/2026, v2.525.0)
 

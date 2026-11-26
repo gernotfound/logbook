@@ -31,18 +31,19 @@
 | Trasferimenti extra SEE | Vedi `vendor-transfer-register.md`; `[TO_VERIFY]` |
 | Retention | Vedi `retention-schedule.md` |
 | Misure | Vedi `technical-organizational-measures.md` |
-| Sistemi | Browser/PWA; IndexedDB/localStorage; Firebase Hosting/Authentication/Firestore/App Check; Vercel Functions per backend trusted |
+| Sistemi — legacy | Browser/PWA; IndexedDB/localStorage; Firebase Authentication/Firestore/App Check; Vercel Functions; Firebase Hosting disabilitato secondo checkpoint storico |
+| Sistemi — target da validare | Browser/PWA; Kinde per identità; Cloudflare Workers Static Assets, Worker API e D1 per dati cifrati. Fitness account pubblico non ancora attivato |
 
 ## Attività 2 — Autenticazione e gestione account
 
 | Campo | Contenuto da validare |
 |---|---|
 | Finalità | Login, identificazione account, recupero accesso, sicurezza sessione |
-| Dati | UID Firebase, email e dati restituiti dal provider di autenticazione applicabile |
+| Dati | Legacy: UID Firebase/email; target: subject Kinde, email e metadati di sessione necessari, da verificare sul tenant |
 | Base | `[TO_VALIDATE]` |
-| Fornitori | Google/Firebase |
+| Fornitori | Legacy Google/Firebase; target Kinde e Google OAuth, accordi e flussi da verificare |
 | Retention | Finché l'account è attivo; cancellazione tramite workflow account deletion, salvo record tecnici di recovery limitati |
-| Misure | Auth Firebase, Security Rules, App Check lato client; enforcement live da verificare |
+| Misure | Legacy Firebase Auth, Security Rules e App Check; target sessione Kinde/Worker, consenso e D1 owner-scoped ancora da collaudare, enforcement live da verificare |
 
 ## Attività 3 — Gestione locale degli errori (nessun monitoraggio esterno)
 
@@ -62,7 +63,8 @@
 | Finalità | Cancellazione sicura, idempotenza e recovery cross-device |
 | Dati | Job tecnico, timestamp/stato, hash non reversibile della receipt; nessun dato fitness nel tombstone finale |
 | Retention | 30 giorni per il tombstone tecnico, poi purge giornaliero previsto |
-| Sistema | Vercel Functions + Firebase Admin + Firestore/Auth |
+| Sistema — legacy | Vercel Functions + Firebase Admin + Firestore/Auth |
+| Sistema — target | Worker trusted/D1 + Kinde Management dopo erasure verificata; non attestato come percorso account pubblico |
 | Accesso | Server-only |
 
 ## Attività 5 — Richieste privacy e supporto

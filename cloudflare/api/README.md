@@ -1,4 +1,6 @@
-# CF-01/02 — isolated encrypted D1 replica candidate
+# CF-01/02 — contratti del candidato API D1 cifrato
+
+**Quando leggere:** route e policy HTTP, sessione Auth Gate, documenti cifrati, ACK, consenso e verifiche D1 isolate. **Non inferire:** Worker privato distribuito non implica route fitness pubblica; gli snapshot nelle sezioni datate non provano il provider corrente. Consultare il [quadro operativo](../../docs/operations/cloudflare-current-state.md).
 
 **Route authorization boundary:** `cloudflare/api-route-policy.mjs` is the single candidate allowlist and scope classification used by the public first-party D1 gateway, private `AUTH_GATE` and replica API's defensive checks of internal claims. It keeps `/v1/auth/logout` internal, distinguishes identity-only rights/withdrawal from verified-email fitness/initial consent, and marks routes that require CSRF. Its per-route byte ceilings reject excessive declared requests at the gateway and bound the replica and consent HTTP readers; empty-body routes retain their independent stream-draining guards. `Content-Length` is never proof of the actual stream length. The private Workers still own schema, session, owner, consent and recovery readbacks; a policy entry alone never grants access or publishes a Worker binding. Runtime-backed negative tests enforce the independently reviewed route set. A new route must be assigned exposure, scope and budget deliberately before either gateway can accept it.
 

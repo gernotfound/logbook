@@ -1,14 +1,18 @@
 # Archivio locale e cifratura cloud — TheLogBook
 
+**Quando leggere:** vault device, provisioning, chiavi, envelope AEAD e disponibilità cloud.
+
+**Non inferire:** cifratura locale e cloud hanno chiavi e failure path distinti; non sono E2EE né un backup indipendente.
+
+**Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
+
+**Stato:** i checkpoint datati descrivono il candidato e non certificano il runtime pubblico; usare [quadro operativo Cloudflare](../../docs/operations/cloudflare-current-state.md) per l'ultimo readback documentato.
+
 ### Kinde — provisioning device vault dopo consenso trusted (18/11/2026, candidato)
 
 `prepareKindeCandidateOwner()` verifica UID/epoch/revisione e ricevuta legale dal D1 prima di chiamare `createAndMigrateVault()`, che ora importa gli identificatori puri da `deviceStorageKeys.ts` senza caricare `deviceStorage` e il suo consenso Firebase. Il Web Lock owner-scoped e i controlli/mirror preservano la stessa chiave dopo crash/retry, senza attribuzione di dati guest. Solo dopo la riapertura del vault e la riverifica di sessione+cookie avviene la hydration AEAD completa e il claim durevole; revoca/cancellazione locale o generazione consenso differente bloccano l'intero percorso. Una creazione del solo vault non è prova di data hydration, appartenenza replica, account fitness o ACK. Il percorso resta **non montato** nel provider pubblico e senza GO D1 Production.
 
 
-**Quando leggere:** vault device, provisioning, chiavi, envelope AEAD e disponibilità cloud.
-**Non inferire:** cifratura locale e cloud hanno chiavi e failure path distinti; non sono E2EE né un backup indipendente.
-
-**Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
 ## Boundary e fonti
 

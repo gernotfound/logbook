@@ -1,5 +1,13 @@
 # Storage e sincronizzazione — TheLogBook
 
+**Quando leggere:** IndexedDB, journal, versioni, hydration, replica, bootstrap e PWA update/reload.
+
+**Non inferire:** stato memoria, durabilità locale, ACK cloud e recupero completo sono prove distinte.
+
+**Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
+
+**Stato:** i checkpoint datati descrivono il candidato e non certificano il runtime pubblico; usare [quadro operativo Cloudflare](../../docs/operations/cloudflare-current-state.md) per l'ultimo readback documentato.
+
 ### CF-04 — Annullamento esplicito di claim/retirement sigillati (candidato 25/11/2026)
 
 La schermata candidata legge una richiesta già sigillata nell'archivio owner-scoped soltanto con sessione Kinde, consenso, cookie CSRF, epoch e vault device correnti. La conferma utente conserva la `mutationId` osservata; il bridge rilegge l'intento prima di chiamare il boundary `cancelCloudflareReplicaMutation()`. Non si crea un nuovo vault/claim e non si annulla un'altra operazione se una scheda concorrente ha sostituito l'intento.
@@ -32,10 +40,6 @@ Il bridge di sola lettura `inspectKindeCandidateCloudCheckpoint` verifica sessio
 
 `claimKindeCandidateReplica()` collega sessione e consenso trusted, vault device già aperto, owner D1 nel controllo remoto, verifica AEAD completa del checkpoint e doppio controllo stabile prima dello staging. La prova legale locale deve corrispondere alla ricevuta server e viene verificata nuovamente prima e dopo il replay. Il request di claim viene prima registrato nell'envelope cifrato owner-scoped; un claim preesistente viene ripreso con la mutationId invariata, senza rigenerare una richiesta. Un lost ACK, controllo instabile, guest, cambio CSRF/generazione/vault o replica locale scaduta impediscono nuove attribuzioni; la ADK temporanea viene azzerata sempre. La funzione rimane candidata non montata nel provider o nella UI, e i risultati `adopted`/`already-active` **non** autorizzano da soli fitness, ACK del journal, diritti o cutover Production. La replica già presente si accetta come `already-active` soltanto con incarico e lease coincidenti nel controllo owner-bound.
 
-**Quando leggere:** IndexedDB, journal, versioni, hydration, replica, bootstrap e PWA update/reload.
-**Non inferire:** stato memoria, durabilità locale, ACK cloud e recupero completo sono prove distinte.
-
-**Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
 ## Contratti collegati
 

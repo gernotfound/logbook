@@ -1,6 +1,6 @@
 # Dati salute e revoca del consenso — decisione e gate pre-utenti esterni
 
-> Stato tecnico al **6 novembre 2026**, issue [#824](https://github.com/gernotfound/logbook/issues/824). L'implementazione è integrata tramite [PR #826](https://github.com/gernotfound/logbook/pull/826) e [PR #829](https://github.com/gernotfound/logbook/pull/829). La CI non dimostra il collaudo autenticato in Production.
+> **Baseline Firebase legacy al 6 novembre 2026**, issue [#824](https://github.com/gernotfound/logbook/issues/824): revoca integrata con [PR #826](https://github.com/gernotfound/logbook/pull/826) e [PR #829](https://github.com/gernotfound/logbook/pull/829). Questa implementazione non attesta il target Kinde/Workers/D1 né il suo fitness account pubblico. La CI non dimostra collaudi autenticati Production.
 > **Gate pre-utenti esterni: NO-GO.** Restano aperti collaudi multi-dispositivo, configurazioni e contratti dei fornitori, validazione giuridica delle basi e della conservazione residua. Questo documento non è un parere legale né una DPIA.
 
 ## Decisioni di prodotto per la beta pubblica (6 novembre 2026)

@@ -1,6 +1,6 @@
 # Misure tecniche e organizzative — TheLogBook
 
-> Scheda TOM Art. 32 da allineare allo stato reale. "Presente nel codice" non equivale a "configurato live": le verifiche esterne sono esplicitamente separate. **13/11/2026:** il frontend Firebase Hosting è disabilitato secondo il proprietario, il runtime applicativo contiene ancora Firebase Auth/Firestore/App Check e Vercel; il nuovo Worker API D1 è solo candidato. Queste righe descrivono la baseline transitoria, non il sistema Cloudflare futuro o una certificazione GDPR.
+> Scheda TOM Art. 32 **non validata**. La tabella sotto conserva la baseline Firebase/Vercel al 13/11/2026, non una certificazione dello stato live. Al checkpoint di codice del 26/11 il frontend pubblico monta guest + identità Kinde; il fitness Workers/D1 resta isolato. I Worker privati, i test e le configurazioni live richiedono prove separate: vedere [quadro operativo](../operations/cloudflare-current-state.md). "Presente nel codice" non equivale a "configurato live" o conforme al GDPR.
 
 **Fonte tecnica:** [AGENTS](../../AGENTS.md) e i contratti specialistici collegati. Le righe su provider e smoke descrivono evidenze da acquisire o checkpoint datati, non nuove verifiche live.
 
