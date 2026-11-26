@@ -60,11 +60,11 @@ describe('Device-only backup without Firebase', () => {
 
         const snapshot = await collectBackupSnapshot(data, false);
         expect(snapshot.owner).toBe('guest');
-        expect(snapshot.data.profile.height).toBe('174');
+        expect(snapshot.data.profile?.height).toBe('174');
         expect(snapshot.coverage).toMatchObject({ scope: 'device' });
         expect(snapshot.recovery.cloudDocuments).toEqual({});
         expect(snapshot.recovery.device).toMatchObject({ ['workout-intent:' + 'a'.repeat(32)]: '{"sequence":1}' });
-        expect(snapshot.recovery.envelope?.data.profile.height).toBe('174');
+        expect(snapshot.recovery.envelope?.data.profile?.height).toBe('174');
     });
 
     it('does not replace an absent local archive with a fabricated cloud snapshot', async () => {
