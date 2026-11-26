@@ -33,6 +33,7 @@ import { cancelLocalVaultReadiness } from '../lib/sync/secureArchiveUnlockFlow';
 import { lockVault } from '../lib/sync/secureArchiveSession';
 import { authenticatedIdentitySource } from '../lib/sync/authenticatedIdentitySource';
 import { readLegacyAuthenticatedIdentity } from './auth/legacyIdentityReader';
+import { installLegacyHealthConsentIdentity } from '../lib/healthConsentLegacyIdentity';
 import { readGuestMigrationSyncRecovery, markGuestMigrationSyncRecovery, clearGuestMigrationSyncRecovery } from '../lib/auth/guestMigrationSyncRecovery';
 
 // The legacy provider is test-only in the Kinde-first application. Importing
@@ -68,6 +69,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const setSaveError = useAppStore(state => state.setSaveError);
 
     useEffect(() => authenticatedIdentitySource.install(readLegacyAuthenticatedIdentity), []);
+    useEffect(() => installLegacyHealthConsentIdentity(readLegacyAuthenticatedIdentity), []);
 
     useEffect(() => {
         const reconcileGuestSession = () => {

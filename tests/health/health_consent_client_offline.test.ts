@@ -3,6 +3,7 @@ import { auth } from '../../src/lib/firebase';
 import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
 import { user, key, accepted, trustedConsentResponse } from './healthConsentClientFixture';
+import { installLegacyHealthConsentIdentity } from '../../src/lib/healthConsentLegacyIdentity';
 
 // Exercise the actual consent policy while isolating only external Firebase/App Check adapters.
 vi.unmock('../../src/lib/healthConsent');
@@ -11,8 +12,9 @@ vi.mock('../../src/lib/appCheck', () => ({ getLimitedUseAppCheckToken: vi.fn(asy
 
 import { beginHealthConsentVerification, currentHealthConsentStatus, isHealthConsentWritable, isHealthConsentCloudWritable, getVerifiedHealthConsentRevision, refreshHealthConsent, withdrawHealthConsent } from '../../src/lib/healthConsent';
 
-beforeEach(() => { lockAllVaults(); localStorage.clear(); vi.unstubAllGlobals(); (auth as { currentUser: unknown }).currentUser = null; });
-afterEach(() => lockAllVaults());
+let disposeIdentity: () => void;
+beforeEach(() => { lockAllVaults(); localStorage.clear(); vi.unstubAllGlobals(); (auth as { currentUser: unknown }).currentUser = null; disposeIdentity = installLegacyHealthConsentIdentity(() => auth.currentUser); });
+afterEach(() => { disposeIdentity(); lockAllVaults(); });
 
 describe('offline consent cache and reconnect privacy boundary', () => {
   it('keeps a previously verified local session visible during recheck while fencing cloud writes', async () => {
