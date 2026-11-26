@@ -363,20 +363,20 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
             <BrandLoadingScreen variant="content" label="Caricamento sezione in corso" />
           }>
             <div style={{ display: activeTab === 'home' ? 'block' : 'none' }}>
-              {(visitedTabs.home || activeTab === 'home') && (
+              {(visitedTabs.has('home') || activeTab === 'home') && (
                 settingsOpen
                   ? <SettingsView onClose={handleCloseSettings} />
                   : <HomeView onNavigate={handleHomeNavigate} onOpenSettings={handleOpenSettings} isActive={activeTab === 'home'} />
               )}
             </div>
             <div style={{ display: activeTab === 'training' ? 'block' : 'none' }}>
-              {(visitedTabs.training || activeTab === 'training') && <TrainingView subTab={trainingSubTab} setSubTab={setTrainingSubTab} isActive={activeTab === 'training'} />}
+              {(visitedTabs.has('training') || activeTab === 'training') && <TrainingView subTab={trainingSubTab} setSubTab={setTrainingSubTab} isActive={activeTab === 'training'} />}
             </div>
             <div style={{ display: activeTab === 'nutrition' ? 'block' : 'none' }}>
-              {(visitedTabs.nutrition || activeTab === 'nutrition') && <NutritionView subTab={nutritionSubTab} setSubTab={setNutritionSubTab} />}
+              {(visitedTabs.has('nutrition') || activeTab === 'nutrition') && <NutritionView subTab={nutritionSubTab} setSubTab={setNutritionSubTab} />}
             </div>
             <div style={{ display: activeTab === 'data' ? 'block' : 'none' }}>
-              {(visitedTabs.data || activeTab === 'data') && <DataView subTab={dataSubTab} setSubTab={setDataSubTab} isActive={activeTab === 'data'} />}
+              {(visitedTabs.has('data') || activeTab === 'data') && <DataView subTab={dataSubTab} setSubTab={setDataSubTab} isActive={activeTab === 'data'} />}
             </div>
           </Suspense>
         </ErrorBoundary>

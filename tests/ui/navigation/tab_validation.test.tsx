@@ -12,6 +12,7 @@ import {
     DataSubTabSchema 
 } from '../../../src/lib/schema';
 import { useLocalStorage } from '../../../src/hooks/useLocalStorage';
+import { useAppNavigation } from '../../../src/hooks/useAppNavigation';
 import { LOCAL_STORAGE_ACTIVE_TAB, LOCAL_STORAGE_TRAINING_TAB } from '../../../src/constants';
 import { ownerUiPreferenceKey } from '../../../src/lib/uiPreferenceKeys';
 import { refreshHealthConsent } from '../../../src/lib/healthConsent';
@@ -48,7 +49,10 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
                 [],
                 true,
                 'HOME',
-                ' Training'
+                ' Training',
+                '__proto__',
+                'constructor',
+                'toString',
             ];
 
             for (const val of invalidValues) {
@@ -108,6 +112,58 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
     });
 
     describe('owner-scoped navigation persistence', () => {
+        it('keeps only validated tabs in its immutable visited set', () => {
+            const { result } = renderHook(() => useAppNavigation('user:nav-regression', null));
+            expect([...result.current.visitedTabs]).toEqual(['home']);
+
+            act(() => result.current.handleTabChange('__proto__'));
+            act(() => result.current.handleTabChange('constructor'));
+            act(() => { window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'toString' })); });
+            expect(result.current.activeTab).toBe('home');
+            expect([...result.current.visitedTabs]).toEqual(['home']);
+
+            act(() => result.current.handleTabChange('training'));
+            expect([...result.current.visitedTabs]).toEqual(['home', 'training']);
+            act(() => result.current.handleTabChange('nutrition'));
+            expect([...result.current.visitedTabs]).toEqual(['home', 'training', 'nutrition']);
+            act(() => result.current.handleTabChange('training'));
+            expect([...result.current.visitedTabs]).toEqual(['home', 'training', 'nutrition']);
+        });
+
+        it('restores tab and settings scroll positions and resets a reselected tab', () => {
+            const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+            const animationFrame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(cb => {
+                cb(0);
+                return 1;
+            });
+            const originalScroll = Object.getOwnPropertyDescriptor(window, 'scrollY');
+            const setScroll = (value: number) => Object.defineProperty(window, 'scrollY', { configurable: true, value });
+
+            try {
+                const { result } = renderHook(() => useAppNavigation('user:scroll-regression', null));
+                setScroll(250);
+                act(() => result.current.handleTabChange('training'));
+                setScroll(75);
+                act(() => result.current.handleTabChange('home'));
+                expect(scrollTo).toHaveBeenLastCalledWith({ top: 250, behavior: 'instant' });
+
+                setScroll(125);
+                act(() => result.current.handleOpenSettings());
+                act(() => result.current.handleCloseSettings());
+                expect(scrollTo).toHaveBeenLastCalledWith({ top: 125, behavior: 'instant' });
+
+                act(() => result.current.handleTabChange('home'));
+                expect(scrollTo).toHaveBeenLastCalledWith({ top: 0, behavior: 'smooth' });
+                act(() => result.current.handleTabChange('training'));
+                expect(scrollTo).toHaveBeenLastCalledWith({ top: 75, behavior: 'instant' });
+            } finally {
+                if (originalScroll) Object.defineProperty(window, 'scrollY', originalScroll);
+                else Reflect.deleteProperty(window, 'scrollY');
+                scrollTo.mockRestore();
+                animationFrame.mockRestore();
+            }
+        });
+
         it('rebinds a mounted useLocalStorage hook when the owner key changes', () => {
             const firstOwnerKey = ownerUiPreferenceKey('user:first', LOCAL_STORAGE_ACTIVE_TAB);
             const secondOwnerKey = ownerUiPreferenceKey('user:second', LOCAL_STORAGE_ACTIVE_TAB);

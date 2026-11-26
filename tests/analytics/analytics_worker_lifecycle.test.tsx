@@ -80,6 +80,68 @@ it('uses a production-shaped correlation fallback after a worker task error', as
     hook.unmount();
 });
 
+it('ignores malformed and unmatched Worker envelopes without losing an in-flight request', async () => {
+    const hook = renderHook(() => useAnalyticsWorker());
+    const pending = hook.result.current.calculateVolumeStats([], [], 80, 8);
+    const currentWorker = worker.instance;
+    const { id } = worker.post.mock.lastCall![0];
+
+    await act(async () => {
+        expect(() => currentWorker.onmessage({ data: null })).not.toThrow();
+        expect(() => currentWorker.onmessage({ data: { id: 'bad-id', type: 'SUCCESS', result: worker.volumeResult } })).not.toThrow();
+        expect(() => currentWorker.onmessage({ data: { id: id + 1000, type: 'SUCCESS', result: worker.volumeResult } })).not.toThrow();
+    });
+    expect(worker.fallback).not.toHaveBeenCalled();
+
+    await act(async () => {
+        currentWorker.onmessage({ data: { id, type: 'SUCCESS', result: worker.volumeResult } });
+    });
+    expect(await pending).toEqual(worker.volumeResult);
+    expect(worker.fallback).not.toHaveBeenCalled();
+    hook.unmount();
+});
+
+it('falls back when a Worker claims SUCCESS without a valid volume result', async () => {
+    const hook = renderHook(() => useAnalyticsWorker());
+    const pending = hook.result.current.calculateVolumeStats([], [], 80, 8);
+    const { id } = worker.post.mock.lastCall![0];
+
+    await act(async () => {
+        worker.instance.onmessage({ data: { id, type: 'SUCCESS', result: { points: [], stats: {} } } });
+    });
+    expect(await pending).toEqual(worker.volumeResult);
+    expect(worker.fallback).toHaveBeenCalledTimes(1);
+    hook.unmount();
+});
+
+it('does not pass a malformed chart point through a nominally valid Worker result', async () => {
+    const hook = renderHook(() => useAnalyticsWorker());
+    const pending = hook.result.current.calculateVolumeStats([], [], 80, 8);
+    const { id } = worker.post.mock.lastCall![0];
+
+    await act(async () => {
+        worker.instance.onmessage({
+            data: { id, type: 'SUCCESS', result: { ...worker.volumeResult, points: [{ label: 'missing metrics' }] } },
+        });
+    });
+    expect(await pending).toEqual(worker.volumeResult);
+    expect(worker.fallback).toHaveBeenCalledTimes(1);
+    hook.unmount();
+});
+
+it('does not accept a volume result as a correlation result', async () => {
+    const hook = renderHook(() => useAnalyticsWorker());
+    const pending = hook.result.current.calculateCorrelationStats([], {}, [], 80, 8);
+    const { id } = worker.post.mock.lastCall![0];
+
+    await act(async () => {
+        worker.instance.onmessage({ data: { id, type: 'SUCCESS', result: worker.volumeResult } });
+    });
+    expect(await pending).toEqual(worker.correlationResult);
+    expect(worker.correlation).toHaveBeenCalledTimes(1);
+    hook.unmount();
+});
+
 it('does not resolve an old cooperative fallback after the view is reactivated', async () => {
     let release!: () => void;
     const gate = new Promise<void>(resolve => { release = resolve; });
@@ -216,6 +278,27 @@ it('cancels an obsolete period before the worker can finish, without an obsolete
     expect(canceled.message).toContain('superata');
     expect(await latest).toEqual(worker.volumeResult);
     expect(worker.fallback).not.toHaveBeenCalled();
+    hook.unmount();
+});
+
+it('ignores a response from the terminated Worker even if it repeats the current request id', async () => {
+    const hook = renderHook(() => useAnalyticsWorker(true, true));
+    const obsolete = hook.result.current.calculateVolumeStats([], [], 80, 8).catch((error: Error) => error);
+    const oldWorker = worker.instance;
+    const fresh = hook.result.current.calculateVolumeStats([], [], 80, 12);
+    const newWorker = worker.instance;
+    const { id } = worker.post.mock.lastCall![0];
+
+    await act(async () => {
+        oldWorker.onmessage({ data: { id, type: 'SUCCESS', result: worker.volumeResult } });
+    });
+    expect(await obsolete).toBeInstanceOf(Error);
+    expect(worker.fallback).not.toHaveBeenCalled();
+
+    await act(async () => {
+        newWorker.onmessage({ data: { id, type: 'SUCCESS', result: worker.volumeResult } });
+    });
+    expect(await fresh).toEqual(worker.volumeResult);
     hook.unmount();
 });
 

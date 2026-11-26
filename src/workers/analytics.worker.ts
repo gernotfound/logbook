@@ -1,5 +1,7 @@
 import { computeWeeklyVolumeSeries, computeVolumeCaloriesCorrelation, computeVolumeCaloriesCorrelationFromVolume } from '../lib/calc/analytics';
 
+// Dedicated Worker: messages arrive through its owning document's private channel.
+// Unlike window messages, event.origin is not an authorization check here.
 self.onmessage = (e: MessageEvent) => {
     const id = e.data?.id;
 

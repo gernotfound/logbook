@@ -1,10 +1,48 @@
 import { useEffect, useRef, useCallback } from 'react';
+import { z } from 'zod';
 import { computeWeeklyVolumeSeries, computeWeeklyVolumeSeriesCooperative, computeVolumeCaloriesCorrelation, computeVolumeCaloriesCorrelationCooperative, computeVolumeCaloriesCorrelationFromVolume } from '../lib/calc/analytics';
 import { getLocalDateString } from '../lib/utils/date';
 import AnalyticsWorker from '../workers/analytics.worker?worker';
 
 let messageIdCounter = 0;
 type VolumeResult = ReturnType<typeof computeWeeklyVolumeSeries>;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+// Validate the entire result before passing it to charts; a partial SUCCESS is not success.
+const weeklyVolumeResultSchema = z.object({
+    points: z.array(z.object({
+        weekIndex: z.number(), weekStart: z.string(), weekEnd: z.string(), label: z.string(),
+        volumeKg: z.number(), volumeTon: z.number(), workoutCount: z.number(), sessionIds: z.array(z.string()),
+    })),
+    stats: z.object({
+        totalVolumeKg: z.number(), avgWeeklyVolumeKg: z.number(), currentWeekVolumeKg: z.number(),
+        previousWeekVolumeKg: z.number(), percentageChange: z.number().nullable(), peakWeekVolumeKg: z.number(),
+        hasData: z.boolean(), activeWeeksCount: z.number(), totalWorkouts: z.number(),
+    }),
+}) satisfies z.ZodType<VolumeResult>;
+
+const correlationResultSchema = z.object({
+    points: z.array(z.object({
+        weekIndex: z.number(), weekStart: z.string(), weekEnd: z.string(), label: z.string(),
+        volumeKg: z.number(), volumeTon: z.number(), avgDailyKcal: z.number(),
+        workoutCount: z.number(), loggedNutritionDays: z.number(),
+    })),
+    stats: z.object({
+        hasData: z.boolean(), correlationCoefficient: z.number().nullable(), correlationInsight: z.string(),
+        avgWeeklyVolumeKg: z.number(), avgDailyKcal: z.number(), validDataPointsCount: z.number(),
+    }),
+}) satisfies z.ZodType<ReturnType<typeof computeVolumeCaloriesCorrelation>>;
+
+function hasAnalyticsResultShape(taskType: string, result: unknown): boolean {
+    if (taskType === 'CALCULATE_VOLUME_STATS') return weeklyVolumeResultSchema.safeParse(result).success;
+    if (taskType === 'CALCULATE_CORRELATION_STATS' || taskType === 'CALCULATE_CORRELATION_FROM_VOLUME') {
+        return correlationResultSchema.safeParse(result).success;
+    }
+    return false;
+}
 
 // Only in-flight results are shared; no persistent cache may outlive its source data.
 const inflightVolumes = new WeakMap<object, WeakMap<object, Map<string, Promise<VolumeResult>>>>();
@@ -32,7 +70,7 @@ export function useAnalyticsWorker(enabled = true, latestOnly = false) {
     const abortControllerRef = useRef<AbortController | null>(null);
     const requestSerialRef = useRef(0);
     const restartWorkerRef = useRef<() => void>(() => {});
-    const pendingPromises = useRef<Map<number, { resolve: (val: any) => void, reject: (err: any) => void, cancel: (err: Error) => void, timeoutId: ReturnType<typeof setTimeout> }>>(new Map());
+    const pendingPromises = useRef<Map<number, { requestType: string, resolve: (val: any) => void, reject: (err: any) => void, cancel: (err: Error) => void, timeoutId: ReturnType<typeof setTimeout> }>>(new Map());
 
     useEffect(() => {
         if (!enabled) return;
@@ -46,16 +84,17 @@ export function useAnalyticsWorker(enabled = true, latestOnly = false) {
             workerRef.current = worker;
 
             worker.onmessage = (e) => {
+                // A terminated Worker may still deliver a queued response after restart.
+                if (workerRef.current !== worker || !isRecord(e.data) || typeof e.data.id !== 'number') return;
                 const { id, type, result, error } = e.data;
                 const promiseHandlers = pendingForThisMount.get(id);
-                if (promiseHandlers) {
-                    clearTimeout(promiseHandlers.timeoutId);
-                    pendingForThisMount.delete(id);
-                    if (type === 'SUCCESS') {
-                        promiseHandlers.resolve(result);
-                    } else {
-                        promiseHandlers.reject(new Error(error || 'Worker error'));
-                    }
+                if (!promiseHandlers) return;
+                clearTimeout(promiseHandlers.timeoutId);
+                pendingForThisMount.delete(id);
+                if (type === 'SUCCESS' && hasAnalyticsResultShape(promiseHandlers.requestType, result)) {
+                    promiseHandlers.resolve(result);
+                } else {
+                    promiseHandlers.reject(new Error(type === 'ERROR' && typeof error === 'string' ? error : 'Invalid analytics Worker response'));
                 }
             };
             
@@ -155,6 +194,7 @@ export function useAnalyticsWorker(enabled = true, latestOnly = false) {
             }, timeoutMs);
 
             pendingPromises.current.set(id, {
+                requestType: type,
                 resolve,
                 cancel: reject,
                 reject: (err) => {
