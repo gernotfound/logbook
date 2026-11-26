@@ -1,6 +1,29 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
-**Checkpoint del più recente incremento funzionale verificato, 26/11/2026:**
+**Checkpoint Impostazioni/legacy, 27/11/2026:** [PR #1472](https://github.com/gernotfound/logbook/pull/1472)
+integrata con squash in [`main` `91e518cf`](https://github.com/gernotfound/logbook/commit/91e518cfc01479617d2945bfcc820368c35225b7),
+v2.735.0, tree identico al candidato `f86f09bd` (`33be0e40`).
+[CI PR exact-SHA, Canonical, CodeQL ed E2E](https://github.com/gernotfound/logbook/actions/runs/45910003654),
+[Main Release Gate/CodeQL](https://github.com/gernotfound/logbook/actions/runs/45910368351)
+e [Static Assets/smoke byte-esatto](https://github.com/gernotfound/logbook/actions/runs/45910632841)
+`success`. Readback diretto Cloudflare frontend: deployment
+`b8771c81-85fc-4e5f-ba9e-4393ed295bfe`, versione
+`36add0dc-c71e-43c7-9f19-b88a2ffe2edf` al 100%; binding
+`APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`, **non `D1_API`**, zero cron frontend.
+[API/Auth Gate](https://github.com/gernotfound/logbook/actions/runs/45910632869),
+[Kinde](https://github.com/gernotfound/logbook/actions/runs/45910632845)
+e [Firestore](https://github.com/gernotfound/logbook/actions/runs/45910632556)
+`success`, ma rispettivi deploy privati/Rules/indici **skipped**.
+Gli hook Impostazioni non importano più staticamente le operazioni Firebase
+di account/erasure: il guest usa solo il lifecycle locale, mentre le azioni
+legacy caricano i moduli su richiesta con guard sessione/epoch anche dopo
+l'import asincrono. Testati import guest senza SDK e A→B→A; il build
+segnala ancora import statici da `AccountCard`, `HealthConsentSuspended`,
+`EmailVerificationGate` e altri ingressi. Nessuna prova di bundle/UI guest
+interamente SDK-free, né attivazione fitness Kinde/D1, cutover o GO.
+[Registro servizi](external-services-register.md).
+
+**Checkpoint backup device, 26/11/2026:**
 [PR #1470](https://github.com/gernotfound/logbook/pull/1470) integrata nello
 SHA [`2f83df6b`](https://github.com/gernotfound/logbook/commit/2f83df6b69e62fda361c8a4c2353acc5e1ab1f92),
 v2.733.0; [CI PR](https://github.com/gernotfound/logbook/actions/runs/45903802688),

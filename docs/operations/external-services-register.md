@@ -2,6 +2,33 @@
 
 **Stato di riferimento:** per l'ultimo readback Cloudflare consultare [quadro operativo](cloudflare-current-state.md). I valori sotto sono checkpoint datati, non una fotografia aggiornata automaticamente del provider.
 
+## Confine Impostazioni legacy e Static Assets · 27 novembre 2026
+
+[PR #1472](https://github.com/gernotfound/logbook/pull/1472) integrata in
+[`main` `91e518cf`](https://github.com/gernotfound/logbook/commit/91e518cfc01479617d2945bfcc820368c35225b7),
+v2.735.0, tree identico alla PR `f86f09bd` (`33be0e40`).
+[CI PR Canonical/CodeQL/Chromium/Safari](https://github.com/gernotfound/logbook/actions/runs/45910003654),
+[Main Release Gate e CodeQL](https://github.com/gernotfound/logbook/actions/runs/45910368351),
+[Cloudflare Static Assets e smoke HTTP byte-esatto](https://github.com/gernotfound/logbook/actions/runs/45910632841):
+tutti `success` sullo SHA pertinente. Readback provider frontend:
+deployment `b8771c81-85fc-4e5f-ba9e-4393ed295bfe`, versione
+`36add0dc-c71e-43c7-9f19-b88a2ffe2edf` al **100%**, binding
+`APP_ORIGIN` (`plain_text`), `ASSETS` (`assets`), `KINDE_HTTP` (`service`),
+**nessun `D1_API`**, nessun cron frontend. I workflow
+[API privata](https://github.com/gernotfound/logbook/actions/runs/45910632869),
+[Kinde](https://github.com/gernotfound/logbook/actions/runs/45910632845)
+e [Firestore](https://github.com/gernotfound/logbook/actions/runs/45910632556)
+sono `success` ma senza deploy dei Worker privati o Rules/indici.
+
+Il percorso guest degli hook Impostazioni non inizializza i moduli legacy
+Firebase/reauth/erasure; l'account legacy li importa solo all'azione con
+session fence prima e dopo il caricamento asincrono. Regressioni guest
+e cambio epoch durante import superate localmente e nella CI. Restano
+import statici Firebase in altre UI, incluso `AccountCard` e lo stato di
+consenso sospeso: il bundle completo e l'assenza di rete non sono certificati.
+Non sono stati modificati Worker privati, DB, IAM, OAuth/posta Production,
+segreti, dati reali o DNS. Nessun GO fitness o cutover.
+
 ## Backup device disaccoppiato e rilascio frontend · 26 novembre 2026
 
 La [PR #1470](https://github.com/gernotfound/logbook/pull/1470) ha integrato
