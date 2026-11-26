@@ -389,31 +389,32 @@ export default {
       && mode !== 'inactivity-enqueue') {
       return { outcome: 'paused' };
     }
+    // The generation is an external restore boundary for every scheduled
+    // lane. An unpinned tick must not adopt a reopened/restored registry.
+    const pin = env.CF06_RECOVERY_GENERATION;
+    if (typeof pin !== 'string' || pin.length > 16) return { outcome: 'paused' };
+    const generation = Number(pin);
+    if (!Number.isSafeInteger(generation) || generation < 1 || String(generation) !== pin) {
+      return { outcome: 'paused' };
+    }
     if (mode === 'inactivity-dry-run' || mode === 'inactivity-enqueue') {
       // Enqueue freezes an account. A processing flag and valid recovery pin
       // alone must never turn a previously diagnostic configuration destructive.
       if (mode === 'inactivity-enqueue' && env.CF06_INACTIVITY_ENQUEUE_ENABLED !== 'enabled') {
         return { outcome: 'paused' };
       }
-      // This pin is an external authorization, not a generation discovered
-      // from a restored database. Invalid configuration must not read D1.
-      const pin = env.CF06_INACTIVITY_RECOVERY_GENERATION;
-      if (typeof pin !== 'string' || pin.length > 16) return { outcome: 'paused' };
-      const generation = Number(pin);
-      if (!Number.isSafeInteger(generation) || generation < 1 || String(generation) !== pin) {
-        return { outcome: 'paused' };
-      }
       return mode === 'inactivity-dry-run'
         ? await runKindeInactivityDryRunTick(env.DB, env.RECOVERY_DB, generation)
         : await runKindeInactivityEnqueueTick(env.DB, env.RECOVERY_DB, generation);
     }
-    const { DB, RECOVERY_DB } = env;
+    const RECOVERY_DB = env.RECOVERY_DB;
+    await readOpenRecoveryGeneration(RECOVERY_DB, generation);
+    const DB = env.DB;
     if (mode === 'alternating-application') mode = await claimErasureLane(DB, RECOVERY_DB);
     if (mode === 'account-application') {
-      return await runKindeAccountErasureSweepTick(DB, RECOVERY_DB);
+      return await runKindeAccountErasureSweepTick(DB, RECOVERY_DB, generation);
     }
     if (!DB || !RECOVERY_DB || DB === RECOVERY_DB) throw new IndependentFenceUnavailableError();
-    const generation = await readOpenRecoveryGeneration(RECOVERY_DB);
     const reconciliation = await reconcileNextIndependentErasure(DB, RECOVERY_DB, generation);
     // A reserved cutoff retry cannot authorize or prevent another owner's
     // independently fenced step. Preserve a failed invocation for diagnostics;

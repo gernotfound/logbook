@@ -102,6 +102,20 @@ function openRecoveryFixture(t) {
   return { sqlite, db: d1For(sqlite) };
 }
 
+void test('every scheduled lane rejects missing or noncanonical recovery pins without touching D1', async () => {
+  const never = { withSession() { throw new Error('unexpected-d1-access'); } };
+  for (const mode of [undefined, 'health', 'account-application', 'alternating-application',
+    'inactivity-dry-run', 'inactivity-enqueue']) {
+    for (const pin of [undefined, null, 2, '0', '02', '2.0', '1e3', '9007199254740992']) {
+      const env = { DB: never, RECOVERY_DB: never, CF06_ERASURE_RUN_ENABLED: 'enabled',
+        CF06_ERASURE_RUN_MODE: mode, CF06_INACTIVITY_ENQUEUE_ENABLED: 'enabled',
+        CF06_RECOVERY_GENERATION: pin };
+      assert.deepEqual(await healthErasureWorker.scheduled(null, env), { outcome: 'paused' },
+        `${mode ?? 'default'}: ${String(pin)}`);
+    }
+  }
+});
+
 void test('derives the same public owner identifier as the trusted callback contract', async () => {
   const expected = 'k_' + createHash('sha256')
     .update('thelogbook:kinde-owner:v1\0' + issuer + '\0' + subject)
@@ -444,7 +458,7 @@ void test('alternating lanes advance a health account only with the real SQL era
   assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'progress', removed: 2 });
   assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'health-pending' });
 
-  const env = { DB: db, RECOVERY_DB: recovery.db, CF06_ERASURE_RUN_ENABLED: 'enabled',
+  const env = { DB: db, RECOVERY_DB: recovery.db, CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_RECOVERY_GENERATION: '2',
     CF06_ERASURE_RUN_MODE: 'alternating-application' };
   assert.deepEqual(await healthErasureWorker.scheduled(null, env), { outcome: 'awaiting-keys' });
   assert.deepEqual(await healthErasureWorker.scheduled(null, env), {
@@ -502,7 +516,7 @@ void test('account erasure recovers a committed consent whose independent floor 
   assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'health-pending' });
   assert.equal(floor.get(identity.uid).change_seq, 2);
   await assert.rejects(requireIndependentAccountAccess(recovery.db, identity.uid), /independent-recovery-fence-unavailable/);
-  const env = { DB: db, RECOVERY_DB: recovery.db, CF06_ERASURE_RUN_ENABLED: 'enabled' };
+  const env = { DB: db, RECOVERY_DB: recovery.db, CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_RECOVERY_GENERATION: '4' };
   assert.deepEqual(await healthErasureWorker.scheduled(null, env), { outcome: 'awaiting-keys' });
   sqlite.exec('UPDATE health_erasure_jobs SET lease_until_ms=1');
   assert.deepEqual(await healthErasureWorker.scheduled(null, env), { outcome: 'complete', keyDisposition: 'never-issued' });
@@ -584,6 +598,9 @@ void test('a recovery generation change during an owner failure stops the sweep 
   const advance = controlSchedulerClock(t, sqlite);
   await write(db, identity);
   assert.ok(await recordKindeAccountErasureIntent(db, deletionRequestProof(attempt)));
+  await assert.rejects(runKindeAccountErasureSweepTick(db, recovery.db),
+    /kinde-erasure-scheduler-unavailable/);
+  assert.equal(sqlite.prepare('SELECT lease_epoch FROM kinde_account_erasure_scheduler').get().lease_epoch, 0);
   const interrupted = d1For(recovery.sqlite, { beforeWrite(sql) {
     if (sql.includes('INSERT INTO recovery_account_erasure_denials')) {
       recovery.sqlite.exec("UPDATE recovery_control SET mode='sealed', generation=3");
@@ -591,13 +608,14 @@ void test('a recovery generation change during an owner failure stops the sweep 
       throw new Error('synthetic recovery swap');
     }
   } });
-  await assert.rejects(runKindeAccountErasureSweepTick(db, interrupted), /independent-recovery-fence-unavailable/);
+  await assert.rejects(runKindeAccountErasureSweepTick(db, interrupted, 2), /independent-recovery-fence-unavailable/);
   assert.equal(sqlite.prepare('SELECT cursor_uid FROM kinde_account_erasure_scheduler').get().cursor_uid, null);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_retries').get().n, 0);
   assert.equal(sqlite.prepare('SELECT status FROM auth_principals WHERE uid=?').get(identity.uid).status, 'active');
   assert.equal(recovery.sqlite.prepare('SELECT COUNT(*) AS n FROM recovery_account_erasure_denials').get().n, 0);
   advance(60_000);
-  assert.deepEqual(await runKindeAccountErasureSweepTick(db, recovery.db), {
+  await assert.rejects(runKindeAccountErasureSweepTick(db, recovery.db, 2), /independent-recovery-fence-unavailable/);
+  assert.deepEqual(await runKindeAccountErasureSweepTick(db, recovery.db, 4), {
     outcome: 'checkpointed', result: { outcome: 'accepted' },
   });
 });
@@ -619,7 +637,7 @@ void test('a global recovery change during Management GET never grants a sweep c
       return Response.json({ code: 'OK', message: 'Synthetic lookup', users: [{ id: subject }] });
     },
   };
-  await assert.rejects(runKindeAccountErasureSweepTick(db, recovery.db, dependencies),
+  await assert.rejects(runKindeAccountErasureSweepTick(db, recovery.db, 2, dependencies),
     /independent-recovery-fence-unavailable/);
   assert.deepEqual(calls, ['GET']);
   assert.equal(sqlite.prepare('SELECT cursor_uid FROM kinde_account_erasure_scheduler').get().cursor_uid, null);
@@ -638,7 +656,7 @@ void test('a generation change after the cursor write withholds the sweep succes
       recovery.sqlite.exec("UPDATE recovery_control SET mode='open', generation=4");
     }
   } });
-  await assert.rejects(runKindeAccountErasureSweepTick(intercepted, recovery.db),
+  await assert.rejects(runKindeAccountErasureSweepTick(intercepted, recovery.db, 2),
     /independent-recovery-fence-unavailable/);
   assert.equal(sqlite.prepare('SELECT cursor_uid FROM kinde_account_erasure_scheduler').get().cursor_uid, identity.uid);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_completions').get().n, 0);
@@ -657,7 +675,7 @@ void test('the scheduled sweep uses D1 time for bounded per-owner retry and rese
     }
   } });
   const retry = sqlite.prepare('SELECT failure_count, retry_after_ms FROM kinde_account_erasure_retries WHERE uid=?');
-  const tick = () => runKindeAccountErasureSweepTick(db, flaky);
+  const tick = () => runKindeAccountErasureSweepTick(db, flaky, 2);
 
   assert.deepEqual(await tick(), { outcome: 'checkpointed', result: { outcome: 'blocked' } });
   const first = retry.get(identity.uid);
@@ -697,12 +715,12 @@ void test('a lost retry write reply or expired sweep lease never checkpoints a b
     if (sql.includes('INSERT INTO kinde_account_erasure_retries')) throw new Error('synthetic retry ACK lost');
   } });
   const checkpoint = sqlite.prepare('SELECT cursor_uid, lease_until_ms FROM kinde_account_erasure_scheduler');
-  await assert.rejects(runKindeAccountErasureSweepTick(lost, failing), /synthetic retry ACK lost/);
+  await assert.rejects(runKindeAccountErasureSweepTick(lost, failing, 2), /synthetic retry ACK lost/);
   assert.equal(checkpoint.get().cursor_uid, null);
   assert.equal(sqlite.prepare('SELECT failure_count FROM kinde_account_erasure_retries').get().failure_count, 1);
-  assert.deepEqual(await runKindeAccountErasureSweepTick(db, recovery.db), { outcome: 'not-claimed' });
+  assert.deepEqual(await runKindeAccountErasureSweepTick(db, recovery.db, 2), { outcome: 'not-claimed' });
   advance(60_000);
-  assert.deepEqual(await runKindeAccountErasureSweepTick(db, recovery.db), {
+  assert.deepEqual(await runKindeAccountErasureSweepTick(db, recovery.db, 2), {
     outcome: 'checkpointed', result: { outcome: 'accepted' },
   });
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_retries').get().n, 0);
@@ -721,14 +739,14 @@ void test('repeated denial outages cap the retry interval at one hour without ch
   const retry = sqlite.prepare('SELECT failure_count, retry_after_ms FROM kinde_account_erasure_retries WHERE uid=?');
   let now = Date.now();
   for (let attemptNumber = 1; attemptNumber <= 9; attemptNumber += 1) {
-    assert.deepEqual(await runKindeAccountErasureSweepTick(db, failing), {
+    assert.deepEqual(await runKindeAccountErasureSweepTick(db, failing, 2), {
       outcome: 'checkpointed', result: { outcome: 'blocked' },
     });
     const row = retry.get(identity.uid);
     const interval = attemptNumber >= 7 ? 3_600_000 : 60_000 * 2 ** (attemptNumber - 1);
     assert.equal(row.failure_count, Math.min(7, attemptNumber));
     assert.ok(Math.abs(row.retry_after_ms - now - interval) < 1000);
-    assert.deepEqual(await runKindeAccountErasureSweepTick(db, failing), {
+    assert.deepEqual(await runKindeAccountErasureSweepTick(db, failing, 2), {
       outcome: 'checkpointed', result: { outcome: 'idle' },
     });
     advance(interval);
@@ -750,10 +768,10 @@ void test('an expired scheduler lease cannot create a retry record or skip an ow
       throw new Error('synthetic slow outage');
     }
   } });
-  await assert.rejects(runKindeAccountErasureSweepTick(db, slowFailure), /kinde-erasure-retry-unavailable/);
+  await assert.rejects(runKindeAccountErasureSweepTick(db, slowFailure, 2), /kinde-erasure-retry-unavailable/);
   assert.equal(sqlite.prepare('SELECT cursor_uid FROM kinde_account_erasure_scheduler').get().cursor_uid, null);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_retries').get().n, 0);
-  assert.deepEqual(await runKindeAccountErasureSweepTick(db, recovery.db), {
+  assert.deepEqual(await runKindeAccountErasureSweepTick(db, recovery.db, 2), {
     outcome: 'checkpointed', result: { outcome: 'accepted' },
   });
 });
@@ -768,12 +786,12 @@ void test('a lost retry-clear reply preserves the cursor and safely replays an a
   const lost = d1For(sqlite, { afterWrite(sql) {
     if (sql.includes('DELETE FROM kinde_account_erasure_retries')) throw new Error('synthetic retry clear ACK lost');
   } });
-  await assert.rejects(runKindeAccountErasureSweepTick(lost, recovery.db), /synthetic retry clear ACK lost/);
+  await assert.rejects(runKindeAccountErasureSweepTick(lost, recovery.db, 2), /synthetic retry clear ACK lost/);
   assert.equal(sqlite.prepare('SELECT cursor_uid FROM kinde_account_erasure_scheduler').get().cursor_uid, null);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_retries').get().n, 0);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_requests').get().n, 1);
   advance(60_000);
-  assert.deepEqual(await runKindeAccountErasureSweepTick(db, recovery.db), {
+  assert.deepEqual(await runKindeAccountErasureSweepTick(db, recovery.db, 2), {
     outcome: 'checkpointed', result: { outcome: 'progress', removed: 2 },
   });
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_requests').get().n, 1);
@@ -788,15 +806,15 @@ void test('sweep commits a durable cursor even after its write reply is lost, th
     if (sql.includes('SET cursor_uid = ?')) throw new Error('synthetic checkpoint ACK lost');
   } });
   const checkpoint = sqlite.prepare('SELECT cursor_uid, lease_epoch, lease_until_ms FROM kinde_account_erasure_scheduler');
-  assert.deepEqual(await runKindeAccountErasureSweepTick(lostReply, recovery.db), {
+  assert.deepEqual(await runKindeAccountErasureSweepTick(lostReply, recovery.db, 2), {
     outcome: 'checkpointed', result: { outcome: 'accepted' },
   });
   assert.deepEqual({ ...checkpoint.get() }, { cursor_uid: identity.uid, lease_epoch: 1, lease_until_ms: 0 });
-  assert.deepEqual(await runKindeAccountErasureSweepTick(d1For(sqlite), recovery.db), {
+  assert.deepEqual(await runKindeAccountErasureSweepTick(d1For(sqlite), recovery.db, 2), {
     outcome: 'checkpointed', result: { outcome: 'idle' },
   });
   assert.deepEqual({ ...checkpoint.get() }, { cursor_uid: null, lease_epoch: 2, lease_until_ms: 0 });
-  assert.deepEqual(await runKindeAccountErasureSweepTick(db, recovery.db), {
+  assert.deepEqual(await runKindeAccountErasureSweepTick(db, recovery.db, 2), {
     outcome: 'checkpointed', result: { outcome: 'progress', removed: 2 },
   });
   assert.throws(() => sqlite.exec('DELETE FROM kinde_account_erasure_scheduler'), /scheduler-immutable/);
@@ -809,7 +827,7 @@ void test('scheduled account application mode resumes durable intents without Ma
   await write(db, identity);
   assert.ok(await recordKindeAccountErasureIntent(db, deletionRequestProof(attempt)));
   const env = {
-    CF06_ERASURE_RUN_ENABLED: 'enabled',
+    CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_RECOVERY_GENERATION: '2',
     CF06_ERASURE_RUN_MODE: 'account-application',
     DB: db,
     RECOVERY_DB: recovery.db,
@@ -817,6 +835,10 @@ void test('scheduled account application mode resumes durable intents without Ma
   const checkpoint = sqlite.prepare('SELECT cursor_uid, lease_epoch, lease_until_ms FROM kinde_account_erasure_scheduler');
   assert.deepEqual(await healthErasureWorker.scheduled({}, { ...env, CF06_ERASURE_RUN_ENABLED: 'disabled' }),
     { outcome: 'paused' });
+  assert.deepEqual(await healthErasureWorker.scheduled({}, { ...env, CF06_RECOVERY_GENERATION: undefined }),
+    { outcome: 'paused' });
+  await assert.rejects(healthErasureWorker.scheduled({}, { ...env, CF06_RECOVERY_GENERATION: '1',
+    get DB() { throw new Error('primary-was-read'); } }), /independent-recovery-fence-unavailable/);
   assert.deepEqual({ ...checkpoint.get() }, { cursor_uid: null, lease_epoch: 0, lease_until_ms: 0 });
   assert.deepEqual(await healthErasureWorker.scheduled({}, env), {
     outcome: 'checkpointed', result: { outcome: 'accepted' },
@@ -833,7 +855,7 @@ void test('scheduled account application mode resumes durable intents without Ma
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_completions').get().n, 0);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_erasure_targets').get().n, 1);
   await assert.rejects(healthErasureWorker.scheduled({}, { ...env, RECOVERY_DB: db }),
-    /kinde-erasure-scheduler-unavailable/);
+    /independent-recovery-fence-unavailable/);
 });
 
 void test('alternating scheduled mode persists one lane per tick and survives lost assignment or a blocked health lane', async (t) => {
@@ -842,7 +864,7 @@ void test('alternating scheduled mode persists one lane per tick and survives lo
   await write(db, identity);
   assert.ok(await recordKindeAccountErasureIntent(db, deletionRequestProof(attempt)));
   const env = {
-    CF06_ERASURE_RUN_ENABLED: 'enabled',
+    CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_RECOVERY_GENERATION: '2',
     CF06_ERASURE_RUN_MODE: 'alternating-application',
     DB: db, RECOVERY_DB: recovery.db,
   };
@@ -850,8 +872,10 @@ void test('alternating scheduled mode persists one lane per tick and survives lo
   const requests = sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_requests');
   assert.equal(turn.get().turn, 0);
   assert.deepEqual(await healthErasureWorker.scheduled({}, { ...env, CF06_ERASURE_RUN_ENABLED: 'disabled' }), { outcome: 'paused' });
+  await assert.rejects(healthErasureWorker.scheduled({}, { ...env, CF06_RECOVERY_GENERATION: '1' }),
+    /independent-recovery-fence-unavailable/);
   assert.equal(turn.get().turn, 0);
-  await assert.rejects(healthErasureWorker.scheduled({}, { ...env, RECOVERY_DB: db }), /erasure-dispatch-unavailable/);
+  await assert.rejects(healthErasureWorker.scheduled({}, { ...env, RECOVERY_DB: db }), /independent-recovery-fence-unavailable/);
   assert.equal(turn.get().turn, 0);
   const lost = d1For(sqlite, { afterFirst(sql) {
     if (sql.includes('UPDATE erasure_dispatch_control')) throw new Error('lost-dispatch-reply');
@@ -866,8 +890,12 @@ void test('alternating scheduled mode persists one lane per tick and survives lo
   assert.equal(turn.get().turn, 2);
 
   // A failed health turn must not prevent the subsequent account turn.
-  const failingRecovery = { withSession() { throw new Error('synthetic-recovery-failure'); } };
-  await assert.rejects(healthErasureWorker.scheduled({}, { ...env, RECOVERY_DB: failingRecovery }), /independent-recovery-fence-unavailable/);
+  let recoverySessions = 0;
+  const failingRecovery = { withSession(mode) {
+    if (++recoverySessions > 1) throw new Error('synthetic-recovery-failure');
+    return recovery.db.withSession(mode);
+  } };
+  await assert.rejects(healthErasureWorker.scheduled({}, { ...env, RECOVERY_DB: failingRecovery }), /synthetic-recovery-failure/);
   assert.equal(turn.get().turn, 3);
   assert.deepEqual(await healthErasureWorker.scheduled({}, env), {
     outcome: 'checkpointed', result: { outcome: 'idle' },
@@ -904,12 +932,12 @@ void test('a lost claim cannot run an owner step and its expired lease restarts 
   const lostClaim = d1For(sqlite, { afterFirst(sql) {
     if (sql.includes('UPDATE kinde_account_erasure_scheduler')) throw new Error('synthetic claim ACK lost');
   } });
-  await assert.rejects(runKindeAccountErasureSweepTick(lostClaim, recovery.db), /synthetic claim ACK lost/);
-  assert.deepEqual(await runKindeAccountErasureSweepTick(db, recovery.db), { outcome: 'not-claimed' });
+  await assert.rejects(runKindeAccountErasureSweepTick(lostClaim, recovery.db, 2), /synthetic claim ACK lost/);
+  assert.deepEqual(await runKindeAccountErasureSweepTick(db, recovery.db, 2), { outcome: 'not-claimed' });
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_requests').get().n, 0);
   assert.equal(recovery.sqlite.prepare('SELECT COUNT(*) AS n FROM recovery_account_erasure_denials').get().n, 0);
   advance(60_000);
-  assert.deepEqual(await runKindeAccountErasureSweepTick(db, recovery.db), {
+  assert.deepEqual(await runKindeAccountErasureSweepTick(db, recovery.db, 2), {
     outcome: 'checkpointed', result: { outcome: 'accepted' },
   });
   assert.deepEqual({ ...sqlite.prepare('SELECT cursor_uid, lease_epoch FROM kinde_account_erasure_scheduler').get() },
@@ -925,13 +953,13 @@ void test('a sweep whose lease expires after an owner write cannot advance the c
   const slow = d1For(recovery.sqlite, { afterWrite(sql) {
     if (sql.includes('INSERT INTO recovery_account_erasure_denials')) advance(60_000);
   } });
-  assert.deepEqual(await runKindeAccountErasureSweepTick(db, slow), { outcome: 'contended' });
+  assert.deepEqual(await runKindeAccountErasureSweepTick(db, slow, 2), { outcome: 'contended' });
   assert.equal(sqlite.prepare('SELECT cursor_uid FROM kinde_account_erasure_scheduler').get().cursor_uid, null);
   assert.equal(sqlite.prepare('SELECT status FROM auth_principals WHERE uid=?').get(identity.uid).status, 'disabled');
   await assert.rejects(requireIndependentAccountAccess(recovery.db, identity.uid), /independent-recovery-fence-unavailable/);
   const results = await Promise.all([
-    runKindeAccountErasureSweepTick(db, recovery.db),
-    runKindeAccountErasureSweepTick(db, recovery.db),
+    runKindeAccountErasureSweepTick(db, recovery.db, 2),
+    runKindeAccountErasureSweepTick(db, recovery.db, 2),
   ]);
   assert.deepEqual(results.map(x => x.outcome).sort(), ['checkpointed', 'not-claimed']);
   assert.equal(sqlite.prepare('SELECT cursor_uid FROM kinde_account_erasure_scheduler').get().cursor_uid, identity.uid);
@@ -1010,7 +1038,7 @@ void test('full account sweep with a terminal health proof leaves headroom withi
   recovery.sqlite.prepare("UPDATE recovery_owner_fences SET status='active', consent_revision=1, change_seq=2 WHERE uid=?").run(identity.uid);
   assert.equal(await acceptKindeAccountErasure(db, recovery.db, intent), true);
   assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'progress', removed: 2 });
-  const env = { DB: db, RECOVERY_DB: recovery.db, CF06_ERASURE_RUN_ENABLED: 'enabled' };
+  const env = { DB: db, RECOVERY_DB: recovery.db, CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_RECOVERY_GENERATION: '2' };
   assert.deepEqual(await healthErasureWorker.scheduled(null, env), { outcome: 'awaiting-keys' });
   sqlite.exec('UPDATE health_erasure_jobs SET lease_until_ms=1');
   assert.deepEqual(await healthErasureWorker.scheduled(null, env), { outcome: 'complete', keyDisposition: 'never-issued' });
@@ -1032,17 +1060,17 @@ void test('full account sweep with a terminal health proof leaves headroom withi
       return Response.json({ code: 'OK', message: 'Synthetic lookup', users: present ? [{ id: subject }] : [] });
     },
   };
-  assert.deepEqual(await runKindeAccountErasureSweepTick(countedDb, countedRecovery, dependencies), {
+  assert.deepEqual(await runKindeAccountErasureSweepTick(countedDb, countedRecovery, 2, dependencies), {
     outcome: 'checkpointed', result: { outcome: 'provider-acknowledged' },
   });
   assert.deepEqual(calls, ['GET', 'DELETE']);
   assert.ok(queries <= 45, `D1 statements in full provider sweep: ${queries}`);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_completions').get().n, 0);
-  assert.deepEqual(await runKindeAccountErasureSweepTick(db, recovery.db, dependencies), {
+  assert.deepEqual(await runKindeAccountErasureSweepTick(db, recovery.db, 2, dependencies), {
     outcome: 'checkpointed', result: { outcome: 'idle' },
   });
   queries = 0;
-  const complete = await runKindeAccountErasureSweepTick(countedDb, countedRecovery, dependencies);
+  const complete = await runKindeAccountErasureSweepTick(countedDb, countedRecovery, 2, dependencies);
   assert.equal(complete.outcome, 'checkpointed');
   assert.equal(complete.result.outcome, 'complete');
   assert.ok(queries <= 45, `D1 statements in final provider sweep: ${queries}`);
@@ -1620,13 +1648,13 @@ void test('scheduled enqueue needs two exact opt-ins and a recovery pin, then fr
   const initial = checkpoint();
   const diagnostic = { ...sqlite.prepare('SELECT * FROM kinde_inactivity_scan_checkpoint').get() };
   const env = { CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_ERASURE_RUN_MODE: 'inactivity-enqueue',
-    CF06_INACTIVITY_ENQUEUE_ENABLED: 'enabled', CF06_INACTIVITY_RECOVERY_GENERATION: '2',
+    CF06_INACTIVITY_ENQUEUE_ENABLED: 'enabled', CF06_RECOVERY_GENERATION: '2',
     DB: db, RECOVERY_DB: recovery.db };
   assert.deepEqual(await healthErasureWorker.scheduled({}, env), { outcome: 'not-claimed' });
   assert.deepEqual(checkpoint(), initial);
   sqlite.exec("UPDATE kinde_inactivity_control SET mode='enabled', generation=2");
   await assert.rejects(healthErasureWorker.scheduled({}, {
-    ...env, CF06_INACTIVITY_RECOVERY_GENERATION: '1',
+    ...env, CF06_RECOVERY_GENERATION: '1',
   }), /independent-recovery-fence-unavailable/);
   assert.deepEqual(checkpoint(), initial);
   assert.deepEqual(await healthErasureWorker.scheduled({}, env),
@@ -1683,7 +1711,7 @@ void test('scheduled inactivity enqueue fails closed at every D1 quota boundary 
     }
     const env = {
       CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_ERASURE_RUN_MODE: 'inactivity-enqueue',
-      CF06_INACTIVITY_ENQUEUE_ENABLED: 'enabled', CF06_INACTIVITY_RECOVERY_GENERATION: '2',
+      CF06_INACTIVITY_ENQUEUE_ENABLED: 'enabled', CF06_RECOVERY_GENERATION: '2',
       DB: guarded(db, 'primary'), RECOVERY_DB: guarded(recovery.db, 'recovery'),
     };
     const checkpoint = () => ({ ...sqlite.prepare('SELECT * FROM kinde_inactivity_enqueue_checkpoint').get() });

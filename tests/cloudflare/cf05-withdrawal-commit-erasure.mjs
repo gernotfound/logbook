@@ -91,13 +91,13 @@ void test('terminal erasure keeps consent status readable without restoring the 
   try {
     assert.equal((await call(f, '/v1/consent/initial', { body: acceptance })).status, 200);
     assert.equal((await call(f, '/v1/consent/withdraw', { body: withdrawal })).status, 200);
-    assert.equal((await erasureWorker.scheduled({}, { ...f.env, CF06_ERASURE_RUN_ENABLED: 'enabled' })).outcome, 'awaiting-keys');
+    assert.equal((await erasureWorker.scheduled({}, { ...f.env, CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_RECOVERY_GENERATION: '2' })).outcome, 'awaiting-keys');
     // Advance the synthetic lease clock; the genuine bounded finalizer
     // must produce the immutable SQL proof and advance only the subject.
     f.sqlite.prepare(
       "UPDATE health_erasure_jobs SET lease_until_ms=? WHERE uid=? AND status='processing'"
     ).run(Date.now() - 1000, f.uid);
-    assert.deepEqual(await erasureWorker.scheduled({}, { ...f.env, CF06_ERASURE_RUN_ENABLED: 'enabled' }),
+    assert.deepEqual(await erasureWorker.scheduled({}, { ...f.env, CF06_ERASURE_RUN_ENABLED: 'enabled', CF06_RECOVERY_GENERATION: '2' }),
       { outcome: 'complete', keyDisposition: 'never-issued' });
 
     const state = f.sqlite.prepare([

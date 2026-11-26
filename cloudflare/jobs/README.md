@@ -37,11 +37,16 @@ cron, account deletion o inattività.
   richiede anche `CF06_INACTIVITY_ENQUEUE_ENABLED=enabled` esatto, oltre al
   flag generale e al pin recovery. Il manifesto non contiene questa variabile,
   la modalità o un cron. Altri valori mantengono la pausa prima di leggere D1.
-  Entrambi i percorsi inattività richiedono `CF06_INACTIVITY_RECOVERY_GENERATION` come stringa decimale
-  canonica positiva e sicura, proveniente dalla configurazione trusted: non
-  deriva il pin dal registro corrente e non entra nelle lane di erasure.
-  Il pin mancante o malformato mantiene la pausa prima di accedere ai binding;
-  un pin obsoleto fallisce chiuso. Nessuna variabile o cron è attivata.
+  **Tutti i percorsi scheduled** (health, account, alternating, dry-run ed enqueue)
+  richiedono lo stesso `CF06_RECOVERY_GENERATION`, stringa decimale canonica
+  positiva e sicura, autorizzata da configurazione trusted esterna al D1
+  ripristinabile. Nessun percorso adotta automaticamente la generazione
+  corrente del registro dopo seal/restore/reopen. Pin assente o malformato:
+  pausa prima di leggere i binding; pin obsoleto: errore chiuso prima di
+  assegnare una lane o toccare il DB applicativo. La ripresa dopo restore
+  richiede nuova verifica operativa della continuità e del pin autorizzato;
+  la sola coincidenza numerica non prova la quiescenza cross-D1.
+  Nessuna variabile o cron è attivata.
   Il test sintetico CF-06 inietta un errore D1 persistente dopo ciascuna
   delle 19 operazioni della fixture di enqueue (entrambe le D1): nessun tick
   fallito restituisce conferma, la decisione già committata non si duplica e

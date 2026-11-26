@@ -1,5 +1,15 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
+**Candidato CF-06, 26/11/2026 — pin recovery esterno unico:** tutte le
+modalità scheduled (sanità, cancellazione applicativa, alternanza e inattività)
+richiedono ora `CF06_RECOVERY_GENERATION` dalla configurazione trusted, oltre
+ai rispettivi opt-in; non adottano la generazione del registro D1 dopo un
+restore. Un pin mancante tiene il processore in pausa; uno obsoleto blocca
+l'avvio prima di lease/turni applicativi. La ripresa esige la verifica esterna
+di quiescenza e continuità, non solo un nuovo numero. Modifica candidata,
+non attivazione o collaudo Cloudflare: manifesti senza cron/flag e niente GO
+per cancellazioni reali.
+
 **Checkpoint CF-07, 26/11/2026 — contratto HTTP candidato:** i limiti
 di lunghezza dichiarata sono ora per-route nella policy pura condivisa:
 gateway, API replica e consenso leggono lo stesso budget, senza importare
