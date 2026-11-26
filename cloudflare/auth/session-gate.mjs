@@ -2,21 +2,11 @@
 // Only a future trusted Auth issuer may create/revoke these sessions.
 // This Worker has no public route and cannot mint an identity on request.
 import { D1_NOW_MS } from '../sql/d1-time.mjs';
+import { candidateApiRoutePolicy } from '../api-route-policy.mjs';
 
 export const SESSION_COOKIE = '__Host-logbook_session';
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const HASH = /^[a-f0-9]{64}$/;
-const READ_ROUTES = new Set([
-  '/v1/sync/control', '/v1/sync/read', '/v1/sync/scan', '/v1/sync/receipt',
-]);
-const MUTATION_ROUTES = new Set([
-  '/v1/sync/commit', '/v1/sync/commit/status', '/v1/sync/replica/claim',
-  '/v1/sync/replica/retire', '/v1/sync/replica/status', '/v1/sync/replica/cancel',
-  '/v1/cloud-key/sync',
-]);
-const IDENTITY_READ_ROUTES = new Set(['/v1/consent/status']);
-const IDENTITY_MUTATION_ROUTES = new Set(['/v1/consent/initial', '/v1/consent/withdraw', '/v1/auth/logout',
-  '/v1/cloud-key/rights-export', '/v1/rights/scan', '/v1/account/activity']);
 
 function json(payload, status) {
   return new Response(JSON.stringify(payload), {
@@ -79,10 +69,11 @@ async function authorize(request, env) {
     return json({ error: 'unauthorized' }, 403);
   }
   const route = request.headers.get('x-original-route');
-  const identityOnly = IDENTITY_READ_ROUTES.has(route) || IDENTITY_MUTATION_ROUTES.has(route);
-  if (!READ_ROUTES.has(route) && !MUTATION_ROUTES.has(route) && !identityOnly) {
+  const policy = candidateApiRoutePolicy(route);
+  if (!policy) {
     return json({ error: 'unauthorized' }, 403);
   }
+  const identityOnly = policy.identityOnly;
   const token = cookieToken(request.headers.get('cookie'));
   if (!token) return json({ error: 'unauthorized' }, 401);
   if (!env.DB || typeof env.DB.withSession !== 'function'
@@ -156,9 +147,7 @@ async function authorize(request, env) {
   const emailVerified = Number.isSafeInteger(row.verified_at_ms)
     && row.verified_at_ms > 0 && row.verified_at_ms <= now;
   // A session may be closed before verification or first health consent.
-  if ((!identityOnly || (IDENTITY_MUTATION_ROUTES.has(route)
-    && !['/v1/auth/logout', '/v1/consent/withdraw',
-      '/v1/cloud-key/rights-export', '/v1/rights/scan', '/v1/account/activity'].includes(route))) && !emailVerified) {
+  if (policy.emailVerifiedRequired && !emailVerified) {
     return json({ error: 'unauthorized' }, 401);
   }
   const suppliedCsrf = request.headers.get('x-csrf-token');
@@ -168,7 +157,7 @@ async function authorize(request, env) {
     csrfVerified = equalHash(await hashSessionSecret(suppliedCsrf), row.csrf_hash);
     if (!csrfVerified) return json({ error: 'unauthorized' }, 403);
   }
-  if ((MUTATION_ROUTES.has(route) || IDENTITY_MUTATION_ROUTES.has(route)) && !csrfVerified) {
+  if (policy.csrfRequired && !csrfVerified) {
     return json({ error: 'csrf-required' }, 403);
   }
   return json({
