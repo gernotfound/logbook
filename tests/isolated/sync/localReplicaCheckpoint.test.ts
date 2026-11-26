@@ -28,6 +28,9 @@ import type { LocalEnvelope } from '../../../src/lib/sync/localEnvelopeValidatio
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
 import { updateArchiveRecord } from '../../../src/lib/sync/secureArchiveRepository';
+import { sealCloudDocument } from '../../../src/lib/sync/cloudDocumentCipher';
+import { readAuthenticatedCloudflareCheckpoint } from '../../../src/lib/sync/cloudReplicaCheckpoint';
+import { stageCloudflareReplicaClaim } from '../../../src/lib/sync/cloudReplicaClaimRecovery';
 
 const catalog: Awaited<ReturnType<typeof getCachedCatalog>> = {
     manifest: {
@@ -89,7 +92,181 @@ function pauseCatalog() {
     return () => release(structuredClone(catalog));
 }
 
+async function stagedClaimWithExistingReplica() {
+    localStorage.setItem('logbook:v2:user:a:health-consent-generation', '1');
+    await initializeLocal('a', data(170));
+    const existing = identity('s00', 'already-registered');
+    await adoptReplicaCheckpoint('a', { identity: existing, baseSeq: 0 }, {
+        clock: {}, syncMetaByDocument: {},
+    });
+
+    const accountKey = new Uint8Array(32).fill(27);
+    const document = sealCloudDocument(accountKey, 'a', '', { profile: { height: '168' } }, {
+        protocolVersion: 3, clock: { s00: 1 }, fields: {},
+        writer: { slot: 's00', replicaId: 'already-registered', generation: 1,
+            seq: 1, consentRevision: 1 },
+    });
+    const verified = await readAuthenticatedCloudflareCheckpoint(
+        async () => ({ revision: 0, fenceEpoch: 5, consentRevision: 1,
+            documents: [{ path: '', revision: 0, document }] }),
+        'a', accountKey, 1, () => true,
+    );
+    const staged = await stageCloudflareReplicaClaim('a', verified,
+        { revision: 0, fenceEpoch: 5, consentRevision: 1, replicas: {} },
+        'replacement-device', () => true,
+    );
+    expect(staged.currentReplica).toEqual({
+        slot: existing.slot, replicaId: existing.replicaId, generation: existing.generation,
+    });
+    return { existing, staged };
+}
+
 describe('durable local replica checkpoint adoption', () => {
+    it('adopts a D1 claim staged against the existing replica and clears only the matching intent', async () => {
+        const { staged } = await stagedClaimWithExistingReplica();
+        const before = (await readLocal('a'))!;
+        const replacement = identity('s01', staged.candidateReplicaId, 2);
+
+        const after = await adoptReplicaCheckpoint('a', { identity: replacement, baseSeq: 7 },
+            cloudCheckpoint({ s00: 1, s01: 7 }), () => true, staged.mutationId);
+
+        expect(after.replica).toEqual(replacement);
+        expect(after.actorSeq).toBe(7);
+        expect(after.cloudflareReplicaClaim).toBeUndefined();
+        expect(after.data).toEqual(before.data);
+        expect(after.baseline).toEqual(before.baseline);
+        expect(after.pending).toEqual(before.pending);
+        expect(await readLocal('a')).toEqual(after);
+    });
+
+    it('accepts the same staged claim only for its exact existing replica as a historical receipt', async () => {
+        const { existing, staged } = await stagedClaimWithExistingReplica();
+        const before = (await readLocal('a'))!;
+        const after = await adoptReplicaCheckpoint('a', { identity: existing, baseSeq: 0 },
+            cloudCheckpoint({}), () => true, staged.mutationId);
+
+        expect(after.replica).toEqual(existing);
+        expect(after.cloudflareReplicaClaim).toBeUndefined();
+        expect(after.pending).toEqual(before.pending);
+        expect(after.actorSeq).toBe(before.actorSeq);
+        expect(await readLocal('a')).toEqual(after);
+    });
+
+    it.each([
+        ['slot', 's02'],
+        ['replicaId', 'other-registered'],
+        ['generation', 2],
+    ] as const)('refuses a staged claim whose existing replica %s was changed', async (field, value) => {
+        const { staged } = await stagedClaimWithExistingReplica();
+        await updateArchiveRecord<LocalEnvelope>('user:a', raw => ({
+            ...raw!,
+            cloudflareReplicaClaim: {
+                ...staged, currentReplica: { ...staged.currentReplica!, [field]: value },
+            },
+        }));
+        const before = await readLocal('a');
+        const ciphertext = await get(key('a'));
+
+        await expect(adoptReplicaCheckpoint('a', {
+            identity: identity('s01', staged.candidateReplicaId, 2), baseSeq: 7,
+        }, cloudCheckpoint({ s00: 1, s01: 7 }), () => true, staged.mutationId))
+            .rejects.toThrow('Checkpoint replica incompatibile con un claim D1 pendente');
+
+        expect(await get(key('a'))).toBe(ciphertext);
+        expect(await readLocal('a')).toEqual(before);
+    });
+
+    it.each([
+        ['slot', 's02'],
+        ['replicaId', 'other-registered'],
+        ['generation', 2],
+    ] as const)('refuses a historical D1 receipt for a different existing replica %s', async (field, value) => {
+        const { existing, staged } = await stagedClaimWithExistingReplica();
+        const ciphertext = await get(key('a'));
+        const before = await readLocal('a');
+
+        await expect(adoptReplicaCheckpoint('a', {
+            identity: { ...existing, [field]: value }, baseSeq: 0,
+        }, cloudCheckpoint({}), () => true, staged.mutationId))
+            .rejects.toThrow('Checkpoint replica incompatibile con un claim D1 pendente');
+
+        expect(await get(key('a'))).toBe(ciphertext);
+        expect(await readLocal('a')).toEqual(before);
+    });
+
+    it.each(['wrong-id', 'consent-advanced', 'integrity-fenced', 'claim-resolved'] as const)(
+        'preserves the journal when a pending D1 claim loses its %s proof', async scenario => {
+            const { staged } = await stagedClaimWithExistingReplica();
+            if (scenario !== 'wrong-id') {
+                await updateArchiveRecord<LocalEnvelope>('user:a', raw => ({
+                    ...raw!,
+                    ...(scenario === 'consent-advanced' ? { consentRevision: 2 } : {}),
+                    ...(scenario === 'integrity-fenced' ? { cloudIntegrityFence: 'unverified-cloud' } : {}),
+                    ...(scenario === 'claim-resolved' ? { cloudflareReplicaClaim: undefined } : {}),
+                }));
+            }
+            const before = await readLocal('a');
+            const ciphertext = await get(key('a'));
+            const expectedId = scenario === 'wrong-id' ? 'wrong-staged-mutation-0001' : staged.mutationId;
+
+            await expect(adoptReplicaCheckpoint('a', {
+                identity: identity('s01', staged.candidateReplicaId, 2), baseSeq: 7,
+            }, cloudCheckpoint({ s00: 1, s01: 7 }), () => true, expectedId))
+                .rejects.toThrow('Checkpoint replica incompatibile con un claim D1 pendente');
+
+            expect(await get(key('a'))).toBe(ciphertext);
+            expect(await readLocal('a')).toEqual(before);
+        },
+    );
+
+    it.each(['local-replica-removed', 'claim-replica-removed'] as const)(
+        'refuses a D1 claim with an inconsistent %s snapshot', async scenario => {
+            const { staged } = await stagedClaimWithExistingReplica();
+            await updateArchiveRecord<LocalEnvelope>('user:a', raw => ({
+                ...raw!,
+                ...(scenario === 'local-replica-removed' ? { replica: null } : {
+                    cloudflareReplicaClaim: { ...staged, currentReplica: null },
+                }),
+            }));
+            const before = await readLocal('a');
+            const ciphertext = await get(key('a'));
+
+            await expect(adoptReplicaCheckpoint('a', {
+                identity: identity('s01', staged.candidateReplicaId, 2), baseSeq: 7,
+            }, cloudCheckpoint({ s00: 1, s01: 7 }), () => true, staged.mutationId))
+                .rejects.toThrow('Checkpoint replica incompatibile con un claim D1 pendente');
+
+            expect(await get(key('a'))).toBe(ciphertext);
+            expect(await readLocal('a')).toEqual(before);
+        },
+    );
+
+    it('rejects an invalid renewed replica lease before persisting a malformed encrypted envelope', async () => {
+        const before = await pendingReplica();
+        const ciphertext = await get(key('a'));
+        const invalidLease = { ...before.replica!, leaseUntilMs: 0 };
+
+        await expect(adoptReplicaCheckpoint('a', {
+            identity: invalidLease, baseSeq: before.actorSeq,
+        }, cloudCheckpoint({}), () => true)).rejects.toThrow('Scadenza lease replica');
+
+        expect(await get(key('a'))).toBe(ciphertext);
+        expect(await readLocal('a')).toEqual(before);
+    });
+
+    it('rejects a fractional replacement sequence without poisoning the encrypted journal', async () => {
+        await initializeLocal('a', data(170));
+        const before = await readLocal('a');
+        const ciphertext = await get(key('a'));
+
+        await expect(adoptReplicaCheckpoint('a', {
+            identity: identity('s01', 'replacement-device', 2), baseSeq: 1.5,
+        }, cloudCheckpoint({}), () => true)).rejects.toThrow('Archivio locale causale non valido');
+
+        expect(await get(key('a'))).toBe(ciphertext);
+        expect(await readLocal('a')).toEqual(before);
+    });
+
     it('rebases pending business changes on a replacement slot without losing journal content', async () => {
         await initializeLocal('a', data(170));
         await adoptReplicaCheckpoint('a', { identity: identity('s00'), baseSeq: 0 }, {
