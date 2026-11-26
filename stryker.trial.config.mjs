@@ -114,6 +114,8 @@ export const trialCases = {
       "tests/isolated/sync/cloudReplicaClaimRecovery_historical.test.ts",
       "tests/isolated/sync/cloudReplicaClaimRecovery_rebase.test.ts",
       "tests/isolated/sync/cloudReplicaClaimRecovery_staging.test.ts",
+      "tests/isolated/sync/cloudReplicaDurableDelivery.test.ts",
+      "tests/isolated/sync/cloudReplicaRetirementGuards.test.ts",
     ],
     "runner": "isolated"
   },
