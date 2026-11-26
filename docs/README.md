@@ -31,6 +31,7 @@ La selezione completa dei contratti resta in [AGENTS](../AGENTS.md). Qui si indi
 | [Archivio locale cifrato](architecture/secure-local-archive-design.md) | Specifica approvata e rilasciata; smoke reali separati | Cifratura, migrazione, recovery, modello di minaccia |
 | [ADR-1: identità stabile Kinde](architecture/kinde-owner-identity.md) | Decisione tecnica adottata nei candidati Workers/D1; gate fitness aperti | UID per owner, sessioni, cifratura e cancellazione account |
 | [ADR-2: confini di fiducia Cloudflare](architecture/cloudflare-trust-boundaries.md) | Matrice architetturale del candidato; prove runtime e GO ancora aperti | Autorizzazioni, Rules→Worker/SQL, crypto, recovery e minacce |
+| [ADR-3: contratti e compatibilità Cloudflare](architecture/cloudflare-contract-evolution.md) | Decisione di evoluzione della baseline candidata; GO ancora aperto | Versioni, sessione, DTO, ACK, expand/contract e rollback sicuro |
 
 ## Operazioni e configurazioni esterne
 
