@@ -29,6 +29,7 @@ La selezione completa dei contratti resta in [AGENTS](../AGENTS.md). Qui si indi
 | Documento | Stato | Per quale attività |
 |---|---|---|
 | [Archivio locale cifrato](architecture/secure-local-archive-design.md) | Specifica approvata e rilasciata; smoke reali separati | Cifratura, migrazione, recovery, modello di minaccia |
+| [ADR-1: identità stabile Kinde](architecture/kinde-owner-identity.md) | Decisione tecnica adottata nei candidati Workers/D1; gate fitness aperti | UID per owner, sessioni, cifratura e cancellazione account |
 
 ## Operazioni e configurazioni esterne
 
