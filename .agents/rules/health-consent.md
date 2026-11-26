@@ -1,5 +1,13 @@
 # Consenso salute, diritti e cancellazione dei dati — TheLogBook
 
+**Quando leggere:** primo consenso trusted, revoca/riaccettazione, generazioni offline, export diritti e health-data erasure.
+**Non inferire:** cache locale, consenso guest o sola uguaglianza UID non attestano un'autorizzazione cloud corrente.
+
+**Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
+
+**Stato:** i checkpoint datati descrivono il candidato e non certificano il runtime pubblico; usare [quadro operativo Cloudflare](../../docs/operations/cloudflare-current-state.md) per l'ultimo readback documentato.
+
+
 ## CF-06 — Confine fra revoca salute e cancellazione account
 
 La finalizzazione sanitaria richiede il lease D1 esatto ancora valido nella scrittura terminale (#1403), non un controllo antecedente; in caso di lease scaduto non distruggere ADK né produrre ricevute. La pipeline account candidata (#1404/#1405) aggiunge deny indipendente e prova Kinde-last; non confondere la ricevuta di revoca o la finalizzazione dei soli dati salute con cancellazione account completa. Il marker attività dell'account non è prova di consenso. Il percorso account, incluso enqueue inattività e cron, non è attivato: vedere [Ciclo account](account-lifecycle.md) e [CF-06](https://github.com/gernotfound/logbook/issues/1060).
@@ -64,10 +72,6 @@ Se la primaria D1 attesta `withdrawn` (inclusa la generazione terminale ammessa 
 `withKindeCandidateRightsKey()` è il candidato separato per un'ADK **già esistente**, purpose `rights-export`; revalida la sessione Kinde prima/dopo l'acquisizione e l'uso, accetta anche l'email successivamente non verificata, e azzera i byte dopo il callback anche in caso di errore. Non chiama `sync`, non apre vault, non installa owner, non crea chiavi, non effettua export documenti o cleanup. Il Worker resta l'autorità SQL sullo stato `withdrawn` e sulla prova di consenso originale: l'ADK da sola non equivale all'esportazione dei dati. Nessun GO finché export JSON completo, job readback dopo lost ACK, lifecycle React/UI, dati reali e worker/KEK non sono verificati: il nuovo scan candidato copre solo ciphertext cloud ancora presenti.
 
 
-**Quando leggere:** primo consenso trusted, revoca/riaccettazione, generazioni offline, export diritti e health-data erasure.
-**Non inferire:** cache locale, consenso guest o sola uguaglianza UID non attestano un'autorizzazione cloud corrente.
-
-**Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
 ## Decisione di prodotto e boundary
 

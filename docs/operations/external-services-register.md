@@ -1,4 +1,6 @@
-# Registro dei servizi esterni — stato corrente TheLogBook
+# Registro dei servizi esterni — inventario e readback storici TheLogBook
+
+**Stato di riferimento:** per l'ultimo readback Cloudflare consultare [quadro operativo](cloudflare-current-state.md). I valori sotto sono checkpoint datati, non una fotografia aggiornata automaticamente del provider.
 
 ## Readback Cloudflare · 25 novembre 2026
 

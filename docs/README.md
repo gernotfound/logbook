@@ -49,7 +49,7 @@ La selezione completa dei contratti resta in [AGENTS](../AGENTS.md). Qui si indi
 
 | Documento | Stato | Per quale attività |
 |---|---|---|
-| [Debug ripresa sincronizzazione](BACKGROUND_SYNC_DEBUG.md) | Guida diagnostica al comportamento corrente | Replay journal, online/foreground, compatibilità browser |
+| [Debug ripresa sincronizzazione](BACKGROUND_SYNC_DEBUG.md) | Diagnostica del trasporto Firebase legacy, non replica account pubblica | Replay journal, online/foreground, compatibilità browser |
 
 ## Privacy, dati salute e accesso di utenti esterni
 
@@ -62,8 +62,8 @@ Il [pacchetto compliance](compliance/README.md) distingue l'uso personale del pr
 | [Procedura diritti interessati](compliance/data-subject-rights-procedure.md) | Procedura interna da completare | Accesso, portabilità, rettifica, cancellazione |
 | [Screening DPIA](compliance/dpia-screening-template.md) | Template da completare | Screening dei rischi e decisione DPIA |
 | [Valutazione DPO](compliance/dpo-assessment-template.md) | Template da completare | Obbligo di nomina |
-| [Consenso salute: decisione e gate](compliance/health-consent-release-gate.md) | Revoca implementata; gate legale e collaudi autenticati aperti | Revoca, diritti ed eventuale riaccettazione |
-| [Consenso salute: protocollo](compliance/health-consent-technical-protocol.md) | Contratto tecnico implementato; verifiche Production e gate legale aperti | Fence, journal, offline e cross-device |
+| [Consenso salute: decisione e gate](compliance/health-consent-release-gate.md) | Revoca implementata nel percorso Firebase legacy; Cloudflare candidato e gate legale aperti | Revoca, diritti ed eventuale riaccettazione |
+| [Consenso salute: protocollo](compliance/health-consent-technical-protocol.md) | Protocollo Firebase legacy; parità Workers/D1 e gate legale non provati | Fence, journal, offline e cross-device |
 | [Runbook incidenti / breach](compliance/incident-breach-runbook.md) | Procedura da assegnare e provare | Gestione, escalation e notifiche |
 | [Registro trattamenti](compliance/processing-record-template.md) | Template Art. 30 da completare | Attività e finalità del trattamento |
 | [Retention schedule](compliance/retention-schedule.md) | Policy da approvare e verificare | Conservazione e cancellazioni |

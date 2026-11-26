@@ -6,7 +6,7 @@
 
 - Privacy: `thelogbook.privacy@gmail.com` (recapito dichiarato, funzionamento confermato dal product owner il 5 novembre 2026; organizzare controllo periodico della casella e registrazione delle richieste)
 - Supporto: `[SUPPORT_EMAIL]`
-- Capacità tecniche in app: backup JSON/esportazioni, rettifica, revoca/riaccettazione del consenso, cancellazione automatica dei dati applicativi dopo revoca trusted, distinta dalla cancellazione dell'identità account. Per contratti e limiti usare [Consenso](../../.agents/rules/health-consent.md), [Ciclo account](../../.agents/rules/account-lifecycle.md) e [Portabilità](../../.agents/rules/backup-and-portability.md); questa procedura non certifica collaudi live.
+- Capacità tecniche per perimetro: guest con backup/esportazioni locali; il flusso account Firebase legacy include rettifica, revoca/riaccettazione e cancellazione trusted dei dati distinta dall'identità. Il percorso account Kinde/Workers/D1 resta candidato non esposto pubblicamente per fitness e diritti; le capacità effettive vanno riverificate prima di trattare richieste reali. Per contratti e limiti usare [Consenso](../../.agents/rules/health-consent.md), [Ciclo account](../../.agents/rules/account-lifecycle.md) e [Portabilità](../../.agents/rules/backup-and-portability.md); questa procedura non certifica collaudi live.
 
 ## Decisione operativa aggiornata — 6 novembre 2026
 

@@ -1,7 +1,7 @@
 # TheLogBook — compliance per l'accesso di utenti esterni
 
 > Stato: struttura operativa per eventuali utenti esterni, da completare e far revisionare prima del loro primo utilizzo reale.
-> Ultimo aggiornamento tecnico del dossier sulla revoca: 6 novembre 2026 (PR #826/#829 integrate); validazione privacy pre-utenti esterni ancora aperta.
+> Baseline tecnica del dossier sulla revoca Firebase: 6 novembre 2026 (PR #826/#829 integrate). Il target Kinde/Workers/D1 richiede parità e collaudi separati; validazione privacy pre-utenti esterni ancora aperta.
 > Questo pacchetto non certifica conformità GDPR e non sostituisce consulenza legale, privacy o fiscale.
 >
 > Navigazione: [indice documentazione](../README.md). I contratti AI restano in [`AGENTS.md`](../../AGENTS.md) e i relativi contratti specialistici: [Consenso salute](../../.agents/rules/health-consent.md), [Portabilità](../../.agents/rules/backup-and-portability.md), [Ciclo account](../../.agents/rules/account-lifecycle.md), [Cifratura](../../.agents/rules/secure-storage.md) e [Telemetria](../../.agents/rules/telemetry-and-privacy.md).

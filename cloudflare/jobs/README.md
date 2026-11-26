@@ -1,6 +1,6 @@
 # CF-06 — candidato Worker di cancellazione sanitaria
 
-> CF-06 #1404/#1405: moduli candidati account deletion e inattività integrati, con ingresso account application-only candidato, non distribuito/schedulato. Migrazioni 0012–0017 applicative e 0005 recovery ancora separate dalla distribuzione del codice. Il runner account deve provare cleanup owner-scoped (incluso marker attività), floor indipendente e Kinde-last con ACK/readback esatti. Vedere [runbook](../../docs/operations/cloudflare-workers-migration.md).
+> CF-06 #1404/#1405: moduli candidati account deletion e inattività integrati, con ingresso account application-only candidato, non distribuito/schedulato. Schema applicativo, recovery, Worker e scheduler sono gate distinti; per il ledger osservato consultare il [quadro operativo](../../docs/operations/cloudflare-current-state.md). Il runner account deve provare cleanup owner-scoped (incluso marker attività), floor indipendente e Kinde-last con ACK/readback esatti. Vedere [runbook](../../docs/operations/cloudflare-workers-migration.md).
 
 **Stato:** configurazione candidata **non distribuita e non schedulata**.
 Questo manifesto prepara il Worker `health-erasure-worker.mjs` ai test di
