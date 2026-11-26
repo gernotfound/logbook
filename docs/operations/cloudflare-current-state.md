@@ -1,5 +1,24 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
+**Readback più recente per le D1 e i binding (26/11/2026, dopo i dispatch manuali):**
+`main` GitHub [`0b331f26`](https://github.com/gernotfound/logbook/commit/0b331f26b0c8cd204e71910f76445023aa75d755)
+v2.718.0; [migrazione CF-02 #4](https://github.com/gernotfound/logbook/actions/runs/45843978632)
+su exact SHA, `upgrade_existing_test_db_0020=true`, con preflight
+`11/20`, postflight `20/20`, controllo digest dei record sintetici e Time
+Travel bookmark superati. Readback Cloudflare: D1 applicativa isolata
+giurisdizione `eu`, ledger contiguo `0001–0020`, replication disabilitata;
+tre principal, 29 sessioni, un subject e un documento sintetici invariati;
+inattività `paused` e dispatcher/scheduler inutilizzati. La
+[migrazione recovery #2](https://github.com/gernotfound/logbook/actions/runs/45823509877)
+ha applicato `0005`, e il registro recovery ha ledger `0001–0005`.
+Quattro Worker senza cron; il frontend `thelogbook.me` espone ancora soltanto
+`APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`, **non `D1_API`**. L'API privata conserva
+due D1 distinte, `AUTH_GATE` e la KEK nel solo binding `secret_text` (non ne è
+stato letto il valore). **Nessun nuovo percorso fitness attivato, nessun GO**.
+Il [modello delle minacce ADR-2](../architecture/cloudflare-trust-boundaries.md)
+distingue i guard attuali dalle prove mancanti. I checkpoint datati sotto
+restano storici e non prevalgono su questo readback.
+
 **Candidato CF-06, 26/11/2026 — pin recovery esterno unico:** tutte le
 modalità scheduled (sanità, cancellazione applicativa, alternanza e inattività)
 richiedono ora `CF06_RECOVERY_GENERATION` dalla configurazione trusted, oltre
@@ -46,7 +65,7 @@ rimangono confinate al loader cloud legacy. Per staging, contratto
 di integrità e requisiti di attivazione vedere
 [operazioni catalogo](../../.agents/rules/catalog-operations.md).
 
-**Preflight migrazioni isolate (26/11/2026, candidato):** il workflow manuale della D1 applicativa confronta prima/dopo sia i conteggi sia le impronte SHA-256 dei record sintetici esistenti (identità, sessioni, replica, documenti cifrati e ricevute). Le letture sono bounded, i dati non vengono pubblicati nei log e il confronto blocca il gate su alterazioni con conteggi invariati. Le query sono separate, quindi non attestano uno snapshot atomico in presenza di scritture concorrenti. Il workflow non è stato avviato da questo incremento; occorre ancora applicare e verificare le migrazioni remote con il percorso main-only autorizzato.
+**Preflight migrazioni isolate (contratto del 26/11/2026):** il workflow manuale della D1 applicativa confronta prima/dopo sia i conteggi sia le impronte SHA-256 dei record sintetici esistenti (identità, sessioni, replica, documenti cifrati e ricevute). Le letture sono bounded, i dati non vengono pubblicati nei log e il confronto blocca il gate su alterazioni con conteggi invariati. Le query sono separate, quindi non attestano uno snapshot atomico in presenza di scritture concorrenti. L'esecuzione effettiva e il ledger aggiornato sono attestati nel readback in apertura, non dalla presenza del workflow nel repository.
 
 **Baseline remota verificata il 25 novembre 2026 prima dell'incremento quota CF-06:** `main` v2.706.0, SHA [`328796a4f72915162d084b9d7749e237e2948125`](https://github.com/gernotfound/logbook/commit/328796a4f72915162d084b9d7749e237e2948125), dopo squash [#1443](https://github.com/gernotfound/logbook/pull/1443). La [CI PR](https://github.com/gernotfound/logbook/actions/runs/45711218867) e la [CI post-merge](https://github.com/gernotfound/logbook/actions/runs/45711823585) risultano success sul rispettivo SHA; [Static Assets e smoke](https://github.com/gernotfound/logbook/actions/runs/45712176120) success sullo SHA `main`. I Worker privati API/Kinde hanno saltato il redeploy perché non pertinenti al diff; Firestore ha riconciliato senza ridistribuire Rules/indici. Lettura Cloudflare separata del 25/11: quattro Worker senza schedule, due D1 LogBook con giurisdizione EU, ledger precedentemente attestato 0011 applicativo e 0004 recovery; frontend deployment `b4d5446c-f20c-40af-b9db-c69e55fabd4b` al 100%. Le migrazioni candidate non risultavano applicate durante la lettura del ledger. I dati provider restano uno snapshot datato, non una prova del runtime dello SHA nuovo. Rileggere HEAD e provider prima di ogni nuovo task. Questa mappa distingue codice su [`main`](https://github.com/gernotfound/logbook/tree/main), runtime pubblico, letture Cloudflare e prove funzionali. Non è una certificazione Production e non autorizza GO, billing, cancellazioni, DNS, OAuth Production o modifiche irreversibili. Le versioni e i commit dei singoli interventi sono nelle [issue CF](https://github.com/gernotfound/logbook/issues/1053); rileggere sempre l'HEAD reale.
 
@@ -75,7 +94,7 @@ di integrità e requisiti di attivazione vedere
 | Fitness account Kinde **isolato** | `KindeCandidateFitnessPanel`, realm con owner/fence, profilo biometrico, pianificazione macro, diario/storico pasti, integratori, misure/sonno, passi/cardio, seduta attiva, editor dei cicli, storico allenamenti consultabile, modificabile ed eliminabile, schede ed esercizi personali con recupero della bozza cifrata ([CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057)) | Disponibile come percorso candidato `candidateMode='fitness'`, non montato nel pubblico `identityOnly`; editor separati dal writer Firebase | Catalogo globale, lifecycle account completo e prove su account/dispositivi reali |
 | Replica Workers/D1 | Worker API/Auth Gate, schema SQL, journal cifrato e ricevute D1; percorso candidato con commit prima della rete | Worker API privato e frontend **senza** binding `D1_API`; prove isolate sintetiche del realm | Roundtrip reale multi-device, lost ACK, concorrenza, offline, quote e fail-safe |
 | Consenso, cifratura e diritti | Consenso iniziale, ADK/vault, export/restore, revoca e rights-only candidati | `CLOUD_ACCOUNT_KEK_V1` presente come `secret_text` nel Worker API privato; nessun grant fitness nel provider pubblico | Recuperabilità indipendente della KEK, consenso/revoca/restore/erasure reali, privacy e protezione anti-resurrection |
-| Erasure e inattività | Finalizzatore lease-fenced, pipeline account Kinde, dispatcher e checkpoint persistente, ingresso account e alternanza candidata, marker foreground, scanner dry-run con checkpoint 0016 e ingresso diagnostico opt-in; modalità enqueue separata con checkpoint 0017 e ulteriore opt-in; backoff owner nella 0020, tutto senza schedule nel [manifest CF-06](../../cloudflare/jobs/README.md) | GET 25/11: zero schedule sui quattro Worker; D1 applicativa 0011 e recovery 0004, migrazioni candidate 0012–0020 e 0005 non attestate applicate | Riautenticazione reale, route/ricevute device, collaudo foreground su provider e dispositivi, montaggio autorizzato runner, test backoff live e permessi Management, recovery, quote, privacy e prova Kinde-last |
+| Erasure e inattività | Finalizzatore lease-fenced, pipeline account Kinde, dispatcher e checkpoint persistente, ingresso account e alternanza candidata, marker foreground, scanner dry-run con checkpoint 0016 e ingresso diagnostico opt-in; modalità enqueue separata con checkpoint 0017 e ulteriore opt-in; backoff owner nella 0020, tutto senza schedule nel [manifest CF-06](../../cloudflare/jobs/README.md) | GET 26/11: zero schedule sui quattro Worker; D1 applicativa ledger 0001–0020 e recovery 0001–0005 applicati e riletti. Scanner `paused`, scheduler e dispatcher inattivi | Riautenticazione reale, route/ricevute device, collaudo foreground su provider e dispositivi, montaggio autorizzato runner, test backoff live e permessi Management, recovery, quote, privacy e prova Kinde-last |
 | Free, abuso e privacy | Rate-limit binding, verifiche statiche, smoke e test con dati sintetici | Nessun GO utenti esterni o account fitness | Quote/abuso, mail, custodia segreti e collaudo indipendente delle condizioni GDPR |
 
 L'archivio candidato degli esercizi personali legge lo snapshot del realm
@@ -139,7 +158,7 @@ Duplicazione ed eliminazione verificano il ciclo osservato nel commit.
 Se viene eliminato il ciclo attivo, la selezione passa al primo dei
 rimanenti o si azzera. Schede e sedute registrate vengono conservate.
 
-## Lettura del provider — 24 novembre 2026
+## Lettura del provider — 24 novembre 2026 (storico, superato per i ledger)
 
 Cloudflare restituisce quattro Worker TheLogBook: `thelogbook-frontend`, `thelogbook-api-isolated`, `thelogbook-cf03-auth-gate-isolated` e `thelogbook-cf03-kinde-http-isolated`. Tutti hanno zero schedule. Il Custom Domain attivo `thelogbook.me` punta al frontend con soli binding `APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`, **senza D1_API**. L'API privata ha `DB`, `RECOVERY_DB`, `AUTH_GATE` e `CLOUD_ACCOUNT_KEK_V1` secret_text; nessun valore letto. Entrambe le D1 isolate riportano jurisdiction eu e read replication disabled. Ledger SQL: applicativa 0001–0011, recovery 0001–0004. Il codice contiene 13 migrazioni applicative e 5 recovery; quelle mancanti richiedono workflow manuale con preflight e readback, non vengono applicate dal merge. Zona attiva, Always Use HTTPS on, DNSSEC disabled. Nessuna modifica provider da questa ricognizione.
 
@@ -152,7 +171,7 @@ La disponibilità del codice candidato non implica accessibilità pubblica. Il p
 1. Completare i percorsi ancora mancanti (catalogo globale, lifecycle account, diritti e UX), senza riscrivere gli editor candidati già integrati, preservando owner/session fence, bozza e journal cifrato durevole; regressioni su `local-pending` e ACK effettivo.
 2. Provare su dispositivi e provider isolati Auth, consenso, sessioni, D1/ADK, recovery offline, perdita di ricevuta, più schede e più device; non abilitare anticipatamente il pubblico.
 3. Il censimento diagnostico confronta i conteggi di decisioni e blocchi indipendenti con entrambe le letture complete e ricontrolla `mode`/`generation` dopo i digest asincroni degli intenti account: un unseal/reseal durante la verifica viene rifiutato. Su SQLite il censimento accetta 512 proprietari coperti e si blocca al 513º. Restano da dimostrare recupero esterno della KEK indipendente, backup/restore, revoca, cancellazione terminale e anti-resurrection.
-4. Aggiornare lo schema isolato con prove, attestare riautenticazione Kinde, enqueue atomico con marker/generazione correnti, runner e Kinde-last; validare quote, antiabuso, privacy e Safari/iOS. Tracking e cron reali richiedono autorizzazione.
+4. Lo schema isolato è aggiornato (readback in apertura): attestare ora riautenticazione Kinde, enqueue atomico con marker/generazione correnti, runner e Kinde-last; validare quote, antiabuso, privacy e Safari/iOS. Tracking e cron reali richiedono autorizzazione.
 5. Rimuovere i chiamanti Firebase/Vercel solo a parità funzionale verificata. CF-09 e GO del proprietario restano separati dalla CI verde.
 
 ## Fonti per agenti e coordinamento
