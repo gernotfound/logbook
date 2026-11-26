@@ -95,9 +95,20 @@ describe('diagnostic encrypted archive bootstrap', () => {
             revision: 0,
         });
         expect(saved.actorId.trim()).not.toBe('');
+        expect(saved.actorId).toMatch(/^actor_[0-9a-f-]+$/);
         expect(await get(key)).toMatch(/^tlb-sealed:v1:/);
         expect(await get('logbook:v2:archive-bootstrap')).toBeUndefined();
         expect(await readLocal('archive-bootstrap')).toEqual(saved);
+    });
+
+    it('allows account bootstrap with its own storage marker while no archive exists', async () => {
+        const marker = updateStorageMarker(1000, undefined, owner);
+        expect(await readLocal(owner)).toBeUndefined();
+
+        await initializeLocal(owner, state('170'));
+
+        expect((await snapshot()).data.profile?.height).toBe('170');
+        expect(getStorageMarker(undefined, owner)).toEqual(marker);
     });
 
     it('creates a separate guest envelope without inheriting an account generation or a cloud journal', async () => {
