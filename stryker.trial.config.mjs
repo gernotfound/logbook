@@ -163,7 +163,11 @@ export const trialCases = {
   },
   "causal-compaction": {
     "mutate": ["src/lib/sync/causalCompaction.ts"],
-    "testFiles": ["tests/gc/causalCompaction.test.ts"],
+    "testFiles": [
+      "tests/gc/causalCompaction.test.ts",
+      "tests/gc/causalCompactionFrontier.test.ts",
+      "tests/gc/causalCompactionReplay.test.ts",
+    ],
     "runner": "gc"
   }
 };
