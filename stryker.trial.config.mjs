@@ -136,7 +136,7 @@ export const trialCases = {
   },
   "journal-acknowledgement": {
     "mutate": ["src/lib/sync/localJournalAcknowledgement.ts"],
-    "testFiles": [...localRepositorySuites, "tests/isolated/sync/lateCommit.test.ts", "tests/isolated/sync/storeJournal.test.ts", "tests/isolated/sync/localJournalAcknowledgement.test.ts"],
+    "testFiles": [...localRepositorySuites, "tests/isolated/sync/lateCommit.test.ts", "tests/isolated/sync/storeJournal.test.ts", "tests/isolated/sync/localJournalAcknowledgement.test.ts", "tests/isolated/sync/cloudReplicaDurableDelivery.test.ts"],
     "runner": "isolated"
   },
   "consent-journal-recovery": {

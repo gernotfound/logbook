@@ -17,6 +17,7 @@ import type { SemanticOperation, SyncMeta } from '../../../src/lib/sync/semantic
 import type { ReplicaIdentity } from '../../../src/lib/sync/replicaProtocol';
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
+import { updateArchiveRecord } from '../../../src/lib/sync/secureArchiveRepository';
 import type { CachedGlobalCatalog, UserData } from '../../../src/types';
 
 const owner = 'user:a';
@@ -94,6 +95,26 @@ function outcome(base: UserData, sent: ReturnType<typeof delivery>) {
 }
 
 describe('diagnostic acknowledgement invariants with a real encrypted journal', () => {
+    it.each(['missing proof', 'non-array operations', 'missing replica'] as const)(
+        'refuses %s before retiring any encrypted journal entry', async kind => {
+            const base = data(170);
+            await initialize(base);
+            await commitLocal(owner, data(171), base);
+            const before = await snapshot();
+            const sent = delivery(before);
+            const ciphertext = await get(key);
+            const malformed: unknown = kind === 'missing proof' ? null
+                : kind === 'non-array operations' ? { ...sent, operations: null }
+                    : { ...sent, replica: null };
+
+            await expect(acknowledgeThrough(owner, lastSequence(sent.operations), data(171),
+                [], undefined, malformed as Parameters<typeof acknowledgeThrough>[5]))
+                .rejects.toThrow('Acknowledgement senza prova del batch');
+            expect(await get(key)).toBe(ciphertext);
+            expect(await snapshot()).toEqual(before);
+        },
+    );
+
     it('rejects an already-invalid guard before reading the catalog and preserves the exact journal', async () => {
         const base = data(170);
         await initialize(base);
@@ -214,6 +235,49 @@ describe('diagnostic acknowledgement invariants with a real encrypted journal', 
         expect(await snapshot()).toEqual(before);
     });
 
+    it('does not acknowledge a pending journal before its replica is durably assigned', async () => {
+        const base = data(170);
+        await initializeLocal(owner, base);
+        await commitLocal(owner, data(171), base);
+        const before = await snapshot();
+        const ciphertext = await get(key);
+        expect(before.replica).toBeNull();
+        const claimedReplica: ReplicaIdentity = {
+            slot: before.actorId, replicaId: 'unconfirmed-replica', generation: 1,
+            checkpointAtMs: Date.now(), leaseUntilMs: Date.now() + 60_000,
+        };
+
+        await expect(acknowledgeThrough(owner, before.pending.at(-1)!.seq, data(171),
+            [], undefined, { operations: before.pending, replica: claimedReplica }))
+            .rejects.toThrow('Acknowledgement invalidato: replica o batch locale cambiati');
+        expect(await get(key)).toBe(ciphertext);
+        expect(await snapshot()).toEqual(before);
+    });
+
+    it.each(['checkpoint slot changed', 'journal actor differs from checkpoint slot'] as const)(
+        'rejects an inconsistent replica transition: %s', async kind => {
+            const base = data(170);
+            await initialize(base);
+            await commitLocal(owner, data(171), base);
+            const sent = delivery(await snapshot());
+            // Model an interrupted/out-of-band membership transition without
+            // manufacturing a new journal: the old actor's operations remain durable.
+            await updateArchiveRecord<LocalEnvelope>(owner, raw => ({
+                ...raw!, replica: { ...raw!.replica!, slot: 's01' },
+            }));
+            const before = await snapshot();
+            const ciphertext = await get(key);
+            const attestedReplica = kind === 'checkpoint slot changed'
+                ? sent.replica : { ...sent.replica, slot: 's01' };
+
+            await expect(acknowledgeThrough(owner, lastSequence(sent.operations), data(171),
+                [], undefined, { operations: sent.operations, replica: attestedReplica }))
+                .rejects.toThrow('Acknowledgement invalidato: replica o batch locale cambiati');
+            expect(await get(key)).toBe(ciphertext);
+            expect(await snapshot()).toEqual(before);
+        },
+    );
+
     it('rejects the whole attested ACK when a delivered document has a newer or incomparable durable frontier', async () => {
         const base = data(170);
         const first = data(171, { '2026-09-01': { date: '2026-09-01', weight: 71 } });
@@ -275,6 +339,39 @@ describe('diagnostic acknowledgement invariants with a real encrypted journal', 
         expect(after.syncMetaByDocument[''].clock).toEqual({ s00: 1 });
         expect(after.syncMetaByDocument[''].protocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
         expect(after.revision).toBe(before.revision + 1);
+    });
+
+    it('incorporates a confirmed remote replica clock without inventing an ACK for local pending entries', async () => {
+        const base = data(170);
+        await initialize(base);
+        await commitLocal(owner, data(171), base);
+        const sent = delivery(await snapshot());
+        const confirmed = outcome(base, sent);
+        await commitLocal(owner, data(172), data(171));
+        const newer = await snapshot();
+        const otherReplicaEdit: SemanticOperation = {
+            docPath: '', path: ['profile', 'neck'], isDelete: false, value: '39',
+            actorId: 's01', seq: 1, clock: { s00: lastSequence(sent.operations), s01: 1 },
+        };
+        const remoteWithAnotherReplica = applySemanticOperations(
+            confirmed.documents, [otherReplicaEdit], confirmed.syncMeta,
+        );
+        const remote = applyRemoteDocuments(base, remoteWithAnotherReplica.documents, catalog);
+        const remoteMeta: Record<string, SyncMeta> = {
+            ...confirmed.syncMeta, '': {
+                ...remoteWithAnotherReplica.syncMetas[''],
+                writer: { slot: 's01', replicaId: 'ack-remote', generation: 1,
+                    seq: 1, consentRevision: 1 },
+            },
+        };
+
+        await acknowledgeThrough(owner, lastSequence(sent.operations), remote,
+            [], remoteMeta, sent);
+        const after = await snapshot();
+        expect(after.clock).toEqual({ s00: newer.actorSeq, s01: 1 });
+        expect(after.syncMetaByDocument[''].clock).toEqual({ s00: lastSequence(sent.operations), s01: 1 });
+        expect(after.pending).toEqual(newer.pending.filter(operation => operation.seq > lastSequence(sent.operations)));
+        expect(after.data.profile?.height).toBe('172');
     });
 
     it('keeps the union of previously complete and delivered months without duplicates', async () => {
