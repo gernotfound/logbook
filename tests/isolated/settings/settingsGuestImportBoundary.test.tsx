@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const ui = vi.hoisted(() => ({
@@ -21,6 +21,7 @@ vi.mock('../../../src/lib/healthDataErasure', () => { throw new Error('Guest set
 vi.mock('../../../src/lib/db/db_account', () => { throw new Error('Guest settings loaded account purge'); });
 
 import { useSettings } from '../../../src/hooks/useSettings';
+import { AccountCard } from '../../../src/components/UI/AccountCard';
 import { activateGuestSession, GUEST_SESSION_KEY, invalidateSession } from '../../../src/lib/sync/session';
 
 beforeEach(() => {
@@ -35,6 +36,19 @@ beforeEach(() => {
 });
 
 describe('Settings guest boundary', () => {
+    it('renders and exits the guest account card without loading legacy account modules', () => {
+        const view = render(<AccountCard />);
+        expect(screen.getByRole('heading', { name: 'Modalità locale' })).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: 'Esci dalla modalità locale' }));
+        expect(ui.logout).toHaveBeenCalledOnce();
+        view.unmount();
+    });
+
+    it('keeps the App startup import independent of Firebase-only gates', async () => {
+        const { default: App } = await import('../../../src/App');
+        expect(typeof App).toBe('function');
+    });
+
     it('renders account/profile/transfer hooks without loading any Firebase-only module', () => {
         const { result } = renderHook(() => useSettings());
         expect(result.current.currentUser).toBeNull();

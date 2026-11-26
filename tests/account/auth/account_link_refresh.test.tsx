@@ -38,7 +38,7 @@ vi.mock('../../../src/lib/auth/passwordPolicy', () => ({
     validatePasswordAgainstPolicy: vi.fn(async () => null),
 }));
 vi.mock('../../../src/lib/sync/safeReload', () => ({ safeHardReload: vi.fn(async () => {}) }));
-import { AccountCard } from '../../../src/components/UI/AccountCard';
+import { LegacyAccountCard as AccountCard } from '../../../src/components/UI/AccountCardLegacy';
 
 beforeEach(() => {
     vi.clearAllMocks();

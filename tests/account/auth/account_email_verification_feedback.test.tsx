@@ -33,7 +33,7 @@ vi.mock('../../../src/store/useDialogStore', () => ({
 
 import { auth } from '../../../src/lib/firebase';
 import { invalidateSession } from '../../../src/lib/sync/session';
-import { AccountCard } from '../../../src/components/UI/AccountCard';
+import { LegacyAccountCard as AccountCard } from '../../../src/components/UI/AccountCardLegacy';
 import { EmailVerificationGate } from '../../../src/components/UI/EmailVerificationGate';
 
 beforeEach(() => {

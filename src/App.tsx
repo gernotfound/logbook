@@ -12,11 +12,9 @@ import BrandLoadingScreen from './components/UI/BrandLoadingScreen';
 import BottomNav from './components/UI/BottomNav';
 import { GlobalDialog } from './components/UI/GlobalDialog';
 import { ConsentOverlay } from './components/UI/ConsentOverlay';
-import { HealthConsentSuspended } from './components/UI/HealthConsentSuspended';
 import { currentHealthConsentStatus, getGuestHealthConsentStatus, getServerConfirmedLegalConsent, refreshHealthConsent, refreshHealthConsentFromStorage, subscribeHealthConsent } from './lib/healthConsent';
 import { needsLegalUpdate } from './lib/legalVersions';
 import { KindeAccountEntry } from './components/UI/KindeAccountEntry';
-import { EmailVerificationGate } from './components/UI/EmailVerificationGate';
 import { AlertTriangle, X } from 'lucide-react';
 
 const loadHomeView = () => import('./components/Home/HomeView');
@@ -30,6 +28,8 @@ const TrainingView = lazy(loadTrainingView);
 const NutritionView = lazy(loadNutritionView);
 const DataView = lazy(loadDataView);
 const SettingsView = lazy(loadSettingsView);
+const EmailVerificationGate = lazy(() => import('./components/UI/EmailVerificationGate').then(module => ({ default: module.EmailVerificationGate })));
+const HealthConsentSuspended = lazy(() => import('./components/UI/HealthConsentSuspended').then(module => ({ default: module.HealthConsentSuspended })));
 
 const BACKGROUND_VIEW_PRELOAD_ORDER = [
   ['home', loadHomeView],
@@ -280,7 +280,7 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
   }
 
   if (currentUser && emailVerificationRequired) {
-    return <><GlobalDialog /><EmailVerificationGate /></>;
+    return <><GlobalDialog /><Suspense fallback={<BrandLoadingScreen label="Caricamento verifica email" />}><EmailVerificationGate /></Suspense></>;
   }
 
   if (!currentUser && !isGuest) {
@@ -304,7 +304,7 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
   }
 
   if ((isGuest || currentUser) && healthConsentStatus !== 'active') {
-    return <><GlobalDialog /><HealthConsentSuspended key={currentUser ? `user:${currentUser.uid}` : 'guest'} status={healthConsentStatus} user={currentUser} /></>;
+    return <><GlobalDialog /><Suspense fallback={<BrandLoadingScreen label="Caricamento gestione consenso" />}><HealthConsentSuspended key={currentUser ? `user:${currentUser.uid}` : 'guest'} status={healthConsentStatus} user={currentUser} /></Suspense></>;
   }
 
   // Never render an unowned/foreign snapshot in a newly authenticated view.
