@@ -3,10 +3,7 @@ import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { currentHealthConsentStatus } from '../lib/healthConsent';
-import { auth, signOut } from '../lib/firebase';
-import { purgeCompletedHealthDataLocal } from '../lib/db/db_account';
-import { requestHealthDataErasure } from '../lib/healthDataErasure';
-import { isSensitiveReauthCancellation, reauthenticateForSensitiveAction } from '../lib/auth/recentAuth';
+import { isSensitiveReauthCancellation } from '../lib/auth/reauthError';
 
 export type SettingsDeletionInFlight = 'account' | 'health-data' | null;
 
@@ -21,10 +18,17 @@ export function useSettingsHealthDataDeletion(beginDeletion: () => boolean, endD
         let serverComplete = false;
         let requestSession: ReturnType<typeof captureSession> | null = null;
         let expectedUid: string | null = null;
+        let firebaseAuth: typeof import('../lib/firebase').auth | null = null;
         try {
-            const user = auth.currentUser;
             const session = captureSession();
             requestSession = session;
+            if (session.owner === 'guest') {
+                throw new Error('La cancellazione cloud richiede un account autenticato.');
+            }
+            const { auth, signOut } = await import('../lib/firebase');
+            firebaseAuth = auth;
+            if (!isCurrentSession(session)) return;
+            const user = auth.currentUser;
             if (!user || session.owner !== 'user:' + user.uid) {
                 throw new Error('Accedi al tuo account prima di richiedere la cancellazione.');
             }
@@ -48,6 +52,8 @@ export function useSettingsHealthDataDeletion(beginDeletion: () => boolean, endD
                 'ULTIMA CONFERMA: tutti i dati applicativi dell’account (profilo, allenamenti, nutrizione, misurazioni e schede) saranno eliminati senza possibilità di recuperarli tramite TheLogBook. L’operazione cloud può impiegare tempo e non potrà essere annullata una volta avviata. Confermi?'
             ))) return;
             assertCurrent();
+            const { reauthenticateForSensitiveAction } = await import('../lib/auth/recentAuth');
+            assertCurrent();
             let reauth = await reauthenticateForSensitiveAction(user);
             assertCurrent();
             if (reauth === 'password-required') {
@@ -65,6 +71,7 @@ export function useSettingsHealthDataDeletion(beginDeletion: () => boolean, endD
                 throw new Error('Non è stato possibile verificare nuovamente la tua identità.');
             }
             setErasingHealthData(true);
+            const { requestHealthDataErasure } = await import('../lib/healthDataErasure');
             assertCurrent();
             useAppStore.getState().cancelPendingSyncs();
             const result = await requestHealthDataErasure(user);
@@ -79,6 +86,8 @@ export function useSettingsHealthDataDeletion(beginDeletion: () => boolean, endD
             serverComplete = true;
             // Auth may still be live, but user data must not be republished.
             // Purge verifies IndexedDB removal before erasing encryption keys.
+            const { purgeCompletedHealthDataLocal } = await import('../lib/db/db_account');
+            assertCurrent();
             await purgeCompletedHealthDataLocal(session.owner);
             // The completed purge removes the consent marker itself; this
             // intentionally invalidates the pre-erasure session snapshot.
@@ -91,7 +100,7 @@ export function useSettingsHealthDataDeletion(beginDeletion: () => boolean, endD
         } catch (error) {
             if (isSensitiveReauthCancellation(error)) return;
             if (requestSession && expectedUid !== null) {
-                if (auth.currentUser?.uid !== expectedUid) return;
+                if (firebaseAuth?.currentUser?.uid !== expectedUid) return;
                 if (!serverComplete && !isCurrentSession(requestSession)) return;
                 if (serverComplete) {
                     // Purge removes the original consent marker; only its Auth epoch
@@ -105,7 +114,9 @@ export function useSettingsHealthDataDeletion(beginDeletion: () => boolean, endD
                 }
             }
             await showAlert(
-                (serverComplete
+                (expectedUid === null
+                    ? ''
+                    : serverComplete
                     ? 'Il server ha completato la cancellazione, ma la pulizia su questo dispositivo o la disconnessione non è terminata. Non considerare conclusa la pulizia locale. Riprova da questo dispositivo.\\n\\n'
                     : 'La cancellazione potrebbe essere stata avviata: non ripristinare vecchie copie senza aver verificato lo stato.\\n\\n')
                 + (error instanceof Error ? error.message : 'Verifica cancellazione non riuscita.'),

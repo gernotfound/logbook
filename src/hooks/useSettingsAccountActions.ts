@@ -6,10 +6,8 @@ import { useDialogStore } from '../store/useDialogStore';
 import { DB } from '../lib/db';
 import { captureSession, isCurrentSession, isActiveGuestSession } from '../lib/sync/session';
 import { readLocal } from '../lib/sync/localRepository';
-import { auth } from '../lib/firebase';
 import { isAccountDeletionPending } from '../lib/sync/accountGate';
-import { isSensitiveReauthCancellation, reauthenticateForSensitiveAction } from '../lib/auth/recentAuth';
-import { revokeSessionsOnServer } from '../lib/auth/revokeSessions';
+import { isSensitiveReauthCancellation } from '../lib/auth/reauthError';
 
 type AccountActionsAuth = Pick<ReturnType<typeof useAuth>, 'currentUser' | 'isGuest' | 'logout'>;
 
@@ -36,9 +34,13 @@ export function useSettingsAccountActions({ currentUser, isGuest, logout }: Acco
         revokingSessionsBusy.current = true;
         const expectedUid = currentUser.uid;
         let requestSession: ReturnType<typeof captureSession> | null = null;
+        let firebaseAuth: typeof import('../lib/firebase').auth | null = null;
         try {
             const session = captureSession();
             requestSession = session;
+            // Loading the legacy provider can outlive a replacement Auth epoch.
+            const { auth } = await import('../lib/firebase');
+            firebaseAuth = auth;
             const assertCurrent = () => {
                 if (!isCurrentSession(session) || auth.currentUser?.uid !== expectedUid) {
                     throw new Error('Sessione cambiata: operazione annullata.');
@@ -80,6 +82,8 @@ export function useSettingsAccountActions({ currentUser, isGuest, logout }: Acco
             await assertSafeLocalState();
             setRevokingSessions(true);
 
+            const { reauthenticateForSensitiveAction } = await import('../lib/auth/recentAuth');
+            assertCurrent();
             let reauth = await reauthenticateForSensitiveAction(auth.currentUser!);
             assertCurrent();
             if (reauth === 'password-required') {
@@ -97,6 +101,7 @@ export function useSettingsAccountActions({ currentUser, isGuest, logout }: Acco
                 throw new Error('Non è stato possibile verificare nuovamente l’identità.');
             }
 
+            const { revokeSessionsOnServer } = await import('../lib/auth/revokeSessions');
             await assertSafeLocalState();
             await revokeSessionsOnServer(auth.currentUser!);
             // A new login to the same UID must not inherit the old request's local logout.
@@ -112,7 +117,8 @@ export function useSettingsAccountActions({ currentUser, isGuest, logout }: Acco
             }
         } catch (error) {
             // Errors from a superseded request must not open an account A dialog over B.
-            if (auth.currentUser?.uid !== expectedUid || (requestSession && !isCurrentSession(requestSession))) return;
+            if ((firebaseAuth && firebaseAuth.currentUser?.uid !== expectedUid)
+                || (requestSession && !isCurrentSession(requestSession))) return;
             if (isSensitiveReauthCancellation(error)) return;
             const code = (error as { code?: unknown } | null)?.code;
             if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
@@ -151,11 +157,12 @@ export function useSettingsAccountActions({ currentUser, isGuest, logout }: Acco
         deletionBusy.current = 'account';
         let session: ReturnType<typeof captureSession> | null = null;
         const expectedUid = currentUser?.uid ?? null;
+        let firebaseAuth: typeof import('../lib/firebase').auth | null = null;
         try {
             session = captureSession();
             const assertCurrent = () => {
                 if (!session || !isCurrentSession(session)
-                    || (expectedUid !== null && auth.currentUser?.uid !== expectedUid)) {
+                    || (expectedUid !== null && firebaseAuth && firebaseAuth.currentUser?.uid !== expectedUid)) {
                     throw new Error('Sessione cambiata: cancellazione annullata.');
                 }
             };
@@ -165,6 +172,9 @@ export function useSettingsAccountActions({ currentUser, isGuest, logout }: Acco
                 await logout({ mode: 'force' });
                 return;
             }
+            const { auth } = await import('../lib/firebase');
+            firebaseAuth = auth;
+            assertCurrent();
             if (!(await showConfirm('Questa operazione è irreversibile: elimina allenamenti, nutrizione, misurazioni e account. Prima di continuare, chiudi TheLogBook sugli altri dispositivi ed esporta un backup se vuoi conservare i dati. Procedere?'))) return;
             assertCurrent();
             if (!(await showConfirm('Ultima conferma: eliminare definitivamente il tuo account TheLogBook?'))) return;
@@ -178,6 +188,8 @@ export function useSettingsAccountActions({ currentUser, isGuest, logout }: Acco
                 throw new Error('Account cambiato.');
             }
 
+            const { reauthenticateForSensitiveAction } = await import('../lib/auth/recentAuth');
+            assertCurrent();
             let reauth = await reauthenticateForSensitiveAction(user);
             if (reauth === 'password-required') {
                 const password = await showPasswordPrompt(
@@ -203,7 +215,7 @@ export function useSettingsAccountActions({ currentUser, isGuest, logout }: Acco
                 resetStore: () => useAppStore.getState().resetStore(),
             });
             if (outcome.status === 'pending' && session && isCurrentSession(session)
-                && (expectedUid === null ? auth.currentUser === null : auth.currentUser?.uid === expectedUid)) {
+                && (expectedUid === null ? firebaseAuth.currentUser === null : firebaseAuth.currentUser?.uid === expectedUid)) {
                 await showAlert(outcome.message);
             }
         } catch (error) {
@@ -215,7 +227,7 @@ export function useSettingsAccountActions({ currentUser, isGuest, logout }: Acco
                 : error instanceof Error ? error.message : 'Cancellazione non riuscita.';
             // The same owner after A→B→A is not the same authenticated session.
             const canShow = session === null || (isCurrentSession(session)
-                && (expectedUid === null ? auth.currentUser === null : auth.currentUser?.uid === expectedUid));
+                && (expectedUid === null ? firebaseAuth?.currentUser == null : !firebaseAuth || firebaseAuth.currentUser?.uid === expectedUid));
             if (canShow) void showAlert(message);
         } finally {
             deletionBusy.current = null;
