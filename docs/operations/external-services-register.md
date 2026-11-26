@@ -2,6 +2,30 @@
 
 **Stato di riferimento:** per l'ultimo readback Cloudflare consultare [quadro operativo](cloudflare-current-state.md). I valori sotto sono checkpoint datati, non una fotografia aggiornata automaticamente del provider.
 
+## Readback Cloudflare e rilascio Static Assets · 26 novembre 2026
+
+La [PR #1468](https://github.com/gernotfound/logbook/pull/1468), v2.731.0,
+è integrata in `main` allo SHA [`926ccbd3`](https://github.com/gernotfound/logbook/commit/926ccbd3c9ae8d42d1595bee5e445cdf48fa3032),
+con tree identico al candidato `c82b4159`. [CI PR, Canonical e CodeQL](https://github.com/gernotfound/logbook/actions/runs/45896360753),
+[Main Release Gate e CodeQL](https://github.com/gernotfound/logbook/actions/runs/45896852214)
+e [Static Assets con smoke byte-esatto](https://github.com/gernotfound/logbook/actions/runs/45897147455)
+sono riusciti sui rispettivi SHA esatti. Il provider Cloudflare mostra il deployment
+frontend `7bd7662f-36ba-4c89-a973-53d4d5b16f62` del 26/11/2026,
+versione `8ded8ec7-4031-466c-ad91-ebd6ea974a96` al 100% (il precedente era
+`ed5461b6-6ac1-444e-88ad-eefa37a7bb68`). I binding frontend riletti sono
+soltanto `APP_ORIGIN`, `ASSETS` e `KINDE_HTTP`: **`D1_API` assente**.
+Tutti e quattro i Worker hanno zero schedule. I workflow [API/Auth Gate](https://github.com/gernotfound/logbook/actions/runs/45897147442)
+e [Kinde HTTP privato](https://github.com/gernotfound/logbook/actions/runs/45897147515)
+sono riusciti, ma hanno **saltato i deploy**; la [riconciliazione Firestore](https://github.com/gernotfound/logbook/actions/runs/45897147577)
+è riuscita senza ridistribuire Rules o indici. Nessuna scrittura manuale al provider,
+lettura di segreti, migrazione D1 o operazione su dati reali.
+
+Il diff separa la policy del consenso salute/guest dalle importazioni Firebase
+statiche, senza attivare il fitness Kinde/D1. Rimangono import Firebase negli
+ingressi Impostazioni/sospensione e mancano prove live Auth, ADK, consenso,
+revoca/erasure, recupero e Safari/iOS fisico: **fitness Cloudflare NO-GO**.
+Il registro distingue il deployment Static Assets dal funzionamento account.
+
 ## Readback Cloudflare · 25 novembre 2026
 
 Verifica diretta in sola lettura: quattro Worker `thelogbook-frontend` (ASSETS, KINDE_HTTP; nessun D1_API), `thelogbook-api-isolated` (AUTH_GATE, DB, RECOVERY_DB, secret KEK presente), `thelogbook-cf03-auth-gate-isolated` (DB, limiter) e `thelogbook-cf03-kinde-http-isolated` (DB, AUTH_GATE, limiter e secret Kinde presenti). Tutti senza cron; nessun Worker CF-06 osservato. D1 applicativa `jurisdiction=eu` ledger 0011; recovery `jurisdiction=eu` ledger 0004. Codice candidato fino a 0016/0005: nessuna applicazione implicita. Flag attività assente dai binding osservati; nessun nuovo tracking. Nessuna lettura di segreti, dati personali o modifica provider manuale. Snapshot non certifica funzionalità, localizzazione Workers, GO o custodia indipendente; vedere [quadro corrente](cloudflare-current-state.md). Le sezioni datate sotto restano storico.

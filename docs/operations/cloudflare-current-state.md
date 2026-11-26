@@ -1,5 +1,18 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
+**Checkpoint applicativo post-merge, 26/11/2026:** la [PR #1468](https://github.com/gernotfound/logbook/pull/1468)
+ha integrato la separazione del consenso guest/legacy da Firebase statico su
+[`main` `926ccbd3`](https://github.com/gernotfound/logbook/commit/926ccbd3c9ae8d42d1595bee5e445cdf48fa3032),
+v2.731.0. [CI PR](https://github.com/gernotfound/logbook/actions/runs/45896360753),
+[gate main/CodeQL](https://github.com/gernotfound/logbook/actions/runs/45896852214)
+e [Static Assets/smoke](https://github.com/gernotfound/logbook/actions/runs/45897147455)
+sono `success`; deployment frontend `7bd7662f-36ba-4c89-a973-53d4d5b16f62`
+al 100% rilevato direttamente su Cloudflare. Il frontend mantiene tre binding
+(`APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`), **senza `D1_API`**; quattro Worker
+ancora senza cron. I deploy API/Auth Gate/Kinde sono stati saltati, così come
+Firestore Rules/indici. Il codice non abilita account fitness né costituisce
+prova live di consenso/ADK/D1, diritti, browser o GO. [Registro servizi](external-services-register.md).
+
 **Readback più recente per le D1 e i binding (26/11/2026, dopo i dispatch manuali):**
 `main` GitHub [`0b331f26`](https://github.com/gernotfound/logbook/commit/0b331f26b0c8cd204e71910f76445023aa75d755)
 v2.718.0; [migrazione CF-02 #4](https://github.com/gernotfound/logbook/actions/runs/45843978632)
