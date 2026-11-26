@@ -1,5 +1,15 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
+**CF-04 catalogo statico candidato (26/11/2026):** presenti un generatore
+di pacchetti statici versionati con impronte SHA-256 e un adapter di
+download/cache fail-closed con test sintetici. I due seed bundled sono
+intenzionalmente vuoti. Il candidato non è montato in app e non è
+pubblicato su Cloudflare: mancano contenuti/licenze verificati,
+asset reali e prova HTTP sul dominio. Le letture catalogo Firestore
+rimangono confinate al loader cloud legacy. Per staging, contratto
+di integrità e requisiti di attivazione vedere
+[operazioni catalogo](../../.agents/rules/catalog-operations.md).
+
 **Preflight migrazioni isolate (26/11/2026, candidato):** il workflow manuale della D1 applicativa confronta prima/dopo sia i conteggi sia le impronte SHA-256 dei record sintetici esistenti (identità, sessioni, replica, documenti cifrati e ricevute). Le letture sono bounded, i dati non vengono pubblicati nei log e il confronto blocca il gate su alterazioni con conteggi invariati. Le query sono separate, quindi non attestano uno snapshot atomico in presenza di scritture concorrenti. Il workflow non è stato avviato da questo incremento; occorre ancora applicare e verificare le migrazioni remote con il percorso main-only autorizzato.
 
 **Baseline remota verificata il 25 novembre 2026 prima dell'incremento quota CF-06:** `main` v2.706.0, SHA [`328796a4f72915162d084b9d7749e237e2948125`](https://github.com/gernotfound/logbook/commit/328796a4f72915162d084b9d7749e237e2948125), dopo squash [#1443](https://github.com/gernotfound/logbook/pull/1443). La [CI PR](https://github.com/gernotfound/logbook/actions/runs/45711218867) e la [CI post-merge](https://github.com/gernotfound/logbook/actions/runs/45711823585) risultano success sul rispettivo SHA; [Static Assets e smoke](https://github.com/gernotfound/logbook/actions/runs/45712176120) success sullo SHA `main`. I Worker privati API/Kinde hanno saltato il redeploy perché non pertinenti al diff; Firestore ha riconciliato senza ridistribuire Rules/indici. Lettura Cloudflare separata del 25/11: quattro Worker senza schedule, due D1 LogBook con giurisdizione EU, ledger precedentemente attestato 0011 applicativo e 0004 recovery; frontend deployment `b4d5446c-f20c-40af-b9db-c69e55fabd4b` al 100%. Le migrazioni candidate non risultavano applicate durante la lettura del ledger. I dati provider restano uno snapshot datato, non una prova del runtime dello SHA nuovo. Rileggere HEAD e provider prima di ogni nuovo task. Questa mappa distingue codice su [`main`](https://github.com/gernotfound/logbook/tree/main), runtime pubblico, letture Cloudflare e prove funzionali. Non è una certificazione Production e non autorizza GO, billing, cancellazioni, DNS, OAuth Production o modifiche irreversibili. Le versioni e i commit dei singoli interventi sono nelle [issue CF](https://github.com/gernotfound/logbook/issues/1053); rileggere sempre l'HEAD reale.
