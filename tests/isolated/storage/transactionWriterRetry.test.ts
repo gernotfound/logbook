@@ -11,6 +11,12 @@ vi.mock('../../../src/lib/checkDocSize', () => ({
     checkDocSize: harness.checkDocSize
 }));
 
+// The real writer receives a trusted active revision from the consent gate.
+// This suite isolates Firestore retries and ciphertext behavior, not Auth.
+vi.mock('../../../src/lib/healthConsent', () => ({
+    getVerifiedHealthConsentRevision: () => 1,
+}));
+
 vi.mock('firebase/firestore', () => ({
     doc: (_db: unknown, path: string) => ({ path }),
     runTransaction: async (_db: unknown, callback: (tx: any) => Promise<any>) => {
@@ -22,6 +28,7 @@ vi.mock('firebase/firestore', () => ({
                         exists: () => true,
                         data: () => ({
                             protocolVersion: 3,
+                            consentRevision: 1,
                             replicas: {
                                 s00: {
                                     replicaId: 'replica-a',
@@ -133,7 +140,7 @@ describe('transaction writer retry safety', () => {
         // business and causal state as the legacy Firestore transaction.
         const staged = prepareEncryptedDocumentChanges(
             'user-a', ops, new Map([['', harness.remoteDocument]]), {},
-            { slot: 's00', replicaId: 'replica-a', generation: 1, seq: 1 }, key,
+            { slot: 's00', replicaId: 'replica-a', generation: 1, seq: 1, consentRevision: 1 }, key,
         );
         expect(openCloudDocument(key, 'user-a', '', staged.sealedDocuments.get(''))).toEqual(openAttempt(1).opened);
         expect(staged.syncMeta).toEqual(outcome.syncMeta);
