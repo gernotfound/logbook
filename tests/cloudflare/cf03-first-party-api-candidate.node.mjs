@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { routeCandidateFirstPartyApi } from '../../cloudflare/first-party-api-candidate.mjs';
-import { candidateApiRoutePolicy } from '../../cloudflare/api-route-policy.mjs';
+import { CANDIDATE_API_ROUTE_PATHS, candidateApiRoutePolicy } from '../../cloudflare/api-route-policy.mjs';
+import apiWorker from '../../cloudflare/api/worker.mjs';
+import kindeWorker from '../../cloudflare/auth/kinde-http-worker.mjs';
+import { withFixture, makeEnv, origin as privateOrigin } from './cf02-documents-fixture.mjs';
 
 const ORIGIN = 'https://thelogbook.me';
 const CSRF = 'A'.repeat(43);
@@ -59,7 +62,7 @@ void test('private Auth Gate routes cannot acquire a public service binding', as
   const { env, calls } = environment();
   assert.deepEqual(candidateApiRoutePolicy('/v1/auth/logout'), {
     public: false, identityOnly: true, csrfRequired: true,
-    emailVerifiedRequired: false,
+    emailVerifiedRequired: false, maxBodyBytes: 0,
   });
   for (const path of ['/v1/auth/logout', '/v1/auth/logout/other', '/v1/sync/__proto__']) {
     assert.equal((await routeCandidateFirstPartyApi(request(path), env)).status, 404, path);
@@ -144,6 +147,63 @@ void test('rejects oversized, malformed and non-decimal declared request bodies'
     }), env);
     assert.equal(response.status, 413, length);
   }
+  assert.equal(calls.data.length, 0);
+});
+
+void test('gateway enforces independent per-route declared budgets before calling either service', async () => {
+  const { env, calls } = environment();
+  const publicData = CANDIDATE_API_ROUTE_PATHS.filter(path => candidateApiRoutePolicy(path).public);
+  const allowed = [KINDE_START, '/api/auth/session', '/api/auth/logout', ...publicData];
+  for (const path of allowed) {
+    const max = path.startsWith('/api/auth/') ? 0 : candidateApiRoutePolicy(path).maxBodyBytes;
+    assert.ok(Number.isSafeInteger(max) && max >= 0, path);
+    const options = { headers: { 'content-length': String(max + 1) },
+      ...(max === 0 ? {} : { body: '{}' }) };
+    assert.equal((await routeCandidateFirstPartyApi(request(path, options), env)).status, 413, path);
+    assert.equal((await routeCandidateFirstPartyApi(request(path, {
+      headers: { 'content-length': String(max) },
+      ...(max === 0 ? {} : { body: '{}' }),
+    }), env)).status, path.startsWith('/api/auth/') ? 429 : 200, path);
+  }
+  assert.equal(calls.kinde.length, 3);
+  assert.equal(calls.data.length, publicData.length);
+  assert.equal((await routeCandidateFirstPartyApi(new Request(ORIGIN + CALLBACK, {
+    headers: { 'content-length': '1' },
+  }), env)).status, 413);
+  assert.equal(calls.kinde.length, 3);
+});
+
+void test('private handlers reject actual excess bytes with absent or forged Content-Length', () => withFixture(async db => {
+  let reachedApi = 0;
+  const env = { APP_ORIGIN: privateOrigin,
+    D1_API: { async fetch(request) {
+      reachedApi += 1;
+      assert.equal(request.headers.has('content-length'), false);
+      return apiWorker.fetch(request, makeEnv(db));
+    } },
+  };
+  for (const headers of [{}, { 'content-length': '1' }]) {
+    const response = await routeCandidateFirstPartyApi(new Request(privateOrigin + CONTROL, {
+      method: 'POST', headers: {
+        origin: privateOrigin, 'content-type': 'application/json', ...headers,
+      }, body: '{}'.padEnd(129, ' '),
+    }), env);
+    assert.equal(response.status, 413);
+    assert.deepEqual(await response.json(), { error: 'payload-too-large' });
+  }
+  assert.equal(reachedApi, 2);
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts').get().n, 0);
+}));
+
+void test('forged zero-length Kinde POST cannot bypass the private empty-body guard', async () => {
+  const { calls, env } = environment({
+    KINDE_HTTP: { fetch: request => kindeWorker.fetch(request, { APP_ORIGIN: ORIGIN }) },
+  });
+  const response = await routeCandidateFirstPartyApi(request(KINDE_START, {
+    headers: { 'content-length': '0' }, body: '{}',
+  }), env);
+  assert.equal(response.status, 403);
   assert.equal(calls.data.length, 0);
 });
 

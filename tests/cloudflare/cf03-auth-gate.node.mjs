@@ -82,36 +82,36 @@ void test('route policy covers the exact trusted D1 surface with independent aut
   // This fixture is intentionally independent of the production manifest:
   // adding an endpoint requires an explicit review of its exposure and scope.
   const routes = [
-    ['/v1/sync/control', true, false, true],
-    ['/v1/sync/read', true, false, true],
-    ['/v1/sync/scan', true, false, true],
-    ['/v1/sync/receipt', true, false, true],
-    ['/v1/sync/commit', true, true, true],
-    ['/v1/sync/commit/status', true, true, true],
-    ['/v1/sync/replica/claim', true, true, true],
-    ['/v1/sync/replica/retire', true, true, true],
-    ['/v1/sync/replica/status', true, true, true],
-    ['/v1/sync/replica/cancel', true, true, true],
-    ['/v1/cloud-key/sync', true, true, true],
-    ['/v1/consent/status', true, false, false],
-    ['/v1/consent/initial', true, true, true],
-    ['/v1/consent/withdraw', true, true, false],
-    ['/v1/cloud-key/rights-export', true, true, false],
-    ['/v1/rights/scan', true, true, false],
-    ['/v1/account/activity', true, true, false],
-    ['/v1/auth/logout', false, true, false],
+    ['/v1/sync/control', true, false, true, 128],
+    ['/v1/sync/read', true, false, true, 512],
+    ['/v1/sync/scan', true, false, true, 256],
+    ['/v1/sync/receipt', true, false, true, 256],
+    ['/v1/sync/commit', true, true, true, 8 * 950_000 + 8_192],
+    ['/v1/sync/commit/status', true, true, true, 512],
+    ['/v1/sync/replica/claim', true, true, true, 4096],
+    ['/v1/sync/replica/retire', true, true, true, 4096],
+    ['/v1/sync/replica/status', true, true, true, 4096],
+    ['/v1/sync/replica/cancel', true, true, true, 4096],
+    ['/v1/cloud-key/sync', true, true, true, 0],
+    ['/v1/consent/status', true, false, false, 0],
+    ['/v1/consent/initial', true, true, true, 2048],
+    ['/v1/consent/withdraw', true, true, false, 2048],
+    ['/v1/cloud-key/rights-export', true, true, false, 0],
+    ['/v1/rights/scan', true, true, false, 256],
+    ['/v1/account/activity', true, true, false, 128],
+    ['/v1/auth/logout', false, true, false, 0],
   ];
   assert.deepEqual([...CANDIDATE_API_ROUTE_PATHS].sort(), routes.map(row => row[0]).sort());
   const { sqlite, env } = await fixture();
   try {
-    for (const [route, publicRoute, csrfRequired, emailVerifiedRequired] of routes) {
+    for (const [route, publicRoute, csrfRequired, emailVerifiedRequired, maxBodyBytes] of routes) {
       const policy = candidateApiRoutePolicy(route);
       assert.deepEqual(policy, { public: publicRoute,
         identityOnly: !route.startsWith('/v1/sync/') && route !== '/v1/cloud-key/sync',
-        csrfRequired, emailVerifiedRequired }, route);
+        csrfRequired, emailVerifiedRequired, maxBodyBytes }, route);
       if (route.startsWith('/v1/sync/') || route === '/v1/account/activity'
         || route === '/v1/rights/scan') {
-        assert.equal(BODY_LIMIT_BYTES.has(route), true, `private body cap missing: ${route}`);
+        assert.equal(BODY_LIMIT_BYTES.get(route), maxBodyBytes, `private body cap missing: ${route}`);
       }
       assert.equal((await status(env, { route, csrfValue: csrf })).status, 200, route);
       assert.equal((await status(env, { route })).status,

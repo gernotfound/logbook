@@ -1,5 +1,31 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
+**Checkpoint CF-07, 26/11/2026 — contratto HTTP candidato:** i limiti
+di lunghezza dichiarata sono ora per-route nella policy pura condivisa:
+gateway, API replica e consenso leggono lo stesso budget, senza importare
+Zod nel frontend. Le route che richiedono un body vuoto hanno budget
+zero; il batch cifrato mantiene il limite per otto documenti. I Worker
+privati continuano a verificare i byte effettivi dello stream, perché
+`Content-Length` può essere assente o falso. I test sintetici attraversano
+anche gateway → API con contenuto oltre soglia e gateway → Kinde con
+finta lunghezza zero. Questo contratto **non pubblica** le route D1,
+non attiva consenso/fitness e non misura quote CPU o righe fatturate.
+
+**Ultima baseline remota verificata prima dell'incremento, 26/11/2026:**
+`main` v2.714.0, SHA [`6381fd22`](https://github.com/gernotfound/logbook/commit/6381fd2259ccd4a3689cc2bfd76655eb3332f46a),
+dopo [#1451](https://github.com/gernotfound/logbook/pull/1451). La
+[CI PR](https://github.com/gernotfound/logbook/actions/runs/45787798154),
+il [gate main e CodeQL](https://github.com/gernotfound/logbook/actions/runs/45788299872),
+il [deploy API/AuthGate](https://github.com/gernotfound/logbook/actions/runs/45788693084)
+e lo [Static Assets/smoke](https://github.com/gernotfound/logbook/actions/runs/45788693340)
+sono riusciti. Kinde e Firestore hanno riconciliato senza redeploy del
+Worker Kinde né delle Rules. GET Cloudflare 26/11: frontend solo
+`APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`, nessun `D1_API`; quattro Worker
+con zero cron; KEK API rilevata solo come binding `secret_text`. Nessuna
+lettura del suo valore, migrazione D1 remota o prova fitness reale.
+La CI e i deployment del successivo incremento vanno verificati sullo
+SHA effettivamente integrato, non dedotti da questo checkpoint.
+
 **CF-04 catalogo statico candidato (26/11/2026):** presenti un generatore
 di pacchetti statici versionati con impronte SHA-256 e un adapter di
 download/cache fail-closed con test sintetici. I due seed bundled sono

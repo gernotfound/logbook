@@ -1,26 +1,22 @@
 import { z } from 'zod';
+import { MAX_CANDIDATE_DOCUMENT_BYTES, candidateApiRoutePolicy } from '../api-route-policy.mjs';
 
-const MAX_DOCUMENT_BYTES = 950000;
-// One causal batch can legitimately contain eight separately encrypted docs.
-// The transport body cap must not be smaller than its own eight-document contract.
-const MAX_BODY_BYTES = 8 * MAX_DOCUMENT_BYTES + 8192;
-// Small control/receipt/membership requests must not inherit the multi-document
-// commit budget: parsing megabytes of otherwise valid JSON wastes Workers CPU.
-// These ceilings include JSON whitespace and are above the strict schemas' maxima.
-const BODY_LIMIT_BYTES = new Map([
-  ['/v1/account/activity', 128],
-  ['/v1/sync/control', 128],
-  ['/v1/sync/read', 512],
-  ['/v1/sync/scan', 256],
-  ['/v1/rights/scan', 256],
-  ['/v1/sync/receipt', 256],
-  ['/v1/sync/replica/claim', 4096],
-  ['/v1/sync/replica/retire', 4096],
-  ['/v1/sync/replica/status', 4096],
-  ['/v1/sync/replica/cancel', 4096],
-  ['/v1/sync/commit', MAX_BODY_BYTES],
-  ['/v1/sync/commit/status', 512],
-]);
+const MAX_DOCUMENT_BYTES = MAX_CANDIDATE_DOCUMENT_BYTES;
+// Handler ownership is separate from route exposure and body budgets. The
+// public manifest cannot silently route a specialized consent/key endpoint
+// into the replica handler's catch-all commit branch.
+const REPLICA_HANDLER_ROUTES = [
+  '/v1/account/activity', '/v1/sync/control', '/v1/sync/read',
+  '/v1/sync/scan', '/v1/rights/scan', '/v1/sync/receipt',
+  '/v1/sync/replica/claim', '/v1/sync/replica/retire',
+  '/v1/sync/replica/status', '/v1/sync/replica/cancel',
+  '/v1/sync/commit', '/v1/sync/commit/status',
+];
+const BODY_LIMIT_BYTES = new Map(REPLICA_HANDLER_ROUTES.map(path => {
+  const bytes = candidateApiRoutePolicy(path)?.maxBodyBytes;
+  if (!Number.isSafeInteger(bytes) || bytes < 1) throw new TypeError('unbounded-replica-route');
+  return [path, bytes];
+}));
 const SLOT = /^s(?:0[0-9]|1[0-5])$/;
 const PATH = /^(?:(?:history_months|nutrition_months)\/[0-9]{4}-(?:0[1-9]|1[0-2]))?$/;
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
