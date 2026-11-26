@@ -2,19 +2,13 @@
 // must be deliberately enabled in the frontend Worker configuration after GO.
 // Never fall back to Static Assets for recognized API paths.
 import { edgeOAuthRateBucket, OAUTH_RATE_BUCKET_HEADER } from './auth/oauth-rate-bucket.mjs';
+import { candidateApiRoutePolicy } from './api-route-policy.mjs';
 
 const KINDE_ROUTES = new Map([
   ['/api/auth/kinde/start', 'POST'],
   ['/api/auth/kinde/callback', 'GET'],
   ['/api/auth/session', 'POST'],
   ['/api/auth/logout', 'POST'],
-]);
-const DATA_ROUTES = new Set([
-  '/v1/consent/status', '/v1/consent/initial', '/v1/consent/withdraw', '/v1/account/activity',
-  '/v1/cloud-key/sync', '/v1/cloud-key/rights-export', '/v1/rights/scan',
-  '/v1/sync/control', '/v1/sync/read', '/v1/sync/scan',
-  '/v1/sync/receipt', '/v1/sync/commit', '/v1/sync/commit/status',
-  '/v1/sync/replica/claim', '/v1/sync/replica/retire', '/v1/sync/replica/status', '/v1/sync/replica/cancel',
 ]);
 // Match the existing eight-document API cap. The private Worker also enforces
 // streaming body limits, including when Content-Length is missing or forged.
@@ -45,7 +39,7 @@ function configuredOrigin(env) {
 
 function permittedRoute(path) {
   if (KINDE_ROUTES.has(path)) return { binding: 'KINDE_HTTP', method: KINDE_ROUTES.get(path) };
-  if (DATA_ROUTES.has(path)) return { binding: 'D1_API', method: 'POST' };
+  if (candidateApiRoutePolicy(path)?.public === true) return { binding: 'D1_API', method: 'POST' };
   return null;
 }
 

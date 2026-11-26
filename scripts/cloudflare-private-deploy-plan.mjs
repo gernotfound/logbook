@@ -13,6 +13,7 @@ const privateWorkflows = {
   '.github/workflows/cloudflare-api-isolated.yml': {
     job: 'Deploy and verify private Auth Gate + D1 API',
     paths: [
+      'cloudflare/api-route-policy.mjs',
       'cloudflare/api/**',
       'cloudflare/auth/**',
       'cloudflare/recovery/**',
@@ -33,6 +34,7 @@ const privateWorkflows = {
     job: 'Compile, deploy and attest Kinde HTTP Worker without public route',
     paths: [
       '.github/workflows/cloudflare-kinde-private.yml',
+      'cloudflare/api-route-policy.mjs',
       'cloudflare/auth/**',
       'cloudflare/sql/**',
       'cloudflare/api/logout-worker.mjs',

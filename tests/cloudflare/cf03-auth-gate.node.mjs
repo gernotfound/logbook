@@ -3,6 +3,8 @@ import { applyCurrentD1Schema } from './current-d1-schema.mjs';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import gate, { hashSessionSecret } from '../../cloudflare/auth/session-gate.mjs';
+import { CANDIDATE_API_ROUTE_PATHS, candidateApiRoutePolicy } from '../../cloudflare/api-route-policy.mjs';
+import { BODY_LIMIT_BYTES } from '../../cloudflare/api/replica-contracts.mjs';
 
 const ORIGIN = 'https://app.example.invalid';
 const token = Buffer.alloc(32, 7).toString('base64url');
@@ -75,6 +77,76 @@ function makeRequest({ route = '/v1/sync/control', cookie = token, csrfValue, or
 async function status(env, props = {}) {
   return gate.fetch(makeRequest(props), env);
 }
+
+void test('route policy covers the exact trusted D1 surface with independent authorization expectations', async () => {
+  // This fixture is intentionally independent of the production manifest:
+  // adding an endpoint requires an explicit review of its exposure and scope.
+  const routes = [
+    ['/v1/sync/control', true, false, true],
+    ['/v1/sync/read', true, false, true],
+    ['/v1/sync/scan', true, false, true],
+    ['/v1/sync/receipt', true, false, true],
+    ['/v1/sync/commit', true, true, true],
+    ['/v1/sync/commit/status', true, true, true],
+    ['/v1/sync/replica/claim', true, true, true],
+    ['/v1/sync/replica/retire', true, true, true],
+    ['/v1/sync/replica/status', true, true, true],
+    ['/v1/sync/replica/cancel', true, true, true],
+    ['/v1/cloud-key/sync', true, true, true],
+    ['/v1/consent/status', true, false, false],
+    ['/v1/consent/initial', true, true, true],
+    ['/v1/consent/withdraw', true, true, false],
+    ['/v1/cloud-key/rights-export', true, true, false],
+    ['/v1/rights/scan', true, true, false],
+    ['/v1/account/activity', true, true, false],
+    ['/v1/auth/logout', false, true, false],
+  ];
+  assert.deepEqual([...CANDIDATE_API_ROUTE_PATHS].sort(), routes.map(row => row[0]).sort());
+  const { sqlite, env } = await fixture();
+  try {
+    for (const [route, publicRoute, csrfRequired, emailVerifiedRequired] of routes) {
+      const policy = candidateApiRoutePolicy(route);
+      assert.deepEqual(policy, { public: publicRoute,
+        identityOnly: !route.startsWith('/v1/sync/') && route !== '/v1/cloud-key/sync',
+        csrfRequired, emailVerifiedRequired }, route);
+      if (route.startsWith('/v1/sync/') || route === '/v1/account/activity'
+        || route === '/v1/rights/scan') {
+        assert.equal(BODY_LIMIT_BYTES.has(route), true, `private body cap missing: ${route}`);
+      }
+      assert.equal((await status(env, { route, csrfValue: csrf })).status, 200, route);
+      assert.equal((await status(env, { route })).status,
+        csrfRequired ? 403 : 200, `CSRF contract: ${route}`);
+    }
+    for (const unknown of ['/v1/auth/admin', '/v1/sync/read/extra', '__proto__', 'constructor', '']) {
+      assert.equal(candidateApiRoutePolicy(unknown), null, unknown);
+      assert.equal((await status(env, { route: unknown, csrfValue: csrf })).status, 403, unknown);
+    }
+  } finally { sqlite.close(); }
+});
+
+void test('unverified identity keeps only approved rights and lifecycle routes, never fitness or initial consent', async () => {
+  const { sqlite, env } = await fixture();
+  try {
+    const newToken = Buffer.alloc(32, 75).toString('base64url');
+    const newCsrf = Buffer.alloc(32, 76).toString('base64url');
+    const now = Date.now();
+    sqlite.exec("UPDATE auth_principals SET verified_at_ms = NULL, auth_epoch = 2 WHERE uid = 'account-a'");
+    sqlite.prepare(`INSERT INTO auth_sessions
+      (token_hash,uid,auth_epoch,csrf_hash,issued_at_ms,idle_expires_at_ms,absolute_expires_at_ms)
+      VALUES (?,?,?,?,?,?,?)`).run(
+      await hashSessionSecret(newToken), 'account-a', 2, await hashSessionSecret(newCsrf),
+      now - 1000, now + 60000, now + 3600000,
+    );
+    env.API_RATE_LIMITER = { limit: async () => ({ success: true }) };
+    const identityAllowed = new Set(['/v1/consent/status', '/v1/consent/withdraw',
+      '/v1/cloud-key/rights-export', '/v1/rights/scan', '/v1/account/activity',
+      '/v1/auth/logout']);
+    for (const route of CANDIDATE_API_ROUTE_PATHS) {
+      const response = await status(env, { route, cookie: newToken, csrfValue: newCsrf });
+      assert.equal(response.status, identityAllowed.has(route) ? 200 : 401, route);
+    }
+  } finally { sqlite.close(); }
+});
 
 void test('valid verified account with current consent receives scoped claims; read needs no CSRF', async () => {
   const { sqlite, env, metrics } = await fixture();

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { routeCandidateFirstPartyApi } from '../../cloudflare/first-party-api-candidate.mjs';
+import { candidateApiRoutePolicy } from '../../cloudflare/api-route-policy.mjs';
 
 const ORIGIN = 'https://thelogbook.me';
 const CSRF = 'A'.repeat(43);
@@ -52,6 +53,18 @@ void test('candidate gateway is not a generic proxy or an SPA fallback', async (
   }
   assert.equal(calls.kinde.length, 0);
   assert.equal(calls.data.length, 0);
+});
+
+void test('private Auth Gate routes cannot acquire a public service binding', async () => {
+  const { env, calls } = environment();
+  assert.deepEqual(candidateApiRoutePolicy('/v1/auth/logout'), {
+    public: false, identityOnly: true, csrfRequired: true,
+    emailVerifiedRequired: false,
+  });
+  for (const path of ['/v1/auth/logout', '/v1/auth/logout/other', '/v1/sync/__proto__']) {
+    assert.equal((await routeCandidateFirstPartyApi(request(path), env)).status, 404, path);
+  }
+  assert.equal(calls.kinde.length + calls.data.length, 0);
 });
 
 void test('routes only explicitly named POST endpoints to private service bindings', async () => {

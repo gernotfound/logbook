@@ -119,6 +119,7 @@ void test('private main-only deployments cover every local module in their stati
   // A missing trigger for a transitive dependency must fail this test even
   // when the entrypoint itself remains covered by its own workflow path.
   for (const [pattern, source] of [
+    ['cloudflare/api-route-policy.mjs', 'cloudflare/api-route-policy.mjs'],
     ['cloudflare/recovery/**', 'cloudflare/recovery/runtime-sync-fence.mjs'],
     ['cloudflare/sql/**', 'cloudflare/sql/d1-time.mjs'],
     ['cloudflare/jobs/kinde-erasure-intent.mjs', 'cloudflare/jobs/kinde-erasure-intent.mjs'],
@@ -129,6 +130,9 @@ void test('private main-only deployments cover every local module in their stati
     assert.ok(missingPrivateSources(apiPaths.filter(path => path !== pattern), apiSources).includes(source));
   }
   assert.ok(kindeSources.includes('cloudflare/http/strict-empty-post.mjs'));
+  assert.ok(kindeSources.includes('cloudflare/api-route-policy.mjs'));
+  assert.ok(missingPrivateSources(kindePaths.filter(path => path !== 'cloudflare/api-route-policy.mjs'),
+    kindeSources).includes('cloudflare/api-route-policy.mjs'));
   assert.ok(missingPrivateSources(
     kindePaths.filter(path => path !== 'cloudflare/http/**'), kindeSources,
   ).includes('cloudflare/http/strict-empty-post.mjs'));
@@ -157,6 +161,7 @@ void test('version-only releases skip private redeploy, but dependency or import
     previousPackage, currentPackage, previousLock, currentLock };
   assert.equal(mustDeployPrivateWorker(base), false);
   for (const file of ['cloudflare/api/worker.mjs', 'cloudflare/recovery/runtime-sync-fence.mjs',
+    'cloudflare/api-route-policy.mjs',
     'cloudflare/jobs/kinde-erasure-intent.mjs', 'cloudflare/jobs/kinde-inactivity-time.mjs',
     'scripts/verify-cloudflare-api-provider.mjs']) {
     assert.equal(mustDeployPrivateWorker({ ...base, changed: [...base.changed, file] }), true);
