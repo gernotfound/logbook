@@ -2,6 +2,37 @@
 
 **Stato di riferimento:** per l'ultimo readback Cloudflare consultare [quadro operativo](cloudflare-current-state.md). I valori sotto sono checkpoint datati, non una fotografia aggiornata automaticamente del provider.
 
+## Backup device disaccoppiato e rilascio frontend · 26 novembre 2026
+
+La [PR #1470](https://github.com/gernotfound/logbook/pull/1470) ha integrato
+il nuovo confine backup locale/Firestore su [`main` `2f83df6b`](https://github.com/gernotfound/logbook/commit/2f83df6b69e62fda361c8a4c2353acc5e1ab1f92),
+v2.733.0: tree identico al candidato `97c34be4`, da base `913731ec`.
+[CI PR con Canonical, CodeQL ed E2E Chromium/Safari](https://github.com/gernotfound/logbook/actions/runs/45903802688),
+[Main Release Gate e CodeQL](https://github.com/gernotfound/logbook/actions/runs/45904225106)
+e [Static Assets con smoke HTTP byte-esatto](https://github.com/gernotfound/logbook/actions/runs/45904526451)
+sono **success** sui rispettivi SHA.
+
+Readback diretto Cloudflare dopo il deploy: `thelogbook-frontend` deployment
+`56ee8f04-8744-4a81-8893-68884061fb38`, versione
+`2305567f-207c-4aff-a524-e803270c152c` al **100%**. Solo binding
+`APP_ORIGIN` (`plain_text`), `ASSETS` (`assets`) e `KINDE_HTTP` (`service`):
+**nessun `D1_API`**. Quattro Worker con zero schedule; D1 applicativa e
+registro recovery isolati entrambi con `jurisdiction=eu` verificata, senza
+inferire la localizzazione degli altri trattamenti. I workflow
+[API/Auth Gate](https://github.com/gernotfound/logbook/actions/runs/45904526487),
+[Kinde HTTP](https://github.com/gernotfound/logbook/actions/runs/45904526507) e
+[Firestore](https://github.com/gernotfound/logbook/actions/runs/45904526515)
+sono `success`, ma **hanno saltato i deploy** di Worker privati e Rules/indici.
+Nessuna operazione manuale su segreti, D1, identità, dati reali o DNS.
+
+Il backup `includeCloud=false` usa soltanto archivio device, inventario stabile
+dei witness e session fence, senza importare Firebase. L'export account legacy
+carica on-demand il reader Firestore, con controllo dell'epoch anche attraverso
+il caricamento asincrono. Restano import Firebase in Impostazioni/sospensione e
+non è stata dimostrata l'assenza di SDK/rete nell'intera UX guest. Il frontend
+rimane **identity-only/guest locale**, non è un GO per fitness Kinde/D1,
+consenso trusted, ADK, sync, diritti, erasure o migrazione di dati.
+
 ## Readback Cloudflare e rilascio Static Assets · 26 novembre 2026
 
 La [PR #1468](https://github.com/gernotfound/logbook/pull/1468), v2.731.0,

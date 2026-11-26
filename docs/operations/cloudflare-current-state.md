@@ -1,5 +1,23 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
+**Checkpoint del più recente incremento funzionale verificato, 26/11/2026:**
+[PR #1470](https://github.com/gernotfound/logbook/pull/1470) integrata nello
+SHA [`2f83df6b`](https://github.com/gernotfound/logbook/commit/2f83df6b69e62fda361c8a4c2353acc5e1ab1f92),
+v2.733.0; [CI PR](https://github.com/gernotfound/logbook/actions/runs/45903802688),
+[Main Release Gate/CodeQL](https://github.com/gernotfound/logbook/actions/runs/45904225106)
+e [Static Assets/smoke byte-esatto](https://github.com/gernotfound/logbook/actions/runs/45904526451)
+`success` sui rispettivi SHA. Readback Cloudflare frontend: deployment
+`56ee8f04-8744-4a81-8893-68884061fb38`, versione
+`2305567f-207c-4aff-a524-e803270c152c` al 100%, binding
+`APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`, **non `D1_API`**. Quattro Worker senza
+cron; le due D1 isolate hanno `jurisdiction=eu`. Workflow API/Auth Gate/Kinde
+e Firestore `success`, ma passi di deploy privati/Rules saltati. Il nuovo
+backup device non importa Firebase; l'export cloud legacy è caricato su richiesta
+con guard di sessione/epoch. Altri import Firebase in Impostazioni e sospensione,
+e la verifica runtime completa guest/fitness Kinde restano **aperte**.
+Nessuna attivazione API/D1 pubblica, dati reali, cutover o GO.
+[Registro servizi](external-services-register.md).
+
 **Checkpoint applicativo post-merge, 26/11/2026:** la [PR #1468](https://github.com/gernotfound/logbook/pull/1468)
 ha integrato la separazione del consenso guest/legacy da Firebase statico su
 [`main` `926ccbd3`](https://github.com/gernotfound/logbook/commit/926ccbd3c9ae8d42d1595bee5e445cdf48fa3032),
