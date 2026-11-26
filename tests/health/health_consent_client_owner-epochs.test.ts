@@ -8,6 +8,7 @@ import { invalidateSession } from '../../src/lib/sync/session';
 import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
 import { user, key, accepted, trustedConsentResponse } from './healthConsentClientFixture';
+import { installLegacyHealthConsentIdentity } from '../../src/lib/healthConsentLegacyIdentity';
 
 // Exercise the actual consent policy while isolating only external Firebase/App Check adapters.
 vi.unmock('../../src/lib/healthConsent');
@@ -16,8 +17,9 @@ vi.mock('../../src/lib/appCheck', () => ({ getLimitedUseAppCheckToken: vi.fn(asy
 
 import { beginHealthConsentVerification, currentHealthConsentStatus, isHealthConsentWritable, isHealthConsentCloudWritable, reacceptHealthConsent, refreshHealthConsent, withdrawHealthConsent, retainNewerHealthConsent, reconfirmStaleHealthWithdrawal } from '../../src/lib/healthConsent';
 
-beforeEach(() => { lockAllVaults(); localStorage.clear(); vi.unstubAllGlobals(); (auth as { currentUser: unknown }).currentUser = null; });
-afterEach(() => lockAllVaults());
+let disposeIdentity: () => void;
+beforeEach(() => { lockAllVaults(); localStorage.clear(); vi.unstubAllGlobals(); (auth as { currentUser: unknown }).currentUser = null; disposeIdentity = installLegacyHealthConsentIdentity(() => auth.currentUser); });
+afterEach(() => { disposeIdentity(); lockAllVaults(); });
 
 describe('consent responses across authenticated owner changes', () => {
   it('does not publish an old trusted response for account A after login to B', async () => {
@@ -60,6 +62,23 @@ describe('consent responses across authenticated owner changes', () => {
 });
 
 describe('withdrawal remains bound to the verified Auth generation', () => {
+  it('does not transfer a verified local grant to a different User instance with the same UID', async () => {
+    const uid = 'new-user-instance-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    await createAndMigrateVault('user:' + uid);
+    vi.stubGlobal('fetch', vi.fn(async () => trustedConsentResponse({ status: 'active', revision: 1 })));
+    beginHealthConsentVerification(uid);
+    expect(await refreshHealthConsent(actor)).toBe('active');
+    expect(isHealthConsentWritable('user:' + uid)).toBe(true);
+
+    (auth as { currentUser: unknown }).currentUser = user(uid);
+    expect(isHealthConsentWritable('user:' + uid)).toBe(false);
+    expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+    await expect(withdrawHealthConsent(actor)).rejects.toThrow('Sessione cambiata');
+    expect(localStorage.getItem(key(uid))).toBeNull();
+  });
+
   it('does not persist a revocation for an old account after a switch to another UID', async () => {
     const uid = 'withdraw-stale-owner-' + crypto.randomUUID();
     const actor = user(uid);

@@ -2,15 +2,27 @@ import type { User } from 'firebase/auth';
 import {
   ConsentTransportUnavailableError,
   isRetryableConsentTransportError,
-  requestFirebaseHealthConsent as serverRequest,
   type ServerStatus,
-} from './healthConsentFirebaseTransport';
+} from './healthConsentTransportContract';
 import type { UserData } from '../types';
 import { LEGAL_VERSIONS } from './legalVersions';
-import { auth } from './firebase';
+import { legacyHealthConsentUserStamp, readLegacyHealthConsentUser } from './healthConsentLegacyIdentity';
 import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from './sync/browserStorage';
 import { captureSessionForOwner, isActiveGuestSession, userOwner } from './sync/session';
 import { getGuestHealthConsentStatus as readGuestHealthConsentStatus, markGuestHealthConsentWithdrawn } from './guestHealthConsent';
+
+async function serverRequest(user: User, method: 'GET' | 'POST', body?: unknown): Promise<ServerStatus> {
+  const owner = userOwner(user.uid);
+  const startingEpoch = captureSessionForOwner(owner).epoch;
+  if (readLegacyHealthConsentUser() !== user) throw new Error('Sessione cambiata.');
+  const { requestFirebaseHealthConsent } = await import('./healthConsentFirebaseTransport');
+  // Dynamic import is itself an async boundary. A→B→A before the transport
+  // starts must not make a stale consent mutation current again.
+  if (readLegacyHealthConsentUser() !== user || captureSessionForOwner(owner).epoch !== startingEpoch) {
+    throw new Error('Sessione cambiata.');
+  }
+  return requestFirebaseHealthConsent(user, method, body);
+}
 
 export type HealthConsentStatus = 'unregistered' | 'checking' | 'active' | 'withdrawn' | 'pending' | 'reaccepting' | 'recovery-required' | 'erasure-required' | 'stale-request' | 'error';
 const entries = new Map<string, HealthConsentStatus>();
@@ -18,6 +30,7 @@ const listeners = new Set<() => void>();
 const verifiedReacceptance = new Map<string, string>();
 const serverConfirmedLegal = new Map<string, NonNullable<UserData['legalConsent']>>();
 const verifiedRevisions = new Map<string, number>();
+const verifiedUserStamps = new Map<string, number>();
 // A UID alone is not a consent proof across Auth epochs, including A→B→A.
 const verifiedSessionEpochs = new Map<string, number>();
 // Offline access is local-only: a cached server approval must never authorize cloud I/O.
@@ -63,6 +76,7 @@ function notify() { for (const listener of listeners) listener(); }
 export function beginHealthConsentVerification(uid: string): void {
   invalidateConsentChecks(uid);
   verifiedRevisions.delete(uid);
+  verifiedUserStamps.delete(uid);
   verifiedSessionEpochs.delete(uid);
   onlineVerifiedRevisions.delete(uid);
   confirmedServerWithdrawals.delete(uid);
@@ -127,17 +141,16 @@ export function isHealthConsentWritable(owner: string): boolean {
   const uid = owner.slice(5);
   // A still-mounted editor for account A cannot write to A after login to B,
   // even if A's previously verified revision remains in this module's cache.
-  if (auth?.currentUser && auth.currentUser.uid !== uid) return false;
   if (currentHealthConsentStatus(uid) !== 'active') return false;
   // An Auth epoch replacement invalidates the approval even when the UID
   // and persisted consent revision remain unchanged.
   try {
+    const currentUser = readLegacyHealthConsentUser();
+    if (currentUser?.uid !== uid || verifiedUserStamps.get(uid) !== legacyHealthConsentUserStamp(currentUser)) return false;
     const persisted = readBrowserValueStrict(generationMarker(uid));
     const verified = verifiedRevisions.get(uid) ?? 0;
-    if (auth?.currentUser?.uid === uid && (verified < 1
-      || verifiedSessionEpochs.get(uid) !== captureSessionForOwner(owner).epoch)) return false;
-    // Node-only pure sync tests have no Firebase currentUser and use rev 0 fixtures.
-    return verified === 0 ? auth?.currentUser?.uid !== uid && persisted === null : persisted === String(verified);
+    if (verified < 1 || verifiedSessionEpochs.get(uid) !== captureSessionForOwner(owner).epoch) return false;
+    return persisted === String(verified);
   } catch { return false; }
 }
 /** Cloud operations require a fresh server check in THIS online session. */
@@ -145,7 +158,8 @@ export function isHealthConsentCloudWritable(owner: string): boolean {
   if (!isHealthConsentWritable(owner)) return false;
   if (!owner.startsWith('user:')) return owner !== 'guest';
   const uid = owner.slice(5);
-  if (auth?.currentUser?.uid !== uid || (typeof navigator !== 'undefined' && navigator.onLine === false)) return false;
+  try { if (readLegacyHealthConsentUser()?.uid !== uid) return false; } catch { return false; }
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
   // An explicit withdrawal fences cloud operations until a fresh trusted
   // acceptance; offline consent reactivation no longer exists.
   try { if (readMarker(uid) !== null) return false; } catch { return false; }
@@ -170,7 +184,7 @@ export function suspendHealthConsentCloudAccess(uid: string): void {
 }
 
 export function getVerifiedHealthConsentRevision(uid: string): number {
-  if (currentHealthConsentStatus(uid) !== 'active' || (auth?.currentUser?.uid === uid && !isHealthConsentCloudWritable('user:' + uid))) {
+  if (currentHealthConsentStatus(uid) !== 'active' || !isHealthConsentCloudWritable('user:' + uid)) {
     throw new Error('Consenso non verificato per questa sessione.');
   }
   return verifiedRevisions.get(uid) ?? 0;
@@ -188,11 +202,11 @@ export function requireHealthConsentWritable(owner: string): void {
 export async function registerInitialHealthConsent(user: User, acceptance: {
   acceptedTerms: true; acceptedHealthData: true; privacyVersion: string; termsVersion: string;
 }): Promise<string> {
-  if (auth.currentUser?.uid !== user.uid || currentHealthConsentStatus(user.uid) !== 'unregistered') {
+  if (readLegacyHealthConsentUser() !== user || currentHealthConsentStatus(user.uid) !== 'unregistered') {
     throw new Error('Sessione cambiata o primo consenso non richiesto.');
   }
   const accepted = await serverRequest(user, 'POST', { action: 'accept-initial', acceptance, expectedRevision: 0 });
-  if (auth.currentUser?.uid !== user.uid) throw new Error('Sessione cambiata durante la registrazione.');
+  if (readLegacyHealthConsentUser() !== user) throw new Error('Sessione cambiata durante la registrazione.');
   if (accepted.status !== 'active' || accepted.revision !== 1 || typeof accepted.acceptedAt !== 'string') {
     throw new Error('Primo consenso non confermato dal server.');
   }
@@ -234,8 +248,7 @@ async function boundedConsentRead(user: User): Promise<ServerStatus> {
 
 export async function refreshHealthConsent(user: User): Promise<HealthConsentStatus> {
   const uid = user.uid;
-  const startingAuthUid = auth.currentUser?.uid ?? null;
-  if (startingAuthUid !== null && startingAuthUid !== uid) return currentHealthConsentStatus(uid);
+  if (readLegacyHealthConsentUser() !== user) return currentHealthConsentStatus(uid);
   // A different login to the SAME UID is still a different authorization
   // generation. A delayed GET must never publish consent into that session.
   const startingSessionEpoch = captureSessionForOwner(userOwner(uid)).epoch;
@@ -252,7 +265,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
   let observedGeneration = readBrowserValueStrict(generationMarker(uid));
   const serial = invalidateConsentChecks(uid);
   const isSameDecision = () => verificationSerials.get(uid) === serial
-    && (auth.currentUser?.uid ?? null) === startingAuthUid
+    && readLegacyHealthConsentUser() === user
     && captureSessionForOwner(userOwner(uid)).epoch === startingSessionEpoch
     && readMarker(uid) === saved
     && readBrowserValueStrict(generationMarker(uid)) === observedGeneration;
@@ -260,6 +273,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
     const cached = saved === null ? readCachedActiveRevision(uid) : null;
     if (cached === null || !isSameDecision()) return false;
     verifiedRevisions.set(uid, cached);
+    verifiedUserStamps.set(uid, legacyHealthConsentUserStamp(user));
     verifiedSessionEpochs.set(uid, startingSessionEpoch);
     setStatus(uid, 'active');
     return true;
@@ -274,6 +288,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
     && isHealthConsentWritable('user:' + uid);
   if (!locallyVerified) {
     verifiedRevisions.delete(uid);
+    verifiedUserStamps.delete(uid);
     verifiedSessionEpochs.delete(uid);
   }
   onlineVerifiedRevisions.delete(uid);
@@ -300,6 +315,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
       // A missing server record never authorizes cloud access or restores
       // an unsent local withdrawal by accident.
       verifiedRevisions.delete(uid);
+      verifiedUserStamps.delete(uid);
       verifiedSessionEpochs.delete(uid);
       onlineVerifiedRevisions.delete(uid);
       serverConfirmedLegal.delete(uid);
@@ -359,6 +375,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
       if (!isSameDecision()) return currentHealthConsentStatus(uid);
       if (ready === 'erased') {
         verifiedRevisions.delete(uid);
+        verifiedUserStamps.delete(uid);
         verifiedSessionEpochs.delete(uid);
         onlineVerifiedRevisions.delete(uid);
         serverConfirmedLegal.delete(uid);
@@ -375,6 +392,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
     writeBrowserValue(lastActiveMarker(uid), String(state.revision));
     if (!isSameDecision()) return currentHealthConsentStatus(uid);
     verifiedRevisions.set(uid, state.revision);
+    verifiedUserStamps.set(uid, legacyHealthConsentUserStamp(user));
     verifiedSessionEpochs.set(uid, startingSessionEpoch);
     onlineVerifiedRevisions.set(uid, state.revision);
     if (state.privacyVersion === LEGAL_VERSIONS.privacy
@@ -406,7 +424,7 @@ export async function withdrawHealthConsent(user: User, freezeWriters?: () => vo
   const uid = user.uid;
   // A stale settings callback must not leave a durable withdrawal that the
   // next login could replay as a newly confirmed destructive choice.
-  if (auth.currentUser !== user) throw new Error('Sessione cambiata.');
+  if (readLegacyHealthConsentUser() !== user) throw new Error('Sessione cambiata.');
   const verified = verifiedRevisions.get(uid);
   if (verified === undefined || verifiedSessionEpochs.get(uid) !== captureSessionForOwner(userOwner(uid)).epoch
     || !isHealthConsentWritable(userOwner(uid))) {
@@ -440,13 +458,12 @@ export async function withdrawHealthConsent(user: User, freezeWriters?: () => vo
  */
 export async function retainNewerHealthConsent(user: User): Promise<HealthConsentStatus> {
   const uid = user.uid;
-  const startingAuthUid = auth.currentUser?.uid ?? null;
-  if (startingAuthUid !== null && startingAuthUid !== uid) throw new Error('Sessione cambiata.');
+  if (readLegacyHealthConsentUser() !== user) throw new Error('Sessione cambiata.');
   if (currentHealthConsentStatus(uid) !== 'stale-request') throw new Error('Nessuna scelta recente da confermare.');
   const saved = readMarker(uid);
   const startingSessionEpoch = captureSessionForOwner(userOwner(uid)).epoch;
   // The same UID after A→B→A is not the session that began this decision.
-  const sameAuth = () => (auth.currentUser?.uid ?? null) === startingAuthUid
+  const sameAuth = () => readLegacyHealthConsentUser() === user
     && captureSessionForOwner(userOwner(uid)).epoch === startingSessionEpoch;
   const originalRevision = parsePendingRevision(saved);
   if (originalRevision === null && saved !== 'withdrawn') throw new Error('Richiesta precedente non riconosciuta.');
@@ -475,6 +492,7 @@ export async function retainNewerHealthConsent(user: User): Promise<HealthConsen
   removeBrowserValue(marker(uid));
   if (ready === 'erased') {
     verifiedRevisions.delete(uid);
+    verifiedUserStamps.delete(uid);
     verifiedSessionEpochs.delete(uid);
     onlineVerifiedRevisions.delete(uid);
     serverConfirmedLegal.delete(uid);
@@ -487,6 +505,7 @@ export async function retainNewerHealthConsent(user: User): Promise<HealthConsen
   }
   writeBrowserValue(lastActiveMarker(uid), String(live.revision));
   verifiedRevisions.set(uid, live.revision);
+  verifiedUserStamps.set(uid, legacyHealthConsentUserStamp(user));
   verifiedSessionEpochs.set(uid, startingSessionEpoch);
   onlineVerifiedRevisions.set(uid, live.revision);
   setStatus(uid, 'active');
@@ -498,13 +517,12 @@ export async function reconfirmStaleHealthWithdrawal(user: User): Promise<void> 
   if (currentHealthConsentStatus(uid) !== 'stale-request') throw new Error('Nessuna revoca precedente da riconfermare.');
   const originalMarker = readMarker(uid);
   const originalGeneration = readBrowserValueStrict(generationMarker(uid));
-  const startingUid = auth.currentUser?.uid ?? null;
-  if (startingUid !== null && startingUid !== uid) throw new Error('Sessione cambiata.');
+  if (readLegacyHealthConsentUser() !== user) throw new Error('Sessione cambiata.');
   const startingSessionEpoch = captureSessionForOwner(userOwner(uid)).epoch;
   const live = await serverRequest(user, 'GET');
   // Never turn a newer decision made by another tab into an unsolicited
   // revocation merely because an older confirmation request arrived late.
-  if ((auth.currentUser?.uid ?? null) !== startingUid
+  if (readLegacyHealthConsentUser() !== user
     || captureSessionForOwner(userOwner(uid)).epoch !== startingSessionEpoch) {
     throw new Error('Sessione cambiata.');
   }
@@ -535,13 +553,12 @@ export async function reacceptHealthConsent(user: User, acceptance: {
   const previousAttempt = parseReacceptRevision(saved);
   if (saved !== 'withdrawn' && previousAttempt === null) throw new Error('Revoca non confermata.');
   let expectedRevision = previousAttempt;
-  const startingUid = auth.currentUser?.uid ?? null;
-  if (startingUid !== null && startingUid !== uid) throw new Error('Sessione cambiata.');
+  if (readLegacyHealthConsentUser() !== user) throw new Error('Sessione cambiata.');
   const startingSessionEpoch = captureSessionForOwner(userOwner(uid)).epoch;
   if (expectedRevision === null) {
     const live = await serverRequest(user, 'GET');
     if (live.status !== 'withdrawn') throw new Error('La revoca non risulta attiva sul server.');
-    if ((auth.currentUser?.uid ?? null) !== startingUid
+    if (readLegacyHealthConsentUser() !== user
       || captureSessionForOwner(userOwner(uid)).epoch !== startingSessionEpoch) {
       throw new Error('Sessione cambiata.');
     }

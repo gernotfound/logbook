@@ -4,7 +4,6 @@ import { useAppStore } from '../store/useAppStore';
 import { useSettings } from '../hooks/useSettings';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { useAuth } from '../hooks/useAuth';
-import { auth } from '../lib/firebase';
 import { withdrawGuestHealthConsent, withdrawHealthConsent } from '../lib/healthConsent';
 import { useDialogStore } from '../store/useDialogStore';
 import BrandLoadingScreen from './UI/BrandLoadingScreen';
@@ -32,7 +31,7 @@ interface SettingsViewProps { onClose?: () => void; }
 
 const SettingsView = ({ onClose }: SettingsViewProps) => {
     const {
-        deletingAccount, deletionPhase, pendingAccountDeletion,
+        currentUser, deletingAccount, deletionPhase, pendingAccountDeletion,
         handleExportCSV, handleExportShare, handleExportBackup, handleImportFile, importingData, exportingData,
         handleDeleteAccount
     } = useSettings();
@@ -101,7 +100,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
 
     const handleWithdrawHealthConsent = async () => {
         if (withdrawingRef.current) return;
-        const user = auth.currentUser;
+        const user = currentUser;
         if (!isGuest && !user) return;
         withdrawingRef.current = true;
         setWithdrawing(true);

@@ -8,6 +8,7 @@ import { invalidateSession } from '../../src/lib/sync/session';
 import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
 import { user, key, accepted, trustedConsentResponse } from './healthConsentClientFixture';
+import { installLegacyHealthConsentIdentity } from '../../src/lib/healthConsentLegacyIdentity';
 
 // Exercise the actual consent policy while isolating only external Firebase/App Check adapters.
 vi.unmock('../../src/lib/healthConsent');
@@ -16,8 +17,9 @@ vi.mock('../../src/lib/appCheck', () => ({ getLimitedUseAppCheckToken: vi.fn(asy
 
 import { beginHealthConsentVerification, currentHealthConsentStatus, isVerifiedHealthWithdrawal, isHealthConsentWritable, isHealthConsentCloudWritable, getServerConfirmedLegalConsent, getVerifiedHealthConsentRevision, refreshHealthConsent, registerInitialHealthConsent, retainNewerHealthConsent } from '../../src/lib/healthConsent';
 
-beforeEach(() => { lockAllVaults(); localStorage.clear(); vi.unstubAllGlobals(); (auth as { currentUser: unknown }).currentUser = null; });
-afterEach(() => lockAllVaults());
+let disposeIdentity: () => void;
+beforeEach(() => { lockAllVaults(); localStorage.clear(); vi.unstubAllGlobals(); (auth as { currentUser: unknown }).currentUser = null; disposeIdentity = installLegacyHealthConsentIdentity(() => auth.currentUser); });
+afterEach(() => { disposeIdentity(); lockAllVaults(); });
 
 describe('bounded cold-start consent verification', () => {
   it('fails closed after a stalled token and permits a fresh retry', async () => {

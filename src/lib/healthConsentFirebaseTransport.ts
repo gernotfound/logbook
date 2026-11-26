@@ -3,26 +3,12 @@ import { trustedBackendUrl } from './backendApi';
 import { auth, ensureAppCheck } from './firebase';
 import { getLimitedUseAppCheckToken } from './appCheck';
 import { captureSessionForOwner, userOwner } from './sync/session';
+import { ConsentTransportUnavailableError, type ServerStatus } from './healthConsentTransportContract';
 
 // Legacy Firebase transport only. Consent decisions and local authorization
 // remain in healthConsent.ts; the Kinde/D1 candidate uses its own boundary.
-export type ServerStatus = { status: 'unregistered' | 'active' | 'withdrawn'; revision: number; acceptedAt?: string; privacyVersion?: string; termsVersion?: string; erasedBeforeRevision?: number };
-export class ConsentTransportUnavailableError extends Error {
-  constructor() { super('Connessione al servizio consensi non disponibile.'); }
-}
 class ConsentRevisionConflictError extends Error {
   constructor() { super('Una decisione sul consenso più recente richiede un nuovo controllo.'); }
-}
-export function isRetryableConsentTransportError(error: unknown): boolean {
-  if (error instanceof ConsentTransportUnavailableError) return true;
-  if (!error || typeof error !== 'object') return false;
-  const candidate = error as { code?: unknown; retryable?: unknown };
-  // Firebase can fail to acquire the App Check or Auth token before fetch
-  // starts. These transient outages are not proof of server withdrawal.
-  if (candidate.code === 'auth/network-request-failed') return true;
-  return candidate.retryable === true
-    && (candidate.code === 'app-check-unavailable'
-      || candidate.code === 'app-check-limited-use-unavailable');
 }
 
 export async function requestFirebaseHealthConsent(user: User, method: 'GET' | 'POST', body?: unknown): Promise<ServerStatus> {

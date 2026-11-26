@@ -10,6 +10,12 @@ const harness = vi.hoisted(() => ({
 
 vi.mock('../../src/lib/checkDocSize', () => ({ checkDocSize: harness.checkDocSize }));
 
+// Compaction exercises the Firestore writer after a trusted consent check.
+// Authentication is outside this fixture; the control and writer share rev 1.
+vi.mock('../../src/lib/healthConsent', () => ({
+    getVerifiedHealthConsentRevision: () => 1,
+}));
+
 vi.mock('firebase/firestore', () => ({
     doc: (_db: unknown, path: string) => ({ path }),
     runTransaction: async (_db: unknown, callback: (tx: any) => Promise<any>) => {
@@ -20,6 +26,7 @@ vi.mock('firebase/firestore', () => ({
                     exists: () => true,
                     data: () => ({
                         protocolVersion: 3,
+                        consentRevision: 1,
                         replicas: {
                             s00: {
                                 replicaId: 'replica-s00',

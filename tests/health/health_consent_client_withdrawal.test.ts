@@ -7,6 +7,7 @@ import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration
 import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
 import { activateGuestSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY } from '../../src/lib/sync/session';
 import { user, key, accepted, trustedConsentResponse } from './healthConsentClientFixture';
+import { installLegacyHealthConsentIdentity } from '../../src/lib/healthConsentLegacyIdentity';
 
 // Exercise the actual consent policy while isolating only external Firebase/App Check adapters.
 vi.unmock('../../src/lib/healthConsent');
@@ -15,8 +16,18 @@ vi.mock('../../src/lib/appCheck', () => ({ getLimitedUseAppCheckToken: vi.fn(asy
 
 import { beginHealthConsentVerification, currentHealthConsentStatus, finishHealthConsentReacceptance, isHealthConsentWritable, reacceptHealthConsent, refreshHealthConsent, requireHealthConsentWritable, withdrawHealthConsent, retainNewerHealthConsent, reconfirmStaleHealthWithdrawal, withdrawGuestHealthConsent, getGuestHealthConsentStatus } from '../../src/lib/healthConsent';
 
-beforeEach(() => { lockAllVaults(); localStorage.clear(); vi.unstubAllGlobals(); (auth as { currentUser: unknown }).currentUser = null; });
-afterEach(() => lockAllVaults());
+let disposeIdentity: () => void;
+const testAccounts = new Map<string, ReturnType<typeof user>>();
+function actingAs(uid: string) {
+  const active = auth.currentUser;
+  if (active?.uid === uid) return active;
+  let account = testAccounts.get(uid);
+  if (!account) { account = user(uid); testAccounts.set(uid, account); }
+  (auth as { currentUser: unknown }).currentUser = account;
+  return account;
+}
+beforeEach(() => { lockAllVaults(); localStorage.clear(); vi.unstubAllGlobals(); (auth as { currentUser: unknown }).currentUser = null; testAccounts.clear(); disposeIdentity = installLegacyHealthConsentIdentity(() => auth.currentUser); });
+afterEach(() => { disposeIdentity(); lockAllVaults(); });
 
 describe('durable health-consent client barrier', () => {
   it('suspends writes before server verification and when local intent is pending', () => {
@@ -39,7 +50,7 @@ describe('durable health-consent client barrier', () => {
         ? { status: 'active', revision: 1 }
         : { status: 'withdrawn', revision: 2 });
     }));
-    expect(await refreshHealthConsent(user(uid))).toBe('withdrawn');
+    expect(await refreshHealthConsent(actingAs(uid))).toBe('withdrawn');
     expect(localStorage.getItem(key(uid))).toBe('withdrawn');
     expect(calls).toEqual(['GET', 'POST']);
     expect(isHealthConsentWritable('user:' + uid)).toBe(false);
@@ -48,7 +59,7 @@ describe('durable health-consent client barrier', () => {
   it('recognizes a remote revocation and prevents normal writes', async () => {
     const uid = 'remote-' + crypto.randomUUID();
     vi.stubGlobal('fetch', vi.fn(async () => trustedConsentResponse({ status: 'withdrawn', revision: 1 })));
-    expect(await refreshHealthConsent(user(uid))).toBe('withdrawn');
+    expect(await refreshHealthConsent(actingAs(uid))).toBe('withdrawn');
     expect(localStorage.getItem(key(uid))).toBe('withdrawn');
     expect(isHealthConsentWritable('user:' + uid)).toBe(false);
   });
@@ -79,12 +90,12 @@ describe('durable health-consent client barrier', () => {
     localStorage.setItem(key(uid), 'reaccepting:1');
     vi.stubGlobal('fetch', vi.fn(async () =>
       trustedConsentResponse({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' })));
-    expect(await reacceptHealthConsent(user(uid), accepted)).toBe('2026-10-12T00:00:00.000Z');
+    expect(await reacceptHealthConsent(actingAs(uid), accepted)).toBe('2026-10-12T00:00:00.000Z');
     expect(currentHealthConsentStatus(uid)).toBe('reaccepting');
     // An acknowledged server action alone does NOT make the old local journal
     // writable. The generation handshake is a separate durable step.
     expect(isHealthConsentWritable('user:' + uid)).toBe(false);
-    expect(await refreshHealthConsent(user(uid))).toBe('active');
+    expect(await refreshHealthConsent(actingAs(uid))).toBe('active');
     expect(isHealthConsentWritable('user:' + uid)).toBe(true);
     finishHealthConsentReacceptance(uid);
     expect(localStorage.getItem(key(uid))).toBeNull();
@@ -118,13 +129,13 @@ describe('out-of-order consent checks', () => {
       if (reads === 2) return trustedConsentResponse({ status: 'withdrawn', revision: 1 });
       return trustedConsentResponse({ status: 'active', revision: 2, acceptedAt: '2026-10-12T05:00:00.000Z' });
     }));
-    const olderCheck = refreshHealthConsent(user(uid));
-    await reacceptHealthConsent(user(uid), accepted);
+    const olderCheck = refreshHealthConsent(actingAs(uid));
+    await reacceptHealthConsent(actingAs(uid), accepted);
     expect(localStorage.getItem(key(uid))).toBe('reaccepting:1');
     resolveOld(trustedConsentResponse({ status: 'withdrawn', revision: 1 }));
     expect(await olderCheck).toBe('reaccepting');
     expect(localStorage.getItem(key(uid))).toBe('reaccepting:1');
-    expect(await refreshHealthConsent(user(uid))).toBe('active');
+    expect(await refreshHealthConsent(actingAs(uid))).toBe('active');
     finishHealthConsentReacceptance(uid);
   });
 });
@@ -140,9 +151,9 @@ describe('overlapping consent verification', () => {
       if (requests === 1) return new Promise<Response>(resolve => { resolveOlder = resolve; });
       return trustedConsentResponse({ status: 'active', revision: 1 });
     }));
-    const older = refreshHealthConsent(user(uid));
+    const older = refreshHealthConsent(actingAs(uid));
     await vi.waitFor(() => expect(requests).toBe(1));
-    expect(await refreshHealthConsent(user(uid))).toBe('active');
+    expect(await refreshHealthConsent(actingAs(uid))).toBe('active');
     resolveOlder(trustedConsentResponse({ status: 'withdrawn', revision: 1 }));
     expect(await older).toBe('active');
     expect(localStorage.getItem(key(uid))).toBeNull();
@@ -159,8 +170,8 @@ describe('overlapping consent verification', () => {
       if (requests === 1) return trustedConsentResponse({ status: 'active', revision: 2 });
       return new Promise<Response>(resolve => { resolveServer = resolve; });
     }));
-    expect(await refreshHealthConsent(user(uid))).toBe('stale-request');
-    const retaining = retainNewerHealthConsent(user(uid));
+    expect(await refreshHealthConsent(actingAs(uid))).toBe('stale-request');
+    const retaining = retainNewerHealthConsent(actingAs(uid));
     await vi.waitFor(() => expect(requests).toBe(2));
     localStorage.setItem(key(uid), 'pending:2');
     resolveServer(trustedConsentResponse({ status: 'active', revision: 2 }));
@@ -181,8 +192,8 @@ describe('stale withdrawal explicit reconfirmation', () => {
       if (methods.length === 1) return trustedConsentResponse({ status: 'active', revision: 2 });
       return new Promise<Response>(resolve => { resolveCheck = resolve; });
     }));
-    expect(await refreshHealthConsent(user(uid))).toBe('stale-request');
-    const ongoing = reconfirmStaleHealthWithdrawal(user(uid));
+    expect(await refreshHealthConsent(actingAs(uid))).toBe('stale-request');
+    const ongoing = reconfirmStaleHealthWithdrawal(actingAs(uid));
     await vi.waitFor(() => expect(methods).toHaveLength(2));
     localStorage.setItem(key(uid), 'withdrawn');
     resolveCheck(trustedConsentResponse({ status: 'active', revision: 2 }));
@@ -201,10 +212,10 @@ describe('later reacceptance on another device', () => {
     vi.stubGlobal('fetch', vi.fn(async () => trustedConsentResponse({
       status: 'active', revision: 2, acceptedAt: '2026-10-12T05:00:00.000Z',
     })));
-    expect(await refreshHealthConsent(user(uid))).toBe('stale-request');
+    expect(await refreshHealthConsent(actingAs(uid))).toBe('stale-request');
     expect(localStorage.getItem(key(uid))).toBe('withdrawn');
     expect(isHealthConsentWritable('user:' + uid)).toBe(false);
-    expect(await retainNewerHealthConsent(user(uid))).toBe('active');
+    expect(await retainNewerHealthConsent(actingAs(uid))).toBe('active');
     expect(localStorage.getItem(key(uid))).toBeNull();
   });
 });
@@ -233,7 +244,7 @@ describe('withdrawal acknowledgement racing with a newer consent', () => {
     expect(localStorage.getItem(key(uid))).toBe('pending:1');
     expect(currentHealthConsentStatus(uid)).toBe('stale-request');
     expect(isHealthConsentWritable('user:' + uid)).toBe(false);
-    expect(await retainNewerHealthConsent(user(uid))).toBe('active');
+    expect(await retainNewerHealthConsent(actingAs(uid))).toBe('active');
   });
 });
 
@@ -276,7 +287,7 @@ describe('stale withdrawal race', () => {
       calls.push(init.method ?? 'GET');
       return trustedConsentResponse({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' });
     }));
-    expect(await refreshHealthConsent(user(uid))).toBe('stale-request');
+    expect(await refreshHealthConsent(actingAs(uid))).toBe('stale-request');
     expect(calls).toEqual(['GET']);
     expect(isHealthConsentWritable('user:' + uid)).toBe(false);
   });
@@ -292,8 +303,8 @@ describe('explicit acknowledgement of newer consent from another device', () => 
       methods.push(init.method ?? 'GET');
       return trustedConsentResponse({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' });
     }));
-    expect(await refreshHealthConsent(user(uid))).toBe('stale-request');
-    expect(await retainNewerHealthConsent(user(uid))).toBe('active');
+    expect(await refreshHealthConsent(actingAs(uid))).toBe('stale-request');
+    expect(await retainNewerHealthConsent(actingAs(uid))).toBe('active');
     expect(isHealthConsentWritable('user:' + uid)).toBe(true);
     expect(localStorage.getItem(key(uid))).toBeNull();
     expect(methods).toEqual(['GET', 'GET']);
