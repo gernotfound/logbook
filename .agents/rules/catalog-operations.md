@@ -85,3 +85,42 @@ esporti ancora `syncGlobalCatalog`; i test del guest e dell'offline
 non richiedono Firebase per la sola lettura del catalogo. Sostituire
 l'adapter con un'origine non-Firebase soltanto dopo aver verificato
 integrità e pubblicazione del catalogo nella nuova architettura.
+
+## Candidato Static Assets Cloudflare — CF-04 (26/11/2026)
+
+`scripts/build-static-catalog.mjs` prepara, **senza pubblicare**, un
+pacchetto statico da due file JSON espliciti e non vuoti. Il comando
+`npm run catalog:static:prepare -- --dry-run --version=candidate-1
+--updated-at=2026-11-26T10:00:00.000Z --exercises=... --foods=...`
+valida gli input e mostra manifest e riferimenti senza scrivere file.
+Per produrre un pacchetto **in una nuova directory di staging** occorrono
+anche `--out-dir=...` e `--confirm-version=candidate-1`; una directory
+esistente viene rifiutata. Le due risorse immutabili vengono scritte
+prima di `manifest.json`. Un output parziale dopo un errore I/O **non**
+è pubblicabile e deve essere scartato/ripreparato, mai recuperato
+interpretando un file incompleto come manifest valido.
+
+Il manifest JSON mantiene `schemaVersion=1`, `docRefs` e `itemCounts` e
+aggiunge `digests` SHA-256. I riferimenti sono nomi di file
+`<tipo>_<versione>_<sha256>.json`; ciascun file contiene `{ "items": [...] }`.
+Il formato non trasforma versioni di release PWA in versioni catalogo.
+L'adapter `src/lib/catalog/staticCatalogAdapter.ts` è un **candidato non
+montato**: legge `/catalog/manifest.json` senza cache HTTP e i documenti
+versionati dalla stessa origin senza credenziali, controlla nomi,
+impronte sui byte esatti, tipo di risposta, dimensioni, conteggi,
+identità e macronutrienti prima di aggiornare IndexedDB. Errori,
+offline, timeout o contenuti HTML restituiti al posto di JSON conservano
+il catalogo locale completo. `persisted: false` mantiene il significato
+di aggiornamento disponibile in memoria ma non durevole.
+
+**MUST prima dell'attivazione:** verificare provenienza, licenze e
+contenuto del catalogo reale non vuoto; predisporre e revisionare
+gli asset immutabili in `public/catalog/` conservando quelli ancora
+referenziati; pubblicare il manifest solo dopo i file; verificare su
+origin Cloudflare risposte JSON, cache header, digest e fallback PWA;
+infine sostituire il solo chiamante compatibile e provare guest,
+account Kinde e offline/Safari. Il candidato non introduce dati nel
+deploy corrente, non modifica Firestore e non fornisce ancora un
+catalogo pubblico. Un rollback ripunta il manifest a file storici
+effettivamente presenti: non sovrascrivere file immutabili per lo stesso
+nome né cancellare versioni ancora referenziate.
