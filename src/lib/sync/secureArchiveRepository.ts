@@ -49,15 +49,26 @@ export async function updateArchiveRecord<T>(
     const control = readVaultControl(owner);
     if (!control || control.phase !== 'active') throw new LocalVaultLockedError();
     const sessionKey = requireUnlockedLocalKey(owner);
-    await update<unknown>(storageKey, raw => {
-        if (requireUnlockedLocalKey(owner) !== sessionKey) throw new LocalVaultLockedError();
-        if (raw !== undefined && (typeof raw !== 'string' || !raw.startsWith(SEALED_LOCAL_PREFIX))) {
-            throw new LocalCiphertextError();
-        }
-        const current = raw === undefined ? undefined : openLocalJson(sessionKey, owner, storageKey, raw) as T;
-        const next = transformSynchronously(current, raw !== undefined, transform);
-        if (requireUnlockedLocalKey(owner) !== sessionKey) throw new LocalVaultLockedError();
-        if (next === current) return raw;
-        return next === undefined ? undefined : sealLocalJson(sessionKey, owner, storageKey, next);
-    });
+    // idb-keyval.update always calls put(), even when the callback returns
+    // undefined. Reject only an absent-record no-op before put(), then
+    // recognize that sentinel as success; the transaction has not written.
+    const absentNoOp = Symbol('absent-archive-no-op');
+    try {
+        await update<unknown>(storageKey, raw => {
+            if (requireUnlockedLocalKey(owner) !== sessionKey) throw new LocalVaultLockedError();
+            if (raw !== undefined && (typeof raw !== 'string' || !raw.startsWith(SEALED_LOCAL_PREFIX))) {
+                throw new LocalCiphertextError();
+            }
+            const current = raw === undefined ? undefined : openLocalJson(sessionKey, owner, storageKey, raw) as T;
+            const next = transformSynchronously(current, raw !== undefined, transform);
+            if (requireUnlockedLocalKey(owner) !== sessionKey) throw new LocalVaultLockedError();
+            if (next === current) {
+                if (raw === undefined) throw absentNoOp;
+                return raw;
+            }
+            return next === undefined ? undefined : sealLocalJson(sessionKey, owner, storageKey, next);
+        });
+    } catch (error) {
+        if (error !== absentNoOp) throw error;
+    }
 }
