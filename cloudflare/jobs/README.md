@@ -62,7 +62,12 @@ cron, account deletion o inattività.
   con attesa crescente di 1–60 minuti e stato cancellato al progresso.
   Lo scheduler può aggiornare il retry soltanto con lease corrente; un ACK
   mancante non autorizza un checkpoint. Il futuro budget/cron e il costo
-  D1 effettivo restano da collaudare.
+  D1 effettivo restano da collaudare. La scansione account fissa anche una
+  generazione recovery aperta per l'intero tick, passata ai singoli passi:
+  il cambio globale interrompe il checkpoint pur se il dispatcher ha
+  classificato un'eccezione come `blocked` per owner. Una rilettura dopo
+  l'eventuale checkpoint nega la conferma se il registro cambia; non
+  trasforma D1 separate in una transazione atomica di restore.
 - Un tick sanitario prova al massimo una riconciliazione del
   cutoff e un passo con lease D1, prima della fase finale atomica. Il Worker
   deve fallire senza dichiarare una cancellazione riuscita se il registro
