@@ -27,7 +27,7 @@ beforeEach(async () => {
 });
 afterEach(async () => { await rm(root, { recursive: true, force: true }); });
 
-test('generates immutable documents with raw-byte SHA-256 digests and publishes manifest last', async () => {
+void test('generates immutable documents with raw-byte SHA-256 digests and publishes manifest last', async () => {
   const out = join(root, 'release');
   const oldLog = console.log;
   console.log = () => {};
@@ -48,7 +48,7 @@ test('generates immutable documents with raw-byte SHA-256 digests and publishes 
   assert.equal((await readdir(out)).length, 3);
 });
 
-test('dry-run is read-only even with a target and rejects a missing write confirmation', async () => {
+void test('dry-run is read-only even with a target and rejects a missing write confirmation', async () => {
   const target = join(root, 'unpublished');
   const oldLog = console.log;
   console.log = () => {};
@@ -59,7 +59,7 @@ test('dry-run is read-only even with a target and rejects a missing write confir
   assert.deepEqual((await readdir(root)).sort(), ['exercises.json', 'foods.json']);
 });
 
-test('rejects empty bundles, duplicate IDs, bad nutritional data, invalid version and noncanonical timestamp', async () => {
+void test('rejects empty bundles, duplicate IDs, bad nutritional data, invalid version and noncanonical timestamp', async () => {
   await writeFile(exercisesPath, '[]');
   await assert.rejects(prepareStaticCatalog({ version, updatedAt, exercisesPath, foodsPath }), /vuoto/);
   await writeFile(exercisesPath, JSON.stringify([exercise, { ...exercise }]));
@@ -72,7 +72,7 @@ test('rejects empty bundles, duplicate IDs, bad nutritional data, invalid versio
   await assert.rejects(prepareStaticCatalog({ version, updatedAt: '2026-02-30T10:00:00.000Z', exercisesPath, foodsPath }), /updated-at/);
 });
 
-test('rejects lossy schema fallbacks before preparing a static package', async () => {
+void test('rejects lossy schema fallbacks before preparing a static package', async () => {
   await writeFile(exercisesPath, JSON.stringify([{ ...exercise, id: 123 }]));
   await assert.rejects(prepareStaticCatalog({ version, updatedAt, exercisesPath, foodsPath }), /schema client/);
   await writeFile(exercisesPath, JSON.stringify([{ ...exercise, trackingType: 'broken' }]));
@@ -82,13 +82,13 @@ test('rejects lossy schema fallbacks before preparing a static package', async (
   await assert.rejects(prepareStaticCatalog({ version, updatedAt, exercisesPath, foodsPath }), /schema client/);
 });
 
-test('rejects files that exceed the existing 800 KB document budget before any output is created', async () => {
+void test('rejects files that exceed the existing 800 KB document budget before any output is created', async () => {
   await writeFile(exercisesPath, JSON.stringify([{ ...exercise, notes: 'x'.repeat(800_000) }]));
   await assert.rejects(buildStaticCatalog([...args(), `--out-dir=${join(root, 'oversized')}`, `--confirm-version=${version}`]), /troppo grande|limite/);
   assert.deepEqual((await readdir(root)).sort(), ['exercises.json', 'foods.json']);
 });
 
-test('rejects an already existing empty output directory', async () => {
+void test('rejects an already existing empty output directory', async () => {
   const out = join(root, 'already-exists');
   await mkdir(out);
   await assert.rejects(buildStaticCatalog([...args(), `--out-dir=${out}`, `--confirm-version=${version}`]), /EEXIST/);
