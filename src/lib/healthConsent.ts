@@ -6,7 +6,7 @@ import {
 } from './healthConsentTransportContract';
 import type { UserData } from '../types';
 import { LEGAL_VERSIONS } from './legalVersions';
-import { readLegacyHealthConsentUser } from './healthConsentLegacyIdentity';
+import { legacyHealthConsentUserStamp, readLegacyHealthConsentUser } from './healthConsentLegacyIdentity';
 import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from './sync/browserStorage';
 import { captureSessionForOwner, isActiveGuestSession, userOwner } from './sync/session';
 import { getGuestHealthConsentStatus as readGuestHealthConsentStatus, markGuestHealthConsentWithdrawn } from './guestHealthConsent';
@@ -30,7 +30,7 @@ const listeners = new Set<() => void>();
 const verifiedReacceptance = new Map<string, string>();
 const serverConfirmedLegal = new Map<string, NonNullable<UserData['legalConsent']>>();
 const verifiedRevisions = new Map<string, number>();
-const verifiedUsers = new Map<string, User>();
+const verifiedUserStamps = new Map<string, number>();
 // A UID alone is not a consent proof across Auth epochs, including A→B→A.
 const verifiedSessionEpochs = new Map<string, number>();
 // Offline access is local-only: a cached server approval must never authorize cloud I/O.
@@ -76,7 +76,7 @@ function notify() { for (const listener of listeners) listener(); }
 export function beginHealthConsentVerification(uid: string): void {
   invalidateConsentChecks(uid);
   verifiedRevisions.delete(uid);
-  verifiedUsers.delete(uid);
+  verifiedUserStamps.delete(uid);
   verifiedSessionEpochs.delete(uid);
   onlineVerifiedRevisions.delete(uid);
   confirmedServerWithdrawals.delete(uid);
@@ -146,7 +146,7 @@ export function isHealthConsentWritable(owner: string): boolean {
   // and persisted consent revision remain unchanged.
   try {
     const currentUser = readLegacyHealthConsentUser();
-    if (currentUser?.uid !== uid || verifiedUsers.get(uid) !== currentUser) return false;
+    if (currentUser?.uid !== uid || verifiedUserStamps.get(uid) !== legacyHealthConsentUserStamp(currentUser)) return false;
     const persisted = readBrowserValueStrict(generationMarker(uid));
     const verified = verifiedRevisions.get(uid) ?? 0;
     if (verified < 1 || verifiedSessionEpochs.get(uid) !== captureSessionForOwner(owner).epoch) return false;
@@ -273,7 +273,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
     const cached = saved === null ? readCachedActiveRevision(uid) : null;
     if (cached === null || !isSameDecision()) return false;
     verifiedRevisions.set(uid, cached);
-    verifiedUsers.set(uid, user);
+    verifiedUserStamps.set(uid, legacyHealthConsentUserStamp(user));
     verifiedSessionEpochs.set(uid, startingSessionEpoch);
     setStatus(uid, 'active');
     return true;
@@ -288,7 +288,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
     && isHealthConsentWritable('user:' + uid);
   if (!locallyVerified) {
     verifiedRevisions.delete(uid);
-    verifiedUsers.delete(uid);
+    verifiedUserStamps.delete(uid);
     verifiedSessionEpochs.delete(uid);
   }
   onlineVerifiedRevisions.delete(uid);
@@ -315,7 +315,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
       // A missing server record never authorizes cloud access or restores
       // an unsent local withdrawal by accident.
       verifiedRevisions.delete(uid);
-      verifiedUsers.delete(uid);
+      verifiedUserStamps.delete(uid);
       verifiedSessionEpochs.delete(uid);
       onlineVerifiedRevisions.delete(uid);
       serverConfirmedLegal.delete(uid);
@@ -375,7 +375,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
       if (!isSameDecision()) return currentHealthConsentStatus(uid);
       if (ready === 'erased') {
         verifiedRevisions.delete(uid);
-        verifiedUsers.delete(uid);
+        verifiedUserStamps.delete(uid);
         verifiedSessionEpochs.delete(uid);
         onlineVerifiedRevisions.delete(uid);
         serverConfirmedLegal.delete(uid);
@@ -392,7 +392,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
     writeBrowserValue(lastActiveMarker(uid), String(state.revision));
     if (!isSameDecision()) return currentHealthConsentStatus(uid);
     verifiedRevisions.set(uid, state.revision);
-    verifiedUsers.set(uid, user);
+    verifiedUserStamps.set(uid, legacyHealthConsentUserStamp(user));
     verifiedSessionEpochs.set(uid, startingSessionEpoch);
     onlineVerifiedRevisions.set(uid, state.revision);
     if (state.privacyVersion === LEGAL_VERSIONS.privacy
@@ -492,7 +492,7 @@ export async function retainNewerHealthConsent(user: User): Promise<HealthConsen
   removeBrowserValue(marker(uid));
   if (ready === 'erased') {
     verifiedRevisions.delete(uid);
-    verifiedUsers.delete(uid);
+    verifiedUserStamps.delete(uid);
     verifiedSessionEpochs.delete(uid);
     onlineVerifiedRevisions.delete(uid);
     serverConfirmedLegal.delete(uid);
@@ -505,7 +505,7 @@ export async function retainNewerHealthConsent(user: User): Promise<HealthConsen
   }
   writeBrowserValue(lastActiveMarker(uid), String(live.revision));
   verifiedRevisions.set(uid, live.revision);
-  verifiedUsers.set(uid, user);
+  verifiedUserStamps.set(uid, legacyHealthConsentUserStamp(user));
   verifiedSessionEpochs.set(uid, startingSessionEpoch);
   onlineVerifiedRevisions.set(uid, live.revision);
   setStatus(uid, 'active');
