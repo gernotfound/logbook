@@ -29,13 +29,13 @@ export function useAppNavigation(navigationOwner: string, startupTab: string | n
   }, [startupTab]);
 
   // Track visited tabs for lazy Keep-Alive rendering
-  const [visitedTabs, setVisitedTabs] = useState<Record<string, boolean>>(() => ({ [activeTab]: true }));
+  const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<AppTab>>(() => new Set([activeTab]));
 
   // Preserve and restore scroll position across tabs without mutating React state.
-  const tabScrollPositions = useRef<Record<string, number>>({});
+  const tabScrollPositions = useRef<Map<AppTab, number>>(new Map());
 
   const handleOpenSettings = () => {
-    tabScrollPositions.current.home = window.scrollY;
+    tabScrollPositions.current.set('home', window.scrollY);
     setSettingsOpen(true);
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
@@ -43,7 +43,7 @@ export function useAppNavigation(navigationOwner: string, startupTab: string | n
   const handleCloseSettings = () => {
     setSettingsOpen(false);
     requestAnimationFrame(() => {
-      window.scrollTo({ top: tabScrollPositions.current.home || 0, behavior: 'instant' });
+      window.scrollTo({ top: tabScrollPositions.current.get('home') ?? 0, behavior: 'instant' });
     });
   };
 
@@ -60,16 +60,16 @@ export function useAppNavigation(navigationOwner: string, startupTab: string | n
       if (validTab === 'nutrition') setNutritionSubTab('meals');
       if (validTab === 'data') setDataSubTab('measurements');
 
-      tabScrollPositions.current[activeTab] = 0;
+      tabScrollPositions.current.set(activeTab, 0);
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
-    if (!wasSettingsOpen) tabScrollPositions.current[activeTab] = window.scrollY;
-    setVisitedTabs(prev => prev[validTab] ? prev : { ...prev, [validTab]: true });
+    if (!wasSettingsOpen) tabScrollPositions.current.set(activeTab, window.scrollY);
+    setVisitedTabs(prev => prev.has(validTab) ? prev : new Set([...prev, validTab]));
     setActiveTab(validTab);
     requestAnimationFrame(() => {
-      const savedPos = tabScrollPositions.current[validTab] || 0;
+      const savedPos = tabScrollPositions.current.get(validTab) ?? 0;
       window.scrollTo({ top: savedPos, behavior: 'instant' });
     });
   };
