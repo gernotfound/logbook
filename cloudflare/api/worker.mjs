@@ -1,6 +1,7 @@
 // Candidate-only encrypted replica API. There is intentionally no public fixture,
 // secret-header login, test backdoor or fallback identity when AUTH_GATE is absent.
 import { z } from 'zod';
+import { candidateApiRoutePolicy } from '../api-route-policy.mjs';
 import { BODY_LIMIT_BYTES, BadInput, id, claimInput, retireInput, readInput, pageInput, commitInput, commitStatusInput, authClaims, activityAuthClaims, uniquePaths, validateSealedBatch } from './replica-contracts.mjs';
 import {
   requireCurrentIndependentSyncFence, RuntimeSyncAccessRevokedError,
@@ -74,7 +75,9 @@ async function payloadHash(value) {
   return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
 }
 
-async function authorize(request, env, route, isMutation) {
+async function authorize(request, env, route) {
+  const policy = candidateApiRoutePolicy(route);
+  if (!policy) throw new BadInput('unauthorized', 403);
   if (!env.AUTH_GATE || typeof env.AUTH_GATE.fetch !== 'function') {
     throw new BadInput('auth-unavailable', 503);
   }
@@ -95,10 +98,10 @@ async function authorize(request, env, route, isMutation) {
   let claims;
   try { claims = (route === '/v1/account/activity' ? activityAuthClaims : authClaims).parse(await response.json()); }
   catch { throw new BadInput('auth-unavailable', 503); }
-  // Rights-only remains possible after losing email verification, but no
-  // active-fitness route may inherit that weaker scope from the AuthGate.
-  if (!claims.emailVerified && route !== '/v1/rights/scan' && route !== '/v1/account/activity') throw new BadInput('unauthorized', 403);
-  if (isMutation && !claims.csrfVerified) throw new BadInput('csrf-required', 403);
+  // A compromised or stale internal response cannot override the route's
+  // scope. The underlying SQL/session/consent fences remain independent.
+  if (policy.emailVerifiedRequired && !claims.emailVerified) throw new BadInput('unauthorized', 403);
+  if (policy.csrfRequired && !claims.csrfVerified) throw new BadInput('csrf-required', 403);
   return claims;
 }
 
@@ -106,7 +109,9 @@ async function handler(request, env) {
   const url = new URL(request.url);
   const route = url.pathname;
   const maxBodyBytes = BODY_LIMIT_BYTES.get(route);
-  if (maxBodyBytes === undefined || url.search !== '') return reply({ error: 'not-found' }, 404);
+  if (maxBodyBytes === undefined || !candidateApiRoutePolicy(route) || url.search !== '') {
+    return reply({ error: 'not-found' }, 404);
+  }
   if (request.method !== 'POST') {
     return reply({ error: 'method-not-allowed' }, 405);
   }
@@ -123,7 +128,7 @@ async function handler(request, env) {
     if (env.CF06_FOREGROUND_ACTIVITY_ENABLED !== 'enabled') return reply({ error: 'activity-unavailable' }, 503);
     if (!env.DB || !env.RECOVERY_DB || env.DB === env.RECOVERY_DB) return reply({ error: 'activity-unavailable' }, 503);
     checkJsonRequestHeaders(request, maxBodyBytes);
-    const claims = await authorize(request, env, route, true);
+    const claims = await authorize(request, env, route);
     if (!z.strictObject({}).safeParse(await jsonBounded(request, maxBodyBytes)).success) {
       throw new BadInput('invalid-input', 400);
     }
@@ -144,9 +149,7 @@ async function handler(request, env) {
   // spending private AuthGate rate-limit, crypto or D1 read budget.
   // Streaming size checks still run after Auth on untrusted/chunked bodies.
   checkJsonRequestHeaders(request, maxBodyBytes);
-  const claims = await authorize(request, env, route,
-    route === '/v1/sync/commit' || route === '/v1/sync/commit/status' || route === '/v1/sync/replica/claim' || route === '/v1/sync/replica/retire' || route === '/v1/sync/replica/status'
-    || route === '/v1/sync/replica/cancel' || route === '/v1/rights/scan');
+  const claims = await authorize(request, env, route);
   const uid = claims.uid;
   const consentRevision = claims.healthConsentRevision;
   const fenceEpoch = claims.fenceEpoch;

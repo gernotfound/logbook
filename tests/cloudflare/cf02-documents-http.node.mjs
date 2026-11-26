@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import worker from '../../cloudflare/api/worker.mjs';
+import { candidateApiRoutePolicy } from '../../cloudflare/api-route-policy.mjs';
 import { BODY_LIMIT_BYTES, BadInput, claimInput, readInput, pageInput, commitInput } from '../../cloudflare/api/replica-contracts.mjs';
 import { origin, withFixture, attempt, makeEnv, call, claim, retire } from './cf02-documents-fixture.mjs';
 
@@ -53,6 +54,53 @@ void test('cheap HTTP preflight rejects bad media types and declared overflow be
   }), env);
   assert.equal(valid.status, 503);
   assert.equal(authCalls, 1);
+}));
+
+void test('private replica handlers obey the reviewed route inventory and independently reject forged internal claims', () => withFixture(async db => {
+  // Independent inventory: a future handler cannot silently inherit a weaker
+  // route scope, and consent/key/logout remain owned by dedicated Workers.
+  const handlerRoutes = [
+    '/v1/account/activity', '/v1/sync/control', '/v1/sync/read', '/v1/sync/scan',
+    '/v1/rights/scan', '/v1/sync/receipt', '/v1/sync/replica/claim',
+    '/v1/sync/replica/retire', '/v1/sync/replica/status', '/v1/sync/replica/cancel',
+    '/v1/sync/commit', '/v1/sync/commit/status',
+  ];
+  assert.deepEqual([...BODY_LIMIT_BYTES.keys()].sort(), handlerRoutes.sort());
+  const before = db.sqlite.prepare('SELECT revision FROM sync_state').get().revision;
+  let attempted = 0;
+  const send = async (route, claims) => {
+    const env = makeEnv(db, claims);
+    env.CF06_FOREGROUND_ACTIVITY_ENABLED = 'enabled';
+    const actualGate = env.AUTH_GATE;
+    env.AUTH_GATE = { async fetch(request) {
+      attempted += 1;
+      assert.equal(request.headers.get('x-original-route'), route);
+      return actualGate.fetch(request);
+    } };
+    const response = await worker.fetch(new Request(origin + route, {
+      method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' },
+      body: '{}',
+    }), env);
+    return { status: response.status, body: await response.json() };
+  };
+  for (const route of handlerRoutes) {
+    const policy = candidateApiRoutePolicy(route);
+    assert.ok(policy, `unreviewed handler route: ${route}`);
+    if (policy.emailVerifiedRequired) {
+      assert.deepEqual(await send(route, { emailVerified: false }), {
+        status: 403, body: { error: 'unauthorized' },
+      }, route);
+    }
+    if (policy.csrfRequired) {
+      assert.deepEqual(await send(route, { csrfVerified: false }), {
+        status: 403, body: { error: 'csrf-required' },
+      }, route);
+    }
+  }
+  assert.equal(attempted, handlerRoutes.filter(path => candidateApiRoutePolicy(path).emailVerifiedRequired).length
+    + handlerRoutes.filter(path => candidateApiRoutePolicy(path).csrfRequired).length);
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, before);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts').get().n, 0);
 }));
 
 void test('each sync route rejects oversized JSON before D1 work without shrinking the commit budget', () => withFixture(async db => {
