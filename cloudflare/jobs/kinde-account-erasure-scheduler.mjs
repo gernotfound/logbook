@@ -3,6 +3,58 @@ import { runOneKindeAccountErasureStep } from './kinde-account-erasure-runner.mj
 
 const UID = /^k_[A-Za-z0-9_-]{43}$/;
 const LEASE_MS = 60_000;
+const RETRYABLE_OUTCOMES = new Set([
+  'blocked', 'contended', 'health-pending', 'provider-pending', 'provider-unconfirmed', 'application-complete',
+]);
+
+// A failed owner moves behind other owners without a hot retry after the
+// cursor wraps. Only a live sweep lease may change retry state. The server
+// clock and bounded exponent also prevent a worker clock from extending it.
+async function updateOwnerRetry(db, uid, result, lease) {
+  if (uid === null || result.outcome === 'idle' || result.outcome === 'already-recorded'
+    || result.outcome === 'deferred') return;
+  const primary = db.withSession('first-primary');
+  const scope = [uid, lease.lease_epoch, lease.lease_token];
+  if (RETRYABLE_OUTCOMES.has(result.outcome)) {
+    const retry = await primary.prepare(`
+      INSERT INTO kinde_account_erasure_retries (uid, failure_count, retry_after_ms)
+      SELECT i.uid, 1, ${D1_NOW_MS} + 60000
+      FROM kinde_account_erasure_intents i
+      WHERE i.uid = ?
+        AND NOT EXISTS (SELECT 1 FROM kinde_account_erasure_completions WHERE uid = i.uid)
+        AND EXISTS (
+          SELECT 1 FROM kinde_account_erasure_scheduler s
+          WHERE s.singleton = 1 AND s.lease_epoch = ? AND s.lease_token = ?
+            AND s.lease_until_ms > ${D1_NOW_MS}
+        )
+      ON CONFLICT(uid) DO UPDATE SET
+        failure_count = MIN(7, failure_count + 1),
+        retry_after_ms = ${D1_NOW_MS} +
+          CASE WHEN failure_count >= 6 THEN 3600000 ELSE 60000 * (1 << failure_count) END
+      RETURNING uid, failure_count, retry_after_ms
+    `).bind(...scope).first();
+    if (retry?.uid !== uid || !Number.isSafeInteger(retry.failure_count)
+      || retry.failure_count < 1 || retry.failure_count > 7
+      || !Number.isSafeInteger(retry.retry_after_ms) || retry.retry_after_ms <= 0) {
+      throw new Error('kinde-erasure-retry-unavailable');
+    }
+    return;
+  }
+  if (!['accepted', 'progress', 'provider-acknowledged', 'complete'].includes(result.outcome)) {
+    throw new Error('kinde-erasure-retry-unavailable');
+  }
+  const cleared = await primary.prepare(`
+    DELETE FROM kinde_account_erasure_retries
+    WHERE uid = ? AND EXISTS (
+      SELECT 1 FROM kinde_account_erasure_scheduler s
+      WHERE s.singleton = 1 AND s.lease_epoch = ? AND s.lease_token = ?
+        AND s.lease_until_ms > ${D1_NOW_MS}
+    )
+  `).bind(...scope).run();
+  if (cleared?.success !== true || ![0, 1].includes(cleared.meta?.changes)) {
+    throw new Error('kinde-erasure-retry-unavailable');
+  }
+}
 
 function newLeaseToken() {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
@@ -40,6 +92,7 @@ export async function runKindeAccountErasureSweepTick(db, recoveryDb, provider =
     throw new Error('kinde-erasure-scheduler-unavailable');
   }
   const step = await runOneKindeAccountErasureStep(db, recoveryDb, lease.cursor_uid, provider);
+  await updateOwnerRetry(db, step.nextCursor, step.result, lease);
 
   let writeProven = false;
   try {

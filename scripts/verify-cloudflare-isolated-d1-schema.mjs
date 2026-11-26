@@ -27,6 +27,7 @@ export const MIGRATIONS = Object.freeze(`
 0017_kinde_inactivity_enqueue_checkpoint.sql
 0018_active_replica_capacity.sql
 0019_explicit_replica_retirement.sql
+0020_account_erasure_retry_backoff.sql
 `.trim().split('\n'));
 const DATABASE = 'thelogbook-cf02-eu-isolated-20261113';
 const DATABASE_ID = '9aa51833-8adc-495f-bdfc-93b5542e8023';
@@ -47,6 +48,8 @@ const CAPACITY_MIGRATION = '0018_active_replica_capacity.sql';
 const CAPACITY_MIGRATION_SHA256 = '639df0e6a152fca082306604bee1bbde0ed279baa05e3dbe74a6a20394ffb4a9';
 const RETIREMENT_MIGRATION = '0019_explicit_replica_retirement.sql';
 const RETIREMENT_MIGRATION_SHA256 = 'f5b2d34278d57a9757f9370797b6e764e1d382c114e91947f86c461b1ba2ef27';
+const RETRY_MIGRATION = '0020_account_erasure_retry_backoff.sql';
+const RETRY_MIGRATION_SHA256 = '534fc3b5891cf39ecb9025a14a29782b8a0782a0b6b096473e6a92fd7eaed0ae';
 const MIGRATION_DIR = new URL('../cloudflare/api/migrations/', import.meta.url);
 const EXISTING_TEST_TABLES = Object.freeze({
   subjects: 'sync_subjects',
@@ -111,6 +114,11 @@ export function verifyCapacityMigrationSql(sql) {
 export function verifyRetirementMigrationSql(sql) {
   assert.equal(createHash('sha256').update(sql.replaceAll('\r\n', '\n')).digest('hex'),
     RETIREMENT_MIGRATION_SHA256, 'unreviewed explicit replica retirement SQL for test D1');
+}
+
+export function verifyRetryMigrationSql(sql) {
+  assert.equal(createHash('sha256').update(sql.replaceAll('\r\n', '\n')).digest('hex'),
+    RETRY_MIGRATION_SHA256, 'unreviewed account retry SQL for test D1');
 }
 
 export function verifyLocalMigrationTarget(config, names) {
@@ -198,7 +206,7 @@ async function fingerprintExistingTestRows(query, counts) {
 export async function verifyRemoteIsolatedD1({
   phase,
   account,
-  existingTestDb0019 = false,
+  existingTestDb0020 = false,
   priorInventory,
   request = fetch,
   token,
@@ -220,7 +228,8 @@ export async function verifyRemoteIsolatedD1({
   verifyEnqueueMigrationSql(readFileSync(new URL(ENQUEUE_MIGRATION, MIGRATION_DIR), 'utf8'));
   verifyCapacityMigrationSql(readFileSync(new URL(CAPACITY_MIGRATION, MIGRATION_DIR), 'utf8'));
   verifyRetirementMigrationSql(readFileSync(new URL(RETIREMENT_MIGRATION, MIGRATION_DIR), 'utf8'));
-  if (existingTestDb0019) assert.equal(names.length, 19, 'populated test D1 mode permits only reviewed migrations through 0019');
+  verifyRetryMigrationSql(readFileSync(new URL(RETRY_MIGRATION, MIGRATION_DIR), 'utf8'));
+  if (existingTestDb0020) assert.equal(names.length, 20, 'populated test D1 mode permits only reviewed migrations through 0020');
 
   const root = BASE + '/accounts/' + account + '/d1/database/' + DATABASE_ID;
   async function call(path, sql) {
@@ -253,9 +262,9 @@ export async function verifyRemoteIsolatedD1({
   const ledger = unpackQuery(await call('/query',
     'SELECT id, name FROM d1_migrations ORDER BY id'));
   const applied = verifyMigrationLedger(ledger, phase);
-  if (existingTestDb0019 && phase === 'before') {
-    assert.ok(applied >= 11 && applied <= 19,
-      'populated test D1 requires a contiguous 0011–0019 prefix');
+  if (existingTestDb0020 && phase === 'before') {
+    assert.ok(applied >= 11 && applied <= 20,
+      'populated test D1 requires a contiguous 0011–0020 prefix');
   }
 
   // The application DB already holds identity sessions and older replica test
@@ -265,16 +274,18 @@ export async function verifyRemoteIsolatedD1({
     sessions: 'auth_sessions',
     keys: 'cloud_account_keys',
     erasure_jobs: 'health_erasure_jobs',
-    ...(existingTestDb0019 ? { consents: 'health_consent_acceptances', ...EXISTING_TEST_TABLES } : {}),
+    ...(existingTestDb0020 ? { consents: 'health_consent_acceptances', ...EXISTING_TEST_TABLES } : {}),
     ...(applied >= 12 ? ACCOUNT_ERASURE_TABLES : {}),
     ...(applied >= 13 ? { activity: 'kinde_account_activity' } : {}),
+    ...(applied >= 20 ? { retries: 'kinde_account_erasure_retries' } : {}),
   };
   const countSql = Object.entries(tables).map(([key, table]) => `(SELECT COUNT(*) FROM ${table}) AS ${key}`).join(', ');
   const counts = unpackQuery(await call('/query', 'SELECT ' + countSql));
   assert.equal(counts.length, 1, 'invalid isolation count response');
-  const emptyTables = existingTestDb0019 ? ['keys', 'erasure_jobs', 'consents'] : ['principals', 'sessions', 'keys', 'erasure_jobs'];
+  const emptyTables = existingTestDb0020 ? ['keys', 'erasure_jobs', 'consents'] : ['principals', 'sessions', 'keys', 'erasure_jobs'];
   if (applied >= 12) emptyTables.push(...Object.keys(ACCOUNT_ERASURE_TABLES));
   if (applied >= 13) emptyTables.push('activity');
+  if (applied >= 20) emptyTables.push('retries');
   for (const key of emptyTables) {
     assert.equal(counts[0]?.[key], 0, 'non-empty isolated D1 ' + key);
   }
@@ -283,7 +294,7 @@ export async function verifyRemoteIsolatedD1({
     GROUP BY uid HAVING COUNT(*) > 5)`));
   assert.deepEqual(capacity, [{ over_capacity: 0 }], 'existing replica capacity exceeded');
   let inventory;
-  if (existingTestDb0019) {
+  if (existingTestDb0020) {
     const existingCounts = Object.fromEntries(['principals', 'sessions', ...Object.keys(EXISTING_TEST_TABLES)]
       .map(key => [key, counts[0]?.[key]]));
     assert.ok(Object.values(existingCounts).every(count => Number.isSafeInteger(count) && count >= 0),
@@ -342,6 +353,7 @@ export async function verifyRemoteIsolatedD1({
       "'health_erasure_finalizations',",
       "'health_erasure_finalization_fence',",
       "'kinde_account_erasure_activity_terminal_fence', 'kinde_account_erasure_completion_fence',",
+      "'kinde_account_erasure_retries', 'kinde_account_erasure_retry_no_terminal', 'kinde_account_erasure_retry_terminal_cleanup',",
       "'kinde_account_erasure_freeze',",
       ...Object.values(ACCOUNT_ERASURE_TABLES).map(name => "'" + name + "',"),
       "'kinde_account_activity', 'kinde_account_activity_by_last_seen',",
@@ -378,6 +390,9 @@ export async function verifyRemoteIsolatedD1({
       ['kinde_account_erasure_intents', 'table'],
       ['kinde_account_erasure_provider_progress', 'table'],
       ['kinde_account_erasure_requests', 'table'],
+      ['kinde_account_erasure_retries', 'table'],
+      ['kinde_account_erasure_retry_no_terminal', 'trigger'],
+      ['kinde_account_erasure_retry_terminal_cleanup', 'trigger'],
       ['kinde_account_erasure_scheduler', 'table'],
       ['kinde_account_erasure_scheduler_no_delete', 'trigger'],
       ['kinde_account_erasure_scheduler_no_replace', 'trigger'],
@@ -407,6 +422,18 @@ export async function verifyRemoteIsolatedD1({
     const expectedTrigger = readFileSync(new URL(RETIREMENT_MIGRATION, MIGRATION_DIR), 'utf8')
       .split('DROP TRIGGER sync_replica_mutation_fence;\n')[1].trim().replace(/;$/, '');
     assert.equal(retirement.sql?.trim().replace(/;$/, ''), expectedTrigger, 'explicit retirement fence drift');
+    const retrySql = readFileSync(new URL(RETRY_MIGRATION, MIGRATION_DIR), 'utf8');
+    for (const name of [
+      'kinde_account_erasure_retries', 'kinde_account_erasure_retry_no_terminal',
+      'kinde_account_erasure_retry_terminal_cleanup',
+    ]) {
+      const start = retrySql.search(new RegExp('CREATE (?:TABLE|TRIGGER) ' + name + '\\b'));
+      assert.ok(start >= 0, 'missing reviewed retry definition ' + name);
+      const end = retrySql.indexOf('\n\n', start);
+      const expected = retrySql.slice(start, end < 0 ? undefined : end).trim().replace(/;$/, '');
+      assert.equal(schema.find(row => row.name === name)?.sql?.trim(), expected,
+        'account retry schema drift ' + name);
+    }
     const modeColumn = unpackQuery(await call('/query', `SELECT name, type, "notnull" AS required, dflt_value
       FROM pragma_table_info('sync_replica_mutations') WHERE name = 'retirement_mode'`));
     assert.deepEqual(modeColumn, [{ name: 'retirement_mode', type: 'TEXT', required: 1, dflt_value: "'expired'" }], 'explicit retirement mode drift');
@@ -424,16 +451,16 @@ export async function verifyRemoteIsolatedD1({
 async function verifyFromCli() {
   const [, , phase, flag = 'false', inventoryPath] = process.argv;
   assert.ok(flag === 'true' || flag === 'false', 'invalid populated test DB mode');
-  const existingTestDb0019 = flag === 'true';
-  if (existingTestDb0019) assert.ok(inventoryPath, 'missing private run inventory path');
-  const priorInventory = existingTestDb0019 && phase === 'after'
+  const existingTestDb0020 = flag === 'true';
+  if (existingTestDb0020) assert.ok(inventoryPath, 'missing private run inventory path');
+  const priorInventory = existingTestDb0020 && phase === 'after'
     ? JSON.parse(readFileSync(inventoryPath, 'utf8')) : undefined;
   const { inventory, ...result } = await verifyRemoteIsolatedD1({
-    phase, existingTestDb0019, priorInventory,
+    phase, existingTestDb0020, priorInventory,
     account: process.env.CLOUDFLARE_ACCOUNT_ID,
     token: process.env.CLOUDFLARE_API_TOKEN,
   });
-  if (existingTestDb0019 && phase === 'before') {
+  if (existingTestDb0020 && phase === 'before') {
     writeFileSync(inventoryPath, JSON.stringify(inventory), { flag: 'wx', mode: 0o600 });
   }
   return result;

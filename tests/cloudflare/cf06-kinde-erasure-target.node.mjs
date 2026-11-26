@@ -429,6 +429,7 @@ void test('application erasure drains only the requesting owner’s sessions and
 
 void test('alternating lanes advance a health account only with the real SQL erasure proof and independent terminal floor', async (t) => {
   const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
+  const advance = controlSchedulerClock(t, sqlite);
   const recovery = openRecoveryFixture(t);
   const proof = deletionRequestProof(attempt);
   await write(db, identity);
@@ -451,6 +452,15 @@ void test('alternating lanes advance a health account only with the real SQL era
   });
   sqlite.exec('UPDATE health_erasure_jobs SET lease_until_ms=1');
   assert.deepEqual(await healthErasureWorker.scheduled(null, env), { outcome: 'complete', keyDisposition: 'never-issued' });
+  assert.deepEqual(await healthErasureWorker.scheduled(null, env), {
+    outcome: 'checkpointed', result: { outcome: 'idle' },
+  });
+  assert.deepEqual(await healthErasureWorker.scheduled(null, env), { outcome: 'idle' });
+  assert.deepEqual(await healthErasureWorker.scheduled(null, env), {
+    outcome: 'checkpointed', result: { outcome: 'deferred' },
+  });
+  advance(60_000);
+  assert.deepEqual(await healthErasureWorker.scheduled(null, env), { outcome: 'idle' });
   assert.deepEqual(await healthErasureWorker.scheduled(null, env), {
     outcome: 'checkpointed', result: { outcome: 'idle' },
   });
@@ -566,6 +576,141 @@ void test('a blocked intent does not starve the next owner and a new sweep retri
     nextCursor: first, result: { outcome: 'accepted' },
   });
   assert.equal(status.get(first).status, 'disabled');
+});
+
+void test('the scheduled sweep uses D1 time for bounded per-owner retry and resets only after real progress', async (t) => {
+  const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
+  const recovery = openRecoveryFixture(t);
+  const advance = controlSchedulerClock(t, sqlite);
+  await write(db, identity);
+  assert.ok(await recordKindeAccountErasureIntent(db, deletionRequestProof(attempt)));
+  let denyAvailable = false;
+  const flaky = d1For(recovery.sqlite, { beforeWrite(sql) {
+    if (!denyAvailable && sql.includes('INSERT INTO recovery_account_erasure_denials')) {
+      throw new Error('synthetic denial outage');
+    }
+  } });
+  const retry = sqlite.prepare('SELECT failure_count, retry_after_ms FROM kinde_account_erasure_retries WHERE uid=?');
+  const tick = () => runKindeAccountErasureSweepTick(db, flaky);
+
+  assert.deepEqual(await tick(), { outcome: 'checkpointed', result: { outcome: 'blocked' } });
+  const first = retry.get(identity.uid);
+  assert.equal(first.failure_count, 1);
+  assert.deepEqual(await tick(), { outcome: 'checkpointed', result: { outcome: 'idle' } });
+  assert.deepEqual(await tick(), { outcome: 'checkpointed', result: { outcome: 'deferred' } });
+  assert.equal(retry.get(identity.uid).failure_count, 1);
+  assert.equal(sqlite.prepare('SELECT status FROM auth_principals WHERE uid=?').get(identity.uid).status, 'active');
+
+  advance(60_000);
+  assert.deepEqual(await tick(), { outcome: 'checkpointed', result: { outcome: 'idle' } });
+  assert.deepEqual(await tick(), { outcome: 'checkpointed', result: { outcome: 'blocked' } });
+  const second = retry.get(identity.uid);
+  assert.equal(second.failure_count, 2);
+  assert.equal(second.retry_after_ms - first.retry_after_ms, 120_000);
+  assert.deepEqual(await tick(), { outcome: 'checkpointed', result: { outcome: 'idle' } });
+  advance(119_999);
+  assert.deepEqual(await tick(), { outcome: 'checkpointed', result: { outcome: 'deferred' } });
+  denyAvailable = true;
+  assert.deepEqual(await tick(), { outcome: 'checkpointed', result: { outcome: 'idle' } });
+  advance(1);
+  assert.deepEqual(await tick(), { outcome: 'checkpointed', result: { outcome: 'accepted' } });
+  assert.equal(retry.get(identity.uid), undefined);
+  assert.equal(sqlite.prepare('SELECT status FROM auth_principals WHERE uid=?').get(identity.uid).status, 'disabled');
+});
+
+void test('a lost retry write reply or expired sweep lease never checkpoints a blocked owner', async (t) => {
+  const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
+  const recovery = openRecoveryFixture(t);
+  const advance = controlSchedulerClock(t, sqlite);
+  await write(db, identity);
+  assert.ok(await recordKindeAccountErasureIntent(db, deletionRequestProof(attempt)));
+  const failing = d1For(recovery.sqlite, { beforeWrite(sql) {
+    if (sql.includes('INSERT INTO recovery_account_erasure_denials')) throw new Error('synthetic denial outage');
+  } });
+  const lost = d1For(sqlite, { afterFirst(sql) {
+    if (sql.includes('INSERT INTO kinde_account_erasure_retries')) throw new Error('synthetic retry ACK lost');
+  } });
+  const checkpoint = sqlite.prepare('SELECT cursor_uid, lease_until_ms FROM kinde_account_erasure_scheduler');
+  await assert.rejects(runKindeAccountErasureSweepTick(lost, failing), /synthetic retry ACK lost/);
+  assert.equal(checkpoint.get().cursor_uid, null);
+  assert.equal(sqlite.prepare('SELECT failure_count FROM kinde_account_erasure_retries').get().failure_count, 1);
+  assert.deepEqual(await runKindeAccountErasureSweepTick(db, recovery.db), { outcome: 'not-claimed' });
+  advance(60_000);
+  assert.deepEqual(await runKindeAccountErasureSweepTick(db, recovery.db), {
+    outcome: 'checkpointed', result: { outcome: 'accepted' },
+  });
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_retries').get().n, 0);
+  assert.equal(checkpoint.get().lease_until_ms, 0);
+});
+
+void test('repeated denial outages cap the retry interval at one hour without changing account access', async (t) => {
+  const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
+  const recovery = openRecoveryFixture(t);
+  const advance = controlSchedulerClock(t, sqlite);
+  await write(db, identity);
+  assert.ok(await recordKindeAccountErasureIntent(db, deletionRequestProof(attempt)));
+  const failing = d1For(recovery.sqlite, { beforeWrite(sql) {
+    if (sql.includes('INSERT INTO recovery_account_erasure_denials')) throw new Error('synthetic outage');
+  } });
+  const retry = sqlite.prepare('SELECT failure_count, retry_after_ms FROM kinde_account_erasure_retries WHERE uid=?');
+  let now = Date.now();
+  for (let attemptNumber = 1; attemptNumber <= 9; attemptNumber += 1) {
+    assert.deepEqual(await runKindeAccountErasureSweepTick(db, failing), {
+      outcome: 'checkpointed', result: { outcome: 'blocked' },
+    });
+    const row = retry.get(identity.uid);
+    const interval = attemptNumber >= 7 ? 3_600_000 : 60_000 * 2 ** (attemptNumber - 1);
+    assert.equal(row.failure_count, Math.min(7, attemptNumber));
+    assert.ok(Math.abs(row.retry_after_ms - now - interval) < 1000);
+    assert.deepEqual(await runKindeAccountErasureSweepTick(db, failing), {
+      outcome: 'checkpointed', result: { outcome: 'idle' },
+    });
+    advance(interval);
+    now += interval;
+  }
+  assert.equal(sqlite.prepare('SELECT status FROM auth_principals WHERE uid=?').get(identity.uid).status, 'active');
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_requests').get().n, 0);
+});
+
+void test('an expired scheduler lease cannot create a retry record or skip an owner', async (t) => {
+  const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
+  const recovery = openRecoveryFixture(t);
+  const advance = controlSchedulerClock(t, sqlite);
+  await write(db, identity);
+  assert.ok(await recordKindeAccountErasureIntent(db, deletionRequestProof(attempt)));
+  const slowFailure = d1For(recovery.sqlite, { beforeWrite(sql) {
+    if (sql.includes('INSERT INTO recovery_account_erasure_denials')) {
+      advance(60_000);
+      throw new Error('synthetic slow outage');
+    }
+  } });
+  await assert.rejects(runKindeAccountErasureSweepTick(db, slowFailure), /kinde-erasure-retry-unavailable/);
+  assert.equal(sqlite.prepare('SELECT cursor_uid FROM kinde_account_erasure_scheduler').get().cursor_uid, null);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_retries').get().n, 0);
+  assert.deepEqual(await runKindeAccountErasureSweepTick(db, recovery.db), {
+    outcome: 'checkpointed', result: { outcome: 'accepted' },
+  });
+});
+
+void test('a lost retry-clear reply preserves the cursor and safely replays an accepted request', async (t) => {
+  const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
+  const recovery = openRecoveryFixture(t);
+  const advance = controlSchedulerClock(t, sqlite);
+  await write(db, identity);
+  assert.ok(await recordKindeAccountErasureIntent(db, deletionRequestProof(attempt)));
+  sqlite.prepare('INSERT INTO kinde_account_erasure_retries VALUES (?, 1, 1)').run(identity.uid);
+  const lost = d1For(sqlite, { afterWrite(sql) {
+    if (sql.includes('DELETE FROM kinde_account_erasure_retries')) throw new Error('synthetic retry clear ACK lost');
+  } });
+  await assert.rejects(runKindeAccountErasureSweepTick(lost, recovery.db), /synthetic retry clear ACK lost/);
+  assert.equal(sqlite.prepare('SELECT cursor_uid FROM kinde_account_erasure_scheduler').get().cursor_uid, null);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_retries').get().n, 0);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_requests').get().n, 1);
+  advance(60_000);
+  assert.deepEqual(await runKindeAccountErasureSweepTick(db, recovery.db), {
+    outcome: 'checkpointed', result: { outcome: 'progress', removed: 2 },
+  });
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_requests').get().n, 1);
 });
 
 void test('sweep commits a durable cursor even after its write reply is lost, then starts a new sweep', async (t) => {
@@ -764,6 +909,9 @@ void test('the provider runs last and the final receipt survives a lost D1 reply
   expireOnRead = true;
   assert.deepEqual(await runKindeAccountErasureProviderStep(db, recovery.db, intent, dependencies), { outcome: 'contended' });
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_completions').get().n, 0);
+  const seedRetry = sqlite.prepare(`INSERT INTO kinde_account_erasure_retries
+    (uid, failure_count, retry_after_ms) VALUES (?, 2, ?)`);
+  seedRetry.run(identity.uid, Date.now() + 120_000);
   expireOnRead = false;
   const lostReply = d1For(sqlite, { afterWrite(sql) {
     if (sql.includes('INSERT INTO kinde_account_erasure_completions')) throw new Error('synthetic terminal reply lost');
@@ -779,6 +927,8 @@ void test('the provider runs last and the final receipt survives a lost D1 reply
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_completions').get().n, 1);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_erasure_targets').get().n, 0);
   assert.equal(sqlite.prepare('SELECT status FROM auth_principals WHERE uid=?').get(identity.uid).status, 'deleted');
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_retries').get().n, 0);
+  assert.throws(() => seedRetry.run(identity.uid, Date.now() + 120_000), /kinde-erasure-retry-terminal/);
   await assert.rejects(requireIndependentAccountAccess(recovery.db, identity.uid), /independent-recovery-fence-unavailable/);
 });
 
