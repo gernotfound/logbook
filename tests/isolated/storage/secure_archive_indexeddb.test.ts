@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { clear, get, set } from 'idb-keyval';
+import { clear, get, keys, set } from 'idb-keyval';
 import { UserDataSchema } from '../../../src/lib/schema';
 import type { UserData } from '../../../src/types';
 import { clearNutritionConflict, commitDomainOperations, commitLocal, initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
@@ -118,6 +118,9 @@ describe('encrypted archive gateway transaction invariants', () => {
         await updateArchiveRecord(owner, () => undefined);
         expect(await get(archive)).toBeUndefined();
         expect(await getArchiveRecord(owner)).toBeUndefined();
+        expect(await keys()).not.toContain(archive);
+        await updateArchiveRecord(owner, () => ({ marker: 'new-archive' }));
+        expect(await getArchiveRecord<{ marker: string }>(owner)).toEqual({ marker: 'new-archive' });
     });
 });
 

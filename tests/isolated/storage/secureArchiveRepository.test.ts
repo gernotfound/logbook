@@ -65,6 +65,16 @@ describe('secure archive repository capability and transaction boundaries', () =
         await unlockVaultForOwner(owner);
     };
 
+    it.each(['read', 'write'] as const)('checks the purge fence before reading vault metadata on %s', async mode => {
+        beginLocalPurge(owner);
+        const readMetadata = vi.spyOn(localStorage, 'getItem');
+        const transform = vi.fn(changeHeight);
+        await expect(mode === 'read' ? getArchiveRecord(owner) : updateArchiveRecord(owner, transform))
+            .rejects.toBeInstanceOf(LocalPurgePendingError);
+        expect(readMetadata).not.toHaveBeenCalledWith(controlKey);
+        expect(transform).not.toHaveBeenCalled();
+    });
+
     it.each(['read', 'write'] as const)('rejects a %s begun without vault control even if another tab restores it', async mode => {
         const ciphertext = await get(archive);
         localStorage.removeItem(controlKey);
