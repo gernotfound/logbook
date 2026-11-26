@@ -15,17 +15,10 @@ import type { SemanticOperation } from './semanticProjection';
 import { classifySyncFailure } from './syncFailure';
 import { ReplicaFencedError } from './replicaProtocol';
 import { boundedPendingTransactionBatch, distinctDocumentCount, MAX_SYNC_DOCUMENTS_PER_TRANSACTION } from './syncBatching';
+import { LegalConsentRequiredError, isLegalConsentRequiredError } from './legalConsentRequiredError';
+import { evaluateGuestJournal } from './guestJournalStatus';
 
-export class LegalConsentRequiredError extends Error {
-    readonly code = 'legal-consent-required';
-    constructor() {
-        super('Consenso dell’account necessario prima della sincronizzazione cloud. I dati restano conservati localmente.');
-        this.name = 'LegalConsentRequiredError';
-    }
-}
-
-export const isLegalConsentRequiredError = (error: unknown): error is LegalConsentRequiredError =>
-    error instanceof LegalConsentRequiredError || (typeof error === 'object' && error !== null && 'code' in error && error.code === 'legal-consent-required');
+export { LegalConsentRequiredError, isLegalConsentRequiredError };
 
 class DurableAcknowledgementPendingError extends Error {
     constructor(cause: unknown) {
@@ -209,6 +202,7 @@ async function classifyTimedOutWork(
 
 export async function replicateJournal(expectedOwner?: string): Promise<SyncResult> {
     const session = captureSession();
+    if (session.owner === 'guest') return evaluateGuestJournal(session, expectedOwner);
     try {
         if (expectedOwner && session.owner !== expectedOwner) throw new Error('Sessione cambiata');
         if (!isHealthConsentWritable(session.owner) || (session.owner !== 'guest' && !isHealthConsentCloudWritable(session.owner))) return { ok: false, status: 'local-pending', error: new LegalConsentRequiredError() };
@@ -222,7 +216,7 @@ export async function replicateJournal(expectedOwner?: string): Promise<SyncResu
         }
         if (!envelope) throw new Error('Copia locale non disponibile');
         if (envelope.cloudIntegrityFence) throw new ReplicaFencedError('Snapshot cloud incompleto: verifica completa richiesta prima di sincronizzare.');
-        if (session.owner === 'guest' || !envelope.pending?.length) return { ok: true, status: 'synced' };
+        if (!envelope.pending?.length) return { ok: true, status: 'synced' };
         if (needsLegalUpdate(envelope.data.legalConsent)) {
             return { ok: false, status: 'local-pending', error: new LegalConsentRequiredError() };
         }

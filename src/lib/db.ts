@@ -1,244 +1,50 @@
-import { auth, getDb, ensureAppCheck } from './firebase';
-import {
-    collection,
-    doc,
-    documentId,
-    getDocFromServer,
-    getDocsFromServer,
-    limit,
-    orderBy,
-    query,
-    startAfter,
-    type QueryConstraint,
-    type QueryDocumentSnapshot,
-} from 'firebase/firestore';
-import { sameCloudControlState } from './sync/cloudReadConsistency';
-import type { UserData } from '../types';
-import { DomainParsers, UserDataSchema } from './schema';
-import { rootDocument } from './sync/documentProjection';
-import { assertCloudBusinessPreserved, CloudDataIntegrityError } from './sync/cloudBusinessIntegrity';
-import { getCachedCatalog } from './catalog/catalogService';
-import { syncGlobalCatalog } from './catalog/firestoreCatalogAdapter';
-import { resolveEffectiveExercises, resolveEffectiveFoods } from './catalog/deltaResolver';
-import { readAccountCloudDocument } from './sync/cloudDocumentRead';
-import { CloudCiphertextError } from './sync/cloudDocumentCipher';
-import { withTimeout } from './db/db_core';
-import { loadHistoryMonths } from './db/db_training';
-import { loadNutritionMonths } from './db/db_nutrition';
-import { requireCompleteHistoryMonthDocument, requireCompleteNutritionMonthDocument } from './sync/monthlyIntegrity';
-import { assertWorkoutSessionIdentities } from './sync/domainOperations/validation';
-import { DB as baseDB } from './_dbBase';
+import type { SyncResult } from '../types';
+import { captureSession, isCurrentSession, storageOwner } from './sync/session';
+import { classifySyncFailure } from './sync/syncFailure';
+import type { DB as LegacyDB } from './_dbBase';
+import type { loadCloudPayload } from './cloudPayloadLegacy';
 
-function parsePersistedActiveWorkout(value: unknown) {
-    if (value === null || value === undefined) return null;
-    const parsed = DomainParsers.parseActiveWorkout(value);
-    if (!parsed) throw new CloudDataIntegrityError('', ['activeWorkout']);
-    try {
-        assertWorkoutSessionIdentities(parsed, 'Allenamento attivo cloud');
-    } catch {
-        // An invalid session identity is not an authorized cloud deletion.
-        throw new CloudDataIntegrityError('', ['activeWorkout', 'id']);
-    }
-    return parsed;
-}
-
-class ConcurrentCloudReadError extends Error {
-    readonly code = 'concurrent-cloud-read';
-    constructor() {
-        super('Il cloud è cambiato durante la lettura: snapshot non utilizzabile per il checkpoint. Riprova la sincronizzazione.');
-        this.name = 'ConcurrentCloudReadError';
-    }
-}
-
-async function loadCloudPayload(options?: { allMonths?: boolean; cloudKey?: Uint8Array }, consistencyAttempt = 0): Promise<{
-    data: UserData;
-    cloudDocuments: Map<string, Record<string, unknown>>;
-    completeMonths: string[];
-} | null> {
-    const user = auth.currentUser;
-    if (!user) return null;
-    // Missing ADK cannot authorize even a rootless/empty cloud snapshot.
-    // Reject before server reads or publishing a default business state.
-    if (!(options?.cloudKey instanceof Uint8Array) || options.cloudKey.length !== 32) {
-        throw new CloudCiphertextError();
-    }
-
-    const cloudDocuments = new Map<string, Record<string, unknown>>();
-    let completeMonths: string[] = [];
-    const state: Record<string, any> & { history: unknown[]; nutrition: Record<string, unknown> } = {
-        profile: {},
-        library: [],
-        routines: [],
-        history: [],
-        nutrition: {},
-        customFoods: [],
-        activeWorkout: null,
-        trainingCycles: [],
-        activeCycleId: null,
-        nutritionPlanning: null,
-        supplements: [],
-        activePains: [],
-        legalConsent: null,
-        catalogOverrides: {},
-    };
-
-    try {
-        await ensureAppCheck();
-        const db = getDb();
-        // Every supported business transaction advances sync_control atomically.
-        // Bracket root + all paginated months with server-side control reads to
-        // reject a mixed cloud epoch, rather than treating partial data as missing.
-        const controlRef = doc(db, 'users', user.uid, 'sync_control', 'state');
-        const beforeControl = await withTimeout(
-            getDocFromServer(controlRef), 10000, 'Controllo consistenza cloud non disponibile',
-        );
-        if (auth.currentUser?.uid !== user.uid) throw new Error('Sessione cambiata durante la lettura cloud');
-        // Read the root and refresh the global catalog concurrently. Hydration must
-        // resolve the user library from the catalog actually downloaded for this
-        // request, not from a stale snapshot captured before a detached sync.
-        const [freshCatalog, root] = await Promise.all([
-            syncGlobalCatalog(db)
-                .then(result => result?.catalog)
-                .catch(error => {
-                    // A catalog/network failure must never block offline-capable
-                    // user hydration; the cached seed remains a valid fallback.
-                    console.warn('[CatalogService] Aggiornamento remoto non disponibile:', error);
-                    return null;
-                }),
-            withTimeout(
-                getDocFromServer(doc(db, 'users', user.uid)),
-                6000,
-                'Timeout recupero profilo utente',
-            ),
-        ]);
-        const catalog = freshCatalog ?? await getCachedCatalog();
-
-        if (root && typeof root.exists === 'function' && root.exists()) {
-            const normalizedRoot = readAccountCloudDocument(root.data(), 'Firestore root data schema', user.uid, '', options?.cloudKey);
-            const data = normalizedRoot.business as Record<string, any>;
-            // Reject lossy Zod normalization before declaring the cloud root authoritative.
-            // The transaction writer already enforces this invariant on remote writes.
-            const projectedRoot = rootDocument(UserDataSchema.parse(data) as unknown as UserData);
-            // A legacy/current root may explicitly persist null for the optional
-            // plan. It denotes absence, even when the schema supplies defaults.
-            if (data.nutritionPlanning === null) projectedRoot.nutritionPlanning = null;
-            assertCloudBusinessPreserved('', data, projectedRoot);
-            cloudDocuments.set('', { ...data, _sync: normalizedRoot.sync });
-            if (data.profile) state.profile = data.profile;
-            state.catalogOverrides = data.catalogOverrides || {};
-            state.library = resolveEffectiveExercises(catalog.exercises, data.library || [], state.catalogOverrides);
-            state.customFoods = resolveEffectiveFoods(catalog.foods, data.customFoods || [], state.catalogOverrides);
-            if (data.routines) state.routines = data.routines;
-            if (data.activeWorkout !== undefined) state.activeWorkout = data.activeWorkout;
-            if (data.trainingCycles) state.trainingCycles = data.trainingCycles;
-            if (data.activeCycleId !== undefined) state.activeCycleId = data.activeCycleId;
-            if (data.supplements) state.supplements = data.supplements;
-            if (data.nutritionPlanning) state.nutritionPlanning = data.nutritionPlanning;
-            state.nutritionPlanningOrigin =
-                data.nutritionPlanningOrigin === 'generated-default' || data.nutritionPlanningOrigin === 'user-edited'
-                    ? data.nutritionPlanningOrigin
-                    : undefined;
-            if (data.activePains) state.activePains = data.activePains;
-            if (data.legalConsent) state.legalConsent = data.legalConsent;
-        } else {
-            // A Firestore parent document may be absent while its subcollections exist.
-            // Initialize root defaults, then keep acquiring the requested monthly coverage.
-            state.library = resolveEffectiveExercises(catalog.exercises, [], state.catalogOverrides);
-            state.customFoods = resolveEffectiveFoods(catalog.foods, [], state.catalogOverrides);
-        }
-
-        if (options?.allMonths) {
-            const scanCollection = async (colName: 'history_months' | 'nutrition_months') => {
-                const documents = new Map<string, Record<string, unknown>>();
-                const months: string[] = [];
-                const history: unknown[] = [];
-                const nutrition: Record<string, unknown> = {};
-                let cursor: QueryDocumentSnapshot | undefined;
-                do {
-                    const constraints: QueryConstraint[] = [orderBy(documentId()), limit(400)];
-                    if (cursor) constraints.push(startAfter(cursor));
-                    const page = await withTimeout(
-                        getDocsFromServer(query(collection(db, 'users', user.uid, colName), ...constraints)),
-                        10000,
-                        `Timeout recupero ${colName} completo`,
-                    );
-                    if (auth.currentUser?.uid !== user.uid) throw new Error('Sessione cambiata durante la lettura cloud');
-                    for (const item of page.docs) {
-                        const path = `${colName}/${item.id}`;
-                        const normalized = readAccountCloudDocument(item.data(), `${path} data schema`, user.uid, path, options?.cloudKey);
-                        const rawMonthData = normalized.business;
-                        const monthData = colName === 'history_months'
-                            ? requireCompleteHistoryMonthDocument(item.id, rawMonthData)
-                            : requireCompleteNutritionMonthDocument(item.id, rawMonthData);
-                        // A full checkpoint must never treat discarded or rewritten entries as complete.
-                        assertCloudBusinessPreserved(path, rawMonthData, monthData);
-                        documents.set(path, { ...monthData, _sync: normalized.sync });
-                        months.push(item.id);
-                        if (colName === 'history_months') history.push(...Object.values(monthData));
-                        else Object.assign(nutrition, monthData);
-                    }
-                    cursor = page.size === 400 ? page.docs[page.docs.length - 1] : undefined;
-                } while (cursor);
-                return { documents, months, history, nutrition };
-            };
-            // Wait for both readers even on failure; publish only complete,
-            // validated sections in the same deterministic order as before.
-            const [historyScan, nutritionScan] = await Promise.allSettled([
-                scanCollection('history_months'),
-                scanCollection('nutrition_months'),
-            ]);
-            if (historyScan.status === 'rejected') throw historyScan.reason;
-            if (nutritionScan.status === 'rejected') throw nutritionScan.reason;
-            for (const [path, document] of historyScan.value.documents) cloudDocuments.set(path, document);
-            for (const [path, document] of nutritionScan.value.documents) cloudDocuments.set(path, document);
-            state.history = historyScan.value.history;
-            state.nutrition = nutritionScan.value.nutrition;
-            completeMonths = [...new Set([...historyScan.value.months, ...nutritionScan.value.months])];
-        } else {
-            const now = new Date();
-            const targetMonths = [0, 1, 2].map(offset => {
-                const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
-                return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-            });
-            // Independent collections populate disjoint sections of the payload.
-            await Promise.all([
-                loadHistoryMonths(user, targetMonths, state, cloudDocuments, options?.cloudKey),
-                loadNutritionMonths(user, targetMonths, state, cloudDocuments, options?.cloudKey),
-            ]);
-            completeMonths = targetMonths;
-        }
-
-        state.history.sort((a: any, b: any) => (b.globalStartTime || 0) - (a.globalStartTime || 0));
-        state.profile = DomainParsers.parseProfile(state.profile);
-        state.library = DomainParsers.parseLibrary(state.library);
-        state.routines = DomainParsers.parseRoutines(state.routines);
-        state.history = DomainParsers.parseHistory(state.history);
-        state.nutrition = DomainParsers.parseNutrition(state.nutrition);
-        state.customFoods = DomainParsers.parseCustomFoods(state.customFoods);
-        state.trainingCycles = DomainParsers.parseTrainingCycles(state.trainingCycles);
-        state.supplements = DomainParsers.parseSupplements(state.supplements);
-        state.activePains = DomainParsers.parseActivePains(state.activePains);
-        if (state.activeWorkout) state.activeWorkout = parsePersistedActiveWorkout(state.activeWorkout);
-        if (state.nutritionPlanning) state.nutritionPlanning = DomainParsers.parseNutritionPlanning(state.nutritionPlanning);
-        if (state.legalConsent) state.legalConsent = DomainParsers.parseLegalConsent(state.legalConsent);
-
-        const afterControl = await withTimeout(
-            getDocFromServer(controlRef), 10000, 'Conferma consistenza cloud non disponibile',
-        );
-        if (auth.currentUser?.uid !== user.uid) throw new Error('Sessione cambiata durante la lettura cloud');
-        if (!sameCloudControlState(beforeControl, afterControl)) {
-            if (consistencyAttempt === 0) return loadCloudPayload(options, 1);
-            throw new ConcurrentCloudReadError();
-        }
-
-        return { data: state as UserData, cloudDocuments, completeMonths };
-    } catch (error) {
-        console.error('Errore caricamento dati dal cloud:', error);
-        throw error;
-    }
-}
-
+// Keep the public DB contract while deferring Firebase-only operations to
+// account paths. Guest writes are checked against the local journal itself.
 export const DB = {
-    ...baseDB,
-    loadCloudPayload,
+    async saveUserData(state: Record<string, any>, revision?: any): Promise<SyncResult> {
+        try {
+            const session = captureSession();
+            if (session.owner === 'guest') {
+                const { evaluateGuestJournal } = await import('./sync/guestJournalStatus');
+                return evaluateGuestJournal(session);
+            }
+            const { DB: legacy } = await import('./_dbBase');
+            if (!isCurrentSession(session)) throw new Error('Sessione cambiata prima del salvataggio');
+            return legacy.saveUserData(state, revision);
+        } catch (error) {
+            console.error('Errore durante il salvataggio:', error);
+            return classifySyncFailure(error);
+        }
+    },
+    async purgeAllLocalUserData(owner?: string): Promise<void> {
+        const target = owner ?? storageOwner();
+        if (target === 'guest') {
+            const { purgeGuestLocalData } = await import('./db/guestLocalPurge');
+            return purgeGuestLocalData();
+        }
+        const { DB: legacy } = await import('./_dbBase');
+        return legacy.purgeAllLocalUserData(target);
+    },
+    async purgeCompletedAccountLocalData(owner: string): Promise<void> {
+        const { DB: legacy } = await import('./_dbBase');
+        return legacy.purgeCompletedAccountLocalData(owner);
+    },
+    async secureLogOut(options?: Parameters<typeof LegacyDB.secureLogOut>[0]): Promise<void> {
+        const { DB: legacy } = await import('./_dbBase');
+        return legacy.secureLogOut(options);
+    },
+    async deleteAccount(lifecycle: Parameters<typeof LegacyDB.deleteAccount>[0]): ReturnType<typeof LegacyDB.deleteAccount> {
+        const { DB: legacy } = await import('./_dbBase');
+        return legacy.deleteAccount(lifecycle);
+    },
+    async loadCloudPayload(options?: Parameters<typeof loadCloudPayload>[0]): ReturnType<typeof loadCloudPayload> {
+        const legacy = await import('./cloudPayloadLegacy');
+        return legacy.loadCloudPayload(options);
+    },
 };

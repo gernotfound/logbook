@@ -10,6 +10,7 @@ import { LEGAL_VERSIONS } from './legalVersions';
 import { auth } from './firebase';
 import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from './sync/browserStorage';
 import { captureSessionForOwner, isActiveGuestSession, userOwner } from './sync/session';
+import { getGuestHealthConsentStatus as readGuestHealthConsentStatus, markGuestHealthConsentWithdrawn } from './guestHealthConsent';
 
 export type HealthConsentStatus = 'unregistered' | 'checking' | 'active' | 'withdrawn' | 'pending' | 'reaccepting' | 'recovery-required' | 'erasure-required' | 'stale-request' | 'error';
 const entries = new Map<string, HealthConsentStatus>();
@@ -31,7 +32,6 @@ const invalidateConsentChecks = (uid: string) => {
   verificationSerials.set(uid, next);
   return next;
 };
-const guestMarker = 'logbook:v2:guest:health-consent-withdrawal';
 const reacceptMarker = (revision: number) => `reaccepting:${revision}`;
 const parseReacceptRevision = (saved: string | null): number | null => {
   if (!saved?.startsWith('reaccepting:')) return null;
@@ -109,18 +109,11 @@ export function currentHealthConsentStatus(uid: string | undefined): HealthConse
   }
 }
 export function getGuestHealthConsentStatus(): HealthConsentStatus {
-  try {
-    const value = readBrowserValueStrict(guestMarker);
-    if (value === null) return 'active';
-    if (value === 'withdrawn') return value;
-    return 'error';
-  } catch {
-    return 'error';
-  }
+  return readGuestHealthConsentStatus();
 }
 
 export function withdrawGuestHealthConsent(): void {
-  writeBrowserValue(guestMarker, 'withdrawn');
+  markGuestHealthConsentWithdrawn();
   notify();
 }
 
