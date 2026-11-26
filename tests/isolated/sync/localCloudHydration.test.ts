@@ -6,15 +6,170 @@ vi.mock('../../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: ca
 
 import { CURRENT_DATA_SCHEMA, CURRENT_LOCAL_ENVELOPE, CURRENT_SYNC_PROTOCOL } from '../../../src/lib/schemaEvolution';
 import { hydrateLocal, IncompleteCloudSnapshotError, readLocal } from '../../../src/lib/sync/localRepository';
+import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
+import { activateGuestSession, GUEST_SESSION_KEY } from '../../../src/lib/sync/session';
+import { readAuthenticatedCloudflareCheckpoint } from '../../../src/lib/sync/cloudReplicaCheckpoint';
+import { stageCloudflareReplicaClaim } from '../../../src/lib/sync/cloudReplicaClaimRecovery';
+import { stageCloudflareReplicaRetirement } from '../../../src/lib/sync/cloudReplicaRetirementRecovery';
+import { stageCloudflareDelivery } from '../../../src/lib/sync/cloudReplicaDurableDelivery';
 import type { CachedGlobalCatalog } from '../../../src/types';
 import {
-    owner, key, catalog, state, workout, serverSnapshot, snapshot, registerAndEdit,
+    owner, key, accountKey, catalog, state, workout, serverSnapshot, snapshot, registerAndEdit,
     expectFencedArchive, installLocalCloudHydrationFixture,
 } from './localCloudHydrationFixture';
 
 installLocalCloudHydrationFixture(() => { catalogSource.read.mockReset().mockResolvedValue(catalog); });
 
 describe('diagnostic cloud hydration through the encrypted local archive', () => {
+    it('installs a verified full checkpoint into a previously empty account vault', async () => {
+        const remote = serverSnapshot(state('170'));
+
+        const result = await hydrateLocal(owner, remote.data, [], remote.documents, 'all',
+            () => true, { consentRevision: 1, localRevision: null });
+
+        expect(result).toMatchObject({ owner, revision: 0, consentRevision: 1,
+            pending: [], syncMetaByDocument: remote.metadata });
+        expect(await snapshot()).toEqual(result);
+        expect(await get(key)).toMatch(/^tlb-sealed:v1:/);
+    });
+
+    it('never writes a checkpoint without full cloud evidence, a live guard and a valid consent epoch', async () => {
+        const remote = serverSnapshot(state('170'));
+        const expected = { consentRevision: 1, localRevision: null };
+        const before = await get(key);
+        const attempts = [
+            () => hydrateLocal(owner, remote.data, [], remote.documents, 'window', () => true, expected),
+            () => hydrateLocal(owner, remote.data, [], undefined, 'all', () => true, expected),
+            () => hydrateLocal(owner, remote.data, [], remote.documents, 'all', undefined, expected),
+            () => hydrateLocal(owner, remote.data, [], remote.documents, 'all', () => true,
+                { consentRevision: 0, localRevision: null }),
+            () => hydrateLocal(owner, remote.data, [], remote.documents, 'all', () => true,
+                { consentRevision: 1.5, localRevision: null }),
+            () => hydrateLocal(owner, remote.data, [], remote.documents, 'all', () => true,
+                { consentRevision: 1, localRevision: 0 }),
+        ];
+
+        for (const attempt of attempts) {
+            await expect(attempt()).rejects.toThrow('Checkpoint locale modificato');
+            expect(await get(key)).toBe(before);
+            expect(await readLocal(owner)).toBeUndefined();
+        }
+
+        const guestSessionId = 'hydration-checkpoint-guest-session';
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, guestSessionId);
+        activateGuestSession(guestSessionId);
+        await createAndMigrateVault('guest');
+        const guestKey = 'logbook:v2:guest';
+        const originalGuest = await get(guestKey);
+        await expect(hydrateLocal('guest', remote.data, [], remote.documents, 'all',
+            () => true, expected)).rejects.toThrow('Checkpoint locale modificato');
+        expect(await get(guestKey)).toBe(originalGuest);
+        expect(await readLocal('guest')).toBeUndefined();
+    });
+
+    it('refuses a stale revision or changed consent when checkpointing an existing vault', async () => {
+        const remote = serverSnapshot(state('170'));
+        const initial = await hydrateLocal(owner, remote.data, [], remote.documents, 'all');
+        const before = await get(key);
+
+        await expect(hydrateLocal(owner, remote.data, [], remote.documents, 'all', () => true,
+            { consentRevision: 1, localRevision: null })).rejects.toThrow('Checkpoint locale modificato');
+        await expect(hydrateLocal(owner, remote.data, [], remote.documents, 'all', () => true,
+            { consentRevision: 2, localRevision: initial.revision })).rejects.toThrow('Checkpoint locale modificato');
+        expect(await get(key)).toBe(before);
+        expect(await snapshot()).toEqual(initial);
+
+        const unchanged = await hydrateLocal(owner, remote.data, [], remote.documents, 'all',
+            () => true, { consentRevision: 1, localRevision: initial.revision });
+        expect(unchanged).toEqual(initial);
+        expect(await get(key)).toBe(before);
+    });
+
+    it('cannot replace an integrity-fenced archive even with matching revision and a fresh scan', async () => {
+        const original = serverSnapshot(state('170', {}, [workout('covered', '2026-09-01')]));
+        await hydrateLocal(owner, original.data, ['2026-09'], original.documents, 'all');
+        const pending = await registerAndEdit();
+        const incomplete = serverSnapshot(state('170'));
+        await expect(hydrateLocal(owner, incomplete.data, ['2026-09'], incomplete.documents, 'all'))
+            .rejects.toBeInstanceOf(IncompleteCloudSnapshotError);
+        const fenced = await snapshot();
+        expectFencedArchive(fenced, pending);
+        expect(fenced.consentRevision).toBe(1);
+        const ciphertext = await get(key);
+
+        await expect(hydrateLocal(owner, original.data, ['2026-09'], original.documents, 'all',
+            () => true, { consentRevision: 1, localRevision: fenced.revision }))
+            .rejects.toThrow('Checkpoint locale modificato');
+        expect(await get(key)).toBe(ciphertext);
+        expect(await snapshot()).toEqual(fenced);
+    });
+
+    it('does not replace an outstanding authenticated D1 replica claim with a hydration checkpoint', async () => {
+        const remote = serverSnapshot(state('170'));
+        const original = await hydrateLocal(owner, remote.data, [], remote.documents, 'all');
+        const verified = await readAuthenticatedCloudflareCheckpoint(
+            async () => ({ revision: 0, fenceEpoch: 5, consentRevision: 1, documents: [] }),
+            'a', accountKey, 1, () => true,
+        );
+        await stageCloudflareReplicaClaim(owner, verified,
+            { revision: 0, fenceEpoch: 5, consentRevision: 1, replicas: {} },
+            'hydration-candidate-device', () => true, original.revision);
+        const staged = await snapshot();
+        expect(staged.cloudflareReplicaClaim).toBeDefined();
+        const ciphertext = await get(key);
+
+        await expect(hydrateLocal(owner, remote.data, [], remote.documents, 'all', () => true,
+            { consentRevision: 1, localRevision: staged.revision }))
+            .rejects.toThrow('Checkpoint locale modificato');
+        expect(await get(key)).toBe(ciphertext);
+        expect(await snapshot()).toEqual(staged);
+    });
+
+    it('preserves an outstanding D1 retirement request across a competing hydration', async () => {
+        const remote = serverSnapshot(state('170'));
+        await hydrateLocal(owner, remote.data, [], remote.documents, 'all');
+        const now = Date.now();
+        const target = { slot: 's02', replicaId: 'expired-hydration-device', generation: 1,
+            checkpointAtMs: now - 86400000, leaseUntilMs: now - 600000 };
+        await stageCloudflareReplicaRetirement(owner, {
+            uid: 'a', revision: 0, fenceEpoch: 5, consentRevision: 1,
+            replicas: { s02: { ...target, status: 'active', lastSeq: 8, checkpointClock: { s01: 4 } } },
+        }, target, () => true);
+        const pending = await snapshot();
+        expect(pending.cloudflareReplicaRetirement).toBeDefined();
+        const ciphertext = await get(key);
+
+        await expect(hydrateLocal(owner, remote.data, [], remote.documents, 'all', () => true,
+            { consentRevision: 1, localRevision: pending.revision }))
+            .rejects.toThrow('Checkpoint locale modificato');
+        expect(await get(key)).toBe(ciphertext);
+        expect(await snapshot()).toEqual(pending);
+    });
+
+    it('keeps the journal and sealed D1 delivery attempt intact when hydration competes', async () => {
+        const remote = serverSnapshot(state('170'));
+        await hydrateLocal(owner, remote.data, [], remote.documents, 'all');
+        const edited = await registerAndEdit();
+        if (!edited.replica) throw new Error('Expected registered replica');
+        await stageCloudflareDelivery(owner, edited.pending,
+            { revision: 0, fenceEpoch: 5, consentRevision: 1,
+                documents: [{ path: '', revision: null, document: null }] },
+            { uid: 'a', revision: 0, fenceEpoch: 5, consentRevision: 1,
+                replicas: { [edited.replica.slot]: { ...edited.replica,
+                    status: 'active', lastSeq: 0, checkpointClock: {} } } },
+            edited.replica, 'batch000000000191', accountKey, () => true);
+        const pending = await snapshot();
+        expect(pending.cloudflareDelivery).toBeDefined();
+        const ciphertext = await get(key);
+
+        await expect(hydrateLocal(owner, remote.data, [], remote.documents, 'all', () => true,
+            { consentRevision: 1, localRevision: pending.revision }))
+            .rejects.toThrow('Checkpoint locale modificato');
+        expect(await get(key)).toBe(ciphertext);
+        expect(await snapshot()).toEqual(pending);
+    });
+
     it('creates the first envelope with current versions, consent and the joined server frontier', async () => {
         const remote = serverSnapshot(state('170',
             { '2026-09-01': { date: '2026-09-01', weight: 80 } },
@@ -146,14 +301,18 @@ describe('diagnostic cloud hydration through the encrypted local archive', () =>
             await expect(pending).rejects.toBeInstanceOf(IncompleteCloudSnapshotError);
             await expect(pending).rejects.toMatchObject({
                 causeKind: 'missing-document', documentPaths: [path],
+                evidence: 'cloud-snapshot-integrity', name: 'IncompleteCloudSnapshotError',
                 message: expect.stringContaining('Snapshot cloud incompleto'),
             });
             expectFencedArchive(await snapshot(), before);
         },
     );
 
-    it.each(['history_months/2026-09', 'nutrition_months/2026-09'])(
-        'rejects delayed causal evidence for %s before certifying a checkpoint', async path => {
+    it.each([
+        ['history_months/2026-09', 'all'], ['history_months/2026-09', 'window'],
+        ['nutrition_months/2026-09', 'all'], ['nutrition_months/2026-09', 'window'],
+    ] as const)(
+        'rejects delayed causal evidence for %s with %s coverage before a checkpoint', async (path, coverage) => {
             const business = path.startsWith('history_months/')
                 ? state('170', {}, [workout('covered', '2026-09-01')])
                 : state('170', { '2026-09-01': { date: '2026-09-01', weight: 80 } });
@@ -161,11 +320,12 @@ describe('diagnostic cloud hydration through the encrypted local archive', () =>
             await hydrateLocal(owner, initial.data, ['2026-09'], initial.documents, 'all');
             const before = await registerAndEdit();
             const delayed = serverSnapshot(business, { '': { s01: 7 }, [path]: { s01: 13 } });
-            const pending = hydrateLocal(owner, delayed.data, ['2026-09'], delayed.documents, 'all');
+            const pending = hydrateLocal(owner, delayed.data, ['2026-09'], delayed.documents, coverage);
 
             await expect(pending).rejects.toBeInstanceOf(IncompleteCloudSnapshotError);
             await expect(pending).rejects.toMatchObject({
                 causeKind: 'stale-document', documentPaths: [path],
+                evidence: 'cloud-snapshot-integrity', name: 'IncompleteCloudSnapshotError',
                 message: expect.stringContaining('Snapshot cloud non aggiornato'),
             });
             expectFencedArchive(await snapshot(), before);
