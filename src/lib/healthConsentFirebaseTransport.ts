@@ -4,8 +4,6 @@ import { auth, ensureAppCheck } from './firebase';
 import { getLimitedUseAppCheckToken } from './appCheck';
 import { captureSessionForOwner, userOwner } from './sync/session';
 import { ConsentTransportUnavailableError, type ServerStatus } from './healthConsentTransportContract';
-export { ConsentTransportUnavailableError, isRetryableConsentTransportError } from './healthConsentTransportContract';
-export type { ServerStatus } from './healthConsentTransportContract';
 
 // Legacy Firebase transport only. Consent decisions and local authorization
 // remain in healthConsent.ts; the Kinde/D1 candidate uses its own boundary.
