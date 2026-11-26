@@ -103,6 +103,9 @@ interpretando un file incompleto come manifest valido.
 Il manifest JSON mantiene `schemaVersion=1`, `docRefs` e `itemCounts` e
 aggiunge `digests` SHA-256. I riferimenti sono nomi di file
 `<tipo>_<versione>_<sha256>.json`; ciascun file contiene `{ "items": [...] }`.
+L'impronta rileva incoerenze fra manifest e file, **non** autentica
+crittograficamente chi ha pubblicato il manifest: il confine di fiducia
+resta la distribuzione della stessa origin sottoposta a review.
 Il formato non trasforma versioni di release PWA in versioni catalogo.
 L'adapter `src/lib/catalog/staticCatalogAdapter.ts` è un **candidato non
 montato**: legge `/catalog/manifest.json` senza cache HTTP e i documenti

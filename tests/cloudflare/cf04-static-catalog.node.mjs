@@ -72,7 +72,7 @@ test('rejects empty bundles, duplicate IDs, bad nutritional data, invalid versio
   await assert.rejects(prepareStaticCatalog({ version, updatedAt: '2026-02-30T10:00:00.000Z', exercisesPath, foodsPath }), /updated-at/);
 });
 
-test('rejects lossy schema fallbacks before signing a static release', async () => {
+test('rejects lossy schema fallbacks before preparing a static package', async () => {
   await writeFile(exercisesPath, JSON.stringify([{ ...exercise, id: 123 }]));
   await assert.rejects(prepareStaticCatalog({ version, updatedAt, exercisesPath, foodsPath }), /schema client/);
   await writeFile(exercisesPath, JSON.stringify([{ ...exercise, trackingType: 'broken' }]));
