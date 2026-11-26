@@ -111,12 +111,13 @@ export async function requestKindeAccountErasure(db, intent, proveIndependentDen
  * @param {Parameters<typeof requestKindeAccountErasure>[0]} db
  * @param {Parameters<typeof armIndependentAccountErasureDenial>[0]} recoveryDb
  * @param {Parameters<typeof requestKindeAccountErasure>[1]} intent
+ * @param {number | null} [expected]
  */
-export function acceptKindeAccountErasure(db, recoveryDb, intent) {
+export function acceptKindeAccountErasure(db, recoveryDb, intent, expected = null) {
   if (!db || !recoveryDb || db === recoveryDb) throw new Error('kinde-erasure-request-unavailable');
   return (async () => {
     try {
-      const generation = await readOpenRecoveryGeneration(recoveryDb);
+      const generation = await readOpenRecoveryGeneration(recoveryDb, expected);
       const accepted = await requestKindeAccountErasure(db, intent, current =>
         armIndependentAccountErasureDenial(recoveryDb, current, generation));
       if (accepted) await requireIndependentAccountErasureDenial(recoveryDb, intent, generation);

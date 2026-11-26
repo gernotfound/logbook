@@ -61,10 +61,11 @@ async function claimProviderLease(primary, uid) {
  *   issuer: string, accessToken: string, fetchImpl: typeof fetch,
  *   codec: ReturnType<typeof import('./kinde-erasure-target.mjs').createKindeErasureTargetCodec>,
  * }} dependencies
+ * @param {number | null} [expected]
  */
-export async function runKindeAccountErasureProviderStep(db, recoveryDb, intent, dependencies) {
+export async function runKindeAccountErasureProviderStep(db, recoveryDb, intent, dependencies, expected = null) {
   if (!db || !recoveryDb || db === recoveryDb) throw new Error('kinde-erasure-provider-unavailable');
-  const generation = await readIndependentAccountErasureGeneration(recoveryDb, intent);
+  const generation = await readIndependentAccountErasureGeneration(recoveryDb, intent, expected);
   const completedAtMs = await readCompletion(db, intent);
   if (completedAtMs !== null) {
     await requireIndependentAccountErasureDenial(recoveryDb, intent, generation);

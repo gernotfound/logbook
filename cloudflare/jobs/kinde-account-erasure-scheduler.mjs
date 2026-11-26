@@ -1,4 +1,5 @@
 import { D1_NOW_MS } from '../sql/d1-time.mjs';
+import { readOpenRecoveryGeneration } from '../recovery/independent-owner-fence.mjs';
 import { runOneKindeAccountErasureStep } from './kinde-account-erasure-runner.mjs';
 
 const UID = /^k_[A-Za-z0-9_-]{43}$/;
@@ -76,6 +77,7 @@ function newLeaseToken() {
  */
 export async function runKindeAccountErasureSweepTick(db, recoveryDb, provider = null) {
   if (!db || !recoveryDb || db === recoveryDb) throw new Error('kinde-erasure-scheduler-unavailable');
+  const generation = await readOpenRecoveryGeneration(recoveryDb);
   const token = newLeaseToken();
   const primary = db.withSession('first-primary');
   const lease = await primary.prepare(`
@@ -91,7 +93,11 @@ export async function runKindeAccountErasureSweepTick(db, recoveryDb, provider =
     || (lease.cursor_uid !== null && (typeof lease.cursor_uid !== 'string' || !UID.test(lease.cursor_uid)))) {
     throw new Error('kinde-erasure-scheduler-unavailable');
   }
-  const step = await runOneKindeAccountErasureStep(db, recoveryDb, lease.cursor_uid, provider);
+  const step = await runOneKindeAccountErasureStep(db, recoveryDb, lease.cursor_uid, provider, generation);
+  // A per-owner failure is retryable; a sealed/reopened recovery registry is
+  // not. The dispatcher intentionally absorbs owner errors, so the sweep
+  // must independently recheck the captured global generation.
+  await readOpenRecoveryGeneration(recoveryDb, generation);
   await updateOwnerRetry(db, step.nextCursor, step.result, lease);
 
   let writeProven = false;
@@ -110,6 +116,7 @@ export async function runKindeAccountErasureSweepTick(db, recoveryDb, provider =
     SELECT cursor_uid, lease_epoch, lease_token, lease_until_ms
     FROM kinde_account_erasure_scheduler WHERE singleton = 1
   `).bind().first();
+  await readOpenRecoveryGeneration(recoveryDb, generation);
   if (current?.lease_epoch === lease.lease_epoch && current.lease_token === token
     && current.lease_until_ms === 0 && current.cursor_uid === step.nextCursor) {
     return { outcome: 'checkpointed', result: step.result };

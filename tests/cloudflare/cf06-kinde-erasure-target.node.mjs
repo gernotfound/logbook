@@ -578,6 +578,72 @@ void test('a blocked intent does not starve the next owner and a new sweep retri
   assert.equal(status.get(first).status, 'disabled');
 });
 
+void test('a recovery generation change during an owner failure stops the sweep without a cursor or retry ACK', async (t) => {
+  const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
+  const recovery = openRecoveryFixture(t);
+  const advance = controlSchedulerClock(t, sqlite);
+  await write(db, identity);
+  assert.ok(await recordKindeAccountErasureIntent(db, deletionRequestProof(attempt)));
+  const interrupted = d1For(recovery.sqlite, { beforeWrite(sql) {
+    if (sql.includes('INSERT INTO recovery_account_erasure_denials')) {
+      recovery.sqlite.exec("UPDATE recovery_control SET mode='sealed', generation=3");
+      recovery.sqlite.exec("UPDATE recovery_control SET mode='open', generation=4");
+      throw new Error('synthetic recovery swap');
+    }
+  } });
+  await assert.rejects(runKindeAccountErasureSweepTick(db, interrupted), /independent-recovery-fence-unavailable/);
+  assert.equal(sqlite.prepare('SELECT cursor_uid FROM kinde_account_erasure_scheduler').get().cursor_uid, null);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_retries').get().n, 0);
+  assert.equal(sqlite.prepare('SELECT status FROM auth_principals WHERE uid=?').get(identity.uid).status, 'active');
+  assert.equal(recovery.sqlite.prepare('SELECT COUNT(*) AS n FROM recovery_account_erasure_denials').get().n, 0);
+  advance(60_000);
+  assert.deepEqual(await runKindeAccountErasureSweepTick(db, recovery.db), {
+    outcome: 'checkpointed', result: { outcome: 'accepted' },
+  });
+});
+
+void test('a global recovery change during Management GET never grants a sweep checkpoint or DELETE', async (t) => {
+  const { db, sqlite, attempt, identity, write, codec } = await deletionAttemptFixture(t);
+  const recovery = openRecoveryFixture(t);
+  await write(db, identity);
+  const intent = await recordKindeAccountErasureIntent(db, deletionRequestProof(attempt));
+  assert.equal(await acceptKindeAccountErasure(db, recovery.db, intent), true);
+  assert.deepEqual(await runKindeAccountErasureAppStep(db, recovery.db, intent), { outcome: 'progress', removed: 2 });
+  const calls = [];
+  const dependencies = {
+    issuer, codec, accessToken: 'synthetic.worker.token',
+    async fetchImpl(request) {
+      calls.push(request.method);
+      recovery.sqlite.exec("UPDATE recovery_control SET mode='sealed', generation=3");
+      recovery.sqlite.exec("UPDATE recovery_control SET mode='open', generation=4");
+      return Response.json({ code: 'OK', message: 'Synthetic lookup', users: [{ id: subject }] });
+    },
+  };
+  await assert.rejects(runKindeAccountErasureSweepTick(db, recovery.db, dependencies),
+    /independent-recovery-fence-unavailable/);
+  assert.deepEqual(calls, ['GET']);
+  assert.equal(sqlite.prepare('SELECT cursor_uid FROM kinde_account_erasure_scheduler').get().cursor_uid, null);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_retries').get().n, 0);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_completions').get().n, 0);
+});
+
+void test('a generation change after the cursor write withholds the sweep success response', async (t) => {
+  const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
+  const recovery = openRecoveryFixture(t);
+  await write(db, identity);
+  assert.ok(await recordKindeAccountErasureIntent(db, deletionRequestProof(attempt)));
+  const intercepted = d1For(sqlite, { afterWrite(sql) {
+    if (sql.includes('SET cursor_uid = ?')) {
+      recovery.sqlite.exec("UPDATE recovery_control SET mode='sealed', generation=3");
+      recovery.sqlite.exec("UPDATE recovery_control SET mode='open', generation=4");
+    }
+  } });
+  await assert.rejects(runKindeAccountErasureSweepTick(intercepted, recovery.db),
+    /independent-recovery-fence-unavailable/);
+  assert.equal(sqlite.prepare('SELECT cursor_uid FROM kinde_account_erasure_scheduler').get().cursor_uid, identity.uid);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM kinde_account_erasure_completions').get().n, 0);
+});
+
 void test('the scheduled sweep uses D1 time for bounded per-owner retry and resets only after real progress', async (t) => {
   const { db, sqlite, attempt, identity, write } = await deletionAttemptFixture(t);
   const recovery = openRecoveryFixture(t);

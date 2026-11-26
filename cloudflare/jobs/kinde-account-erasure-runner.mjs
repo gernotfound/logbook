@@ -19,8 +19,9 @@ const UID = /^k_[A-Za-z0-9_-]{43}$/;
  * @param {Parameters<typeof acceptKindeAccountErasure>[1]} recoveryDb
  * @param {string | null} [after]
  * @param {Parameters<typeof runKindeAccountErasureProviderStep>[3] | null} [provider]
+ * @param {number | null} [expectedRecoveryGeneration]
  */
-export async function runOneKindeAccountErasureStep(db, recoveryDb, after = null, provider = null) {
+export async function runOneKindeAccountErasureStep(db, recoveryDb, after = null, provider = null, expectedRecoveryGeneration = null) {
   if (!db || !recoveryDb || db === recoveryDb) throw new Error('kinde-erasure-runner-unavailable');
   if (after !== null && (typeof after !== 'string' || !UID.test(after))) {
     throw new TypeError('invalid-kinde-erasure-runner-cursor');
@@ -50,12 +51,12 @@ export async function runOneKindeAccountErasureStep(db, recoveryDb, after = null
   if (row.deferred === 1) return { nextCursor, result: { outcome: 'deferred' } };
   try {
     if (row.accepted === 0) {
-      const accepted = await acceptKindeAccountErasure(db, recoveryDb, intent);
+      const accepted = await acceptKindeAccountErasure(db, recoveryDb, intent, expectedRecoveryGeneration);
       return { nextCursor, result: { outcome: accepted ? 'accepted' : 'contended' } };
     }
     const result = provider === null
-      ? await runKindeAccountErasureAppStep(db, recoveryDb, intent)
-      : await runKindeAccountErasureProviderStep(db, recoveryDb, intent, provider);
+      ? await runKindeAccountErasureAppStep(db, recoveryDb, intent, expectedRecoveryGeneration)
+      : await runKindeAccountErasureProviderStep(db, recoveryDb, intent, provider, expectedRecoveryGeneration);
     return { nextCursor, result };
   } catch {
     // A blocked owner must not starve the rest of the sweep. Its durable
