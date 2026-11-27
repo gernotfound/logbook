@@ -16,6 +16,19 @@ avere le stesse revisioni, lo stesso epoch e registri di replica equivalenti.
 
 ### CF-04 — Barriera journal per il rientro di una replica ritirata (candidato 27/11/2026)
 
+La diagnostica candidata `inspectKindeCandidateOfflineReplicaJournal()` apre
+soltanto un vault già provisionato, con sessione Kinde e consenso trusted
+correnti, legge il journal cifrato e verifica due registri D1 owner-bound
+identici. Rilegge l'archivio prima della risposta per rifiutare cambi locali
+concorrenti e rilascia la capacità di vault su ogni esito. Distingue journal
+vuoto, primo claim con pending, mutazione già sigillata, membership originale
+attiva e replica ritirata/sostituita/scaduta o mancante. L'UI candidata
+segnala i pending non ACKati senza esporre contenuti salute. Non crea vault,
+non acquisisce ADK, non invia commit/claim, non modifica IndexedDB e non
+autorizza un replay: una lettura di membership non prova il contenuto del
+cloud né la riconciliazione dei conflitti. Non estendere questo responso
+al fitness pubblico; un recupero causale esplicito SYNC-7D/7E resta aperto.
+
 Prima di sigillare una nuova richiesta D1, `stageCloudflareReplicaClaim()`
 rifiuta un archivio che possiede sia una replica precedente sia operazioni
 offline nel journal. Una prima registrazione senza replica può invece
