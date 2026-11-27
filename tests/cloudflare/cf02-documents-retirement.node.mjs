@@ -28,6 +28,50 @@ void test('retirement requires elapsed lease plus skew; reused slot fences old j
   assert.equal((await call(db, 'commit', attempt('batch000000000076', 1, 2))).status, 409);
 }));
 
+void test('slot reuse carries a committed sequence across generations without reviving the old writer', () => withFixture(async db => {
+  const committed = attempt('old-replica-sequence-02', 2, 0);
+  assert.equal((await call(db, 'commit', committed)).status, 200);
+  assert.equal(db.sqlite.prepare("SELECT last_seq FROM sync_replicas WHERE uid=? AND slot='s00'").get(owner).last_seq, 2);
+
+  db.sqlite.prepare("UPDATE sync_replicas SET lease_until_ms=? WHERE uid=? AND slot='s00'")
+    .run(Date.now() - 600000, owner);
+  const retired = await call(db, 'replica/retire', retire('retire-old-sequence-02', 1));
+  assert.equal(retired.status, 200);
+  assert.equal(retired.body.baseSeq, 2);
+
+  const now = Date.now();
+  for (let i = 1; i < 16; i++) {
+    db.sqlite.prepare('INSERT INTO sync_replicas (uid,slot,replica_id,generation,lease_until_ms,checkpoint_at_ms,checkpoint_clock_json,last_seq,status) VALUES (?,?,?,?,?,?,?,?,?)')
+      .run(owner, `s${String(i).padStart(2, '0')}`, `occupied-device-${i}`, 1,
+        now - 600000, now - 86400000, '{}', 0, 'active');
+  }
+  const successor = await call(db, 'replica/claim', claim('claim-new-sequence-02', 2, 'successor-device', { s00: 2 }));
+  assert.equal(successor.status, 200);
+  assert.equal(successor.body.action, 'reuse-expired');
+  assert.equal(successor.body.replica.slot, 's00');
+  assert.equal(successor.body.replica.generation, 2);
+  assert.equal(successor.body.baseSeq, 2);
+  assert.equal(db.sqlite.prepare("SELECT last_seq FROM sync_replicas WHERE uid=? AND slot='s00'").get(owner).last_seq, 2);
+
+  // The old receipt is durable historical evidence, not a renewed writer grant.
+  const replay = await call(db, 'commit', committed);
+  assert.equal(replay.status, 200);
+  assert.equal(replay.body.replayed, true);
+  assert.equal(replay.body.revision, 1);
+  assert.equal((await call(db, 'commit', attempt('old-replica-after-reuse', 3, 3))).status, 409);
+
+  const next = attempt('successor-sequence-03', 3, 3);
+  next.replica = { slot: successor.body.replica.slot,
+    replicaId: successor.body.replica.replicaId,
+    generation: successor.body.replica.generation };
+  next.documents[0].document._sync.writer = { ...next.replica, seq: 3, consentRevision: 1 };
+  const saved = await call(db, 'commit', next);
+  assert.equal(saved.status, 200);
+  assert.equal(saved.body.revision, 4);
+  assert.equal(saved.body.lastSeq, 3);
+  assert.equal(db.sqlite.prepare("SELECT last_seq FROM sync_replicas WHERE uid=? AND slot='s00'").get(owner).last_seq, 3);
+}));
+
 void test('account, consent, CSRF, lease and snapshot fences apply to replica maintenance', () => withFixture(async db => {
   const input = claim('mutation0000000011');
   assert.equal((await call(db, 'replica/claim', input, { env: { DB: db, API_ORIGIN: origin } })).status, 503);
