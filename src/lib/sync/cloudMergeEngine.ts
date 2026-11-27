@@ -10,7 +10,7 @@ import { assertCloudBusinessPreserved } from './cloudBusinessIntegrity';
 import { CloudCiphertextError, sealCloudDocument, type SealedCloudDocument } from './cloudDocumentCipher';
 import { readAccountCloudDocument } from './cloudDocumentRead';
 
-function normalizeRemote(path: string, raw: DocumentData): DocumentData {
+export function normalizeRemote(path: string, raw: DocumentData): DocumentData {
     if (path === '') {
         const root = rootDocument(UserDataSchema.parse(raw) as unknown as UserData);
         // A missing plan must not be promoted to a synthetic nested plan on retry.

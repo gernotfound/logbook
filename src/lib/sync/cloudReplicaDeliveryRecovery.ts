@@ -1,10 +1,10 @@
 import equal from 'fast-deep-equal';
-import type { UserData } from '../../types';
-import { UserDataSchema } from '../schema';
 import { assertCloudBusinessPreserved } from './cloudBusinessIntegrity';
+import { readAccountCloudDocument } from './cloudDocumentRead';
 import { readAuthenticatedCloudflareCheckpoint } from './cloudReplicaCheckpoint';
 import { prepareCloudflareCommit } from './cloudReplicaCommit';
 import { parseCloudflareDeliveryIntent, type CloudflareDeliveryIntent } from './cloudReplicaDeliveryRecord';
+import { normalizeRemote } from './cloudMergeEngine';
 import { rootDocument } from './documentProjection';
 import type {
     CloudReplicaCompleteScan, createCloudflareReplicaTransport,
@@ -36,6 +36,7 @@ function requireCurrent(guard: Guard): void {
 function independentProfileRebase(
     local: LocalEnvelope,
     operations: CloudflareDeliveryIntent['operations'],
+    staged: NormalizedCloudDocument,
     verified: NormalizedCloudDocument | undefined,
 ): boolean {
     if (!verified || !operations.length || operations.some(op => op.docPath !== ''
@@ -62,9 +63,15 @@ function independentProfileRebase(
     if (!independent.size || !coversVectorClock(accountedClock, meta.clock)) return false;
 
     const baseline = rootDocument(local.baseline);
-    const remote = rootDocument(UserDataSchema.parse(verified.business) as unknown as UserData);
+    // The staged ciphertext is the immutable witness for OTHER root keys.
+    // A local pre-claim baseline may have trusted legal fields that were not
+    // yet present in the first cloud root; comparing those against the cloud
+    // would falsely classify an unrelated profile edit as a conflict.
+    const original = normalizeRemote('', staged.business);
+    assertCloudBusinessPreserved('', staged.business, original);
+    const remote = normalizeRemote('', verified.business);
     assertCloudBusinessPreserved('', verified.business, remote);
-    const expected = structuredClone(baseline);
+    const expected = structuredClone(original);
     const expectedProfile = { ...(baseline.profile as Record<string, unknown> | null ?? {}) };
     const remoteProfile = remote.profile as Record<string, unknown> | null;
     for (const field of independent) {
@@ -155,9 +162,13 @@ export async function restageUncommittedCloudflareDelivery(
     // Every D1 document write records the committing control revision.
     // Unchanged documents can be safely re-sealed; changed documents need
     // actual causal and business witnesses, not just a successful AEAD scan.
+    const originalRoot = original.batch.documents.find(document => document.path === '');
+    const openedOriginalRoot = originalRoot ? readAccountCloudDocument(
+        originalRoot.document, 'D1 original recovery intent', uid, '', accountKey,
+    ) : undefined;
     if (paths.some(path => (byPath.get(path)?.revision ?? 0) > original.batch.expectedRevision
-        && (path !== '' || !independentProfileRebase(local, original.operations,
-            checkpoint.documents.get(path))))) {
+        && (path !== '' || !openedOriginalRoot || !independentProfileRebase(local,
+            original.operations, openedOriginalRoot, checkpoint.documents.get(path))))) {
         return 'reconciliation-required';
     }
     const snapshot = {

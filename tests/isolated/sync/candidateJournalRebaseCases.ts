@@ -6,6 +6,7 @@ export function registerCandidateJournalRebaseCases({
     owner, storeKey, adk, profile, savedDelivery, changedRemote, transport,
     readLocal, deliverCloudflareJournalCandidate, CloudReplicaTransportError,
     readAccountCloudDocument, parseSyncMeta, sealCloudDocument, commitLocal,
+    seed, updateArchiveRecord, stageCloudflareDelivery,
 }: CandidateJournalTestContext): void {
     describe('verified 409 rebase, AEAD and competing-device recovery', () => {
     it('rebases a provably uncommitted 409 only after full AEAD scan and two stable controls', async () => {
@@ -66,6 +67,32 @@ export function registerCandidateJournalRebaseCases({
             .toBe('retry-staged');
         expect((await readLocal(owner))!.pending).toEqual(setup.local.pending);
         expect((await readLocal(owner))!.cloudflareDelivery?.batch.expectedRevision).toBe(2);
+    });
+
+    it('does not confuse trusted local legal fields with a peer profile conflict before first cloud root', async () => {
+        const setup = await seed();
+        await updateArchiveRecord<unknown>(owner, raw => {
+            const record = raw as { baseline: Record<string, unknown>; data: Record<string, unknown> };
+            const trustedLegal = { hasAcceptedTerms: true, hasAcceptedHealthData: true,
+                acceptedAt: '2026-11-20T00:00:00.000Z',
+                privacyVersion: '1.3.9', termsVersion: '1.2.5' };
+            return { ...record,
+                baseline: { ...record.baseline, legalConsent: trustedLegal },
+                data: { ...record.data, legalConsent: trustedLegal },
+            };
+        });
+        await stageCloudflareDelivery(owner, setup.local.pending, setup.snapshot, setup.control,
+            setup.replica, 'batch000000009912', adk, () => true);
+        const { control, scan } = changedRemote(setup);
+        const remote = transport(setup.control, setup.snapshot);
+        remote.commit.mockRejectedValueOnce(new CloudReplicaTransportError(409));
+        remote.commitOutcome.mockResolvedValueOnce({ outcome: 'not-committed', currentRevision: 2 });
+        remote.control.mockResolvedValue(control);
+        remote.scanAll.mockResolvedValue(scan);
+
+        expect(await deliverCloudflareJournalCandidate(owner, adk, remote, 'csrf-session', () => true))
+            .toBe('retry-staged');
+        expect((await readLocal(owner))!.data.legalConsent?.hasAcceptedHealthData).toBe(true);
     });
 
     it.each([
