@@ -88,8 +88,10 @@ cambiati senza metadata). Sono **indicatori di possibili collisioni**, non
 una risoluzione dei conflitti: zero sovrapposizioni non prova indipendenza
 semantica o autorizza replay, nuovo actor, ACK o una scelta UX automatica.
 Il contatore dei documenti non classificabili include anche modifiche
-business prive di stamp e avanzamenti di clock non spiegati **quando nello
-stesso documento coesistono altri stamp legittimamente cambiati**. La
+business prive di stamp (compresi i totali nutrizionali ignorati dal diff
+semantico quando un giorno viene aggiunto o rimosso) e avanzamenti di clock
+non spiegati **quando nello stesso documento coesistono altri stamp
+legittimamente cambiati**. La
 presenza di un solo field stamp non classifica l'intero documento: la
 diagnosi usa il diff semantico e richiede che gli eventi causali nuovi
 siano coperti dai testimoni disponibili; un diff non rappresentabile è
