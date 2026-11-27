@@ -2,6 +2,23 @@
 
 **Stato di riferimento:** per l'ultimo readback Cloudflare consultare [quadro operativo](cloudflare-current-state.md). I valori sotto sono checkpoint datati, non una fotografia aggiornata automaticamente del provider.
 
+## CF-04 · Diagnostica journal e readback frontend · 27 novembre 2026
+
+[PR #1489](https://github.com/gernotfound/logbook/pull/1489), versione
+2.752.0, squash su [`main` `929b5145`](https://github.com/gernotfound/logbook/commit/929b5145c09d90f4a34b4446a9e2e68b6bdeb055).
+[CI PR exact-SHA](https://github.com/gernotfound/logbook/actions/runs/46011831581),
+[Main Release Gate/CodeQL](https://github.com/gernotfound/logbook/actions/runs/46012414991)
+e [Static Assets + smoke HTTPS](https://github.com/gernotfound/logbook/actions/runs/46012820226)
+`success`. Readback Cloudflare successivo: frontend `thelogbook-frontend`
+deployment `d6fda4be-ccca-45ec-b38a-9b571ad96376` del 27/11/2026
+14:07:09 UTC, versione `a673718a-ba53-4f3c-9960-8bf6b50876b3` al 100%.
+Binding `APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`, nessun `D1_API`. API/Kinde privati
+senza nuovo deploy, Firestore riconciliato senza deploy Rules/indici.
+La diagnostica legge solo il journal owner-vault e il registro D1 stabile,
+senza ADK, claim o ACK; non certifica recovery, fitness pubblico, PWA/Safari
+o collaudo multi-device. [CF-04 #1058](https://github.com/gernotfound/logbook/issues/1058)
+conserva le prove post-merge e i residui di SYNC-7D/7E.
+
 ## CF-03 · Pubblicazione diagnostica e inventario D1 · 27 novembre 2026
 
 [PR #1485](https://github.com/gernotfound/logbook/pull/1485) integrata in

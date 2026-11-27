@@ -14,6 +14,25 @@ avere le stesse revisioni, lo stesso epoch e registri di replica equivalenti.
 
 ## Checkpoint candidati CF-03/04
 
+### CF-04 — Preflight causale del rientro, nessuna scrittura (27/11/2026)
+
+`preflightRetiredReplicaRecovery()` è un controllo puro **successivo** alla
+lettura del vault autenticato e alla scansione AEAD completa della D1. Confronta
+owner, revisione, epoch, consenso, registro dell'incarnazione originale,
+documenti business e metadati causali della baseline locale. Controlla anche
+che il replay delle operazioni originarie riproduca il dato locale senza
+reinterpretarlo. Una sequenza già coperta dal `lastSeq` della **stessa**
+incarnazione segnala possibile ACK perso, non permesso di eliminarla. Baseline
+divergente, documento extra/mancante, metadato avanzato anche con stesso
+valore business (ABA), transizione pendente o replay locale incongruente
+richiedono riconciliazione separata. `baseline-unchanged` è soltanto
+un'osservazione di preflight: non autorizza una nuova identità causale, un
+commit/ACK, una scelta di conflitto o una nuova membership, e può scadere
+subito dopo la scansione. Il chiamante futuro deve ottenere ADK già
+autorizzata, due control stabili, guard sessione e prova trusted prima/dopo,
+poi fencing atomico prima di qualsiasi mutazione. Il preflight non è montato
+in UI e non rende disponibile il recupero SYNC-7D/7E.
+
 ### CF-04 — Barriera journal per il rientro di una replica ritirata (candidato 27/11/2026)
 
 La diagnostica candidata `inspectKindeCandidateOfflineReplicaJournal()` apre
