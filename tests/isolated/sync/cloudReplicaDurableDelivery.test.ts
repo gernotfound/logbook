@@ -37,6 +37,7 @@ const consent: LegalConsent = {
     hasAcceptedTerms: true, hasAcceptedHealthData: true,
     acceptedAt: '2026-11-13T10:00:00.000Z', privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
 };
+const receiptScope = { trustedLegalConsent: consent, expectedFenceEpoch: 5 };
 
 beforeEach(async () => {
     await clear();
@@ -246,7 +247,7 @@ describe('candidate D1 delivery: encrypted IndexedDB intent and exact ACK', () =
             // incarnation is retired and the slot is reused by generation 2.
             return { revision: batch.expectedRevision + 1, lastSeq: batch.lastSeq };
         }) };
-        expect(await reconcileCloudflareDeliveryReceiptOnly(owner, adk, receiptOnly, () => true, consent))
+        expect(await reconcileCloudflareDeliveryReceiptOnly(owner, adk, receiptOnly, () => true, receiptScope))
             .toBe('acknowledged');
         expect(receiptOnly.receipt).toHaveBeenCalledOnce();
         const after = (await readLocal(owner))!;
@@ -257,12 +258,24 @@ describe('candidate D1 delivery: encrypted IndexedDB intent and exact ACK', () =
         expect(after.actorId).toBe(original.actorId);
     });
 
+    it('refuses a historical receipt from another Auth epoch before any remote lookup or local ACK', async () => {
+        await stage(consent);
+        const original = await readLocal(owner);
+        const sealed = await get(storeKey);
+        const receiptOnly = { receipt: vi.fn() };
+        await expect(reconcileCloudflareDeliveryReceiptOnly(owner, adk, receiptOnly, () => true,
+            { ...receiptScope, expectedFenceEpoch: 6 })).rejects.toThrow('Epoca Auth D1');
+        expect(receiptOnly.receipt).not.toHaveBeenCalled();
+        expect(await readLocal(owner)).toEqual(original);
+        expect(await get(storeKey)).toBe(sealed);
+    });
+
     it('retains the exact ciphertext and pending operations when a historical receipt is absent', async () => {
         await stage(consent);
         const before = (await readLocal(owner))!;
         const sealed = await get(storeKey);
         const receiptOnly = { receipt: vi.fn(async () => null) };
-        expect(await reconcileCloudflareDeliveryReceiptOnly(owner, adk, receiptOnly, () => true, consent))
+        expect(await reconcileCloudflareDeliveryReceiptOnly(owner, adk, receiptOnly, () => true, receiptScope))
             .toBe('unconfirmed');
         expect(receiptOnly.receipt).toHaveBeenCalledOnce();
         expect(await get(storeKey)).toBe(sealed);
@@ -279,7 +292,7 @@ describe('candidate D1 delivery: encrypted IndexedDB intent and exact ACK', () =
             return { revision: batch.expectedRevision + 1, lastSeq: batch.lastSeq };
         }) };
         await expect(reconcileCloudflareDeliveryReceiptOnly(owner, adk, receiptOnly,
-            () => live, consent)).rejects.toThrow('sessione');
+            () => live, receiptScope)).rejects.toThrow('sessione');
         expect(await get(storeKey)).toBe(sealed);
         expect(await readLocal(owner)).toEqual(before);
 
@@ -287,7 +300,9 @@ describe('candidate D1 delivery: encrypted IndexedDB intent and exact ACK', () =
             receipt: vi.fn(async (batch: CloudReplicaBatch) => ({
                 revision: batch.expectedRevision + 1, lastSeq: batch.lastSeq,
             })),
-        }, () => true, { ...consent, acceptedAt: '2026-11-13T11:00:00.000Z' }))
+        }, () => true, { ...receiptScope, trustedLegalConsent: {
+            ...consent, acceptedAt: '2026-11-13T11:00:00.000Z',
+        } }))
             .rejects.toThrow('Consenso D1 modificato');
         expect(await get(storeKey)).toBe(sealed);
         expect(await readLocal(owner)).toEqual(before);
@@ -300,7 +315,7 @@ describe('candidate D1 delivery: encrypted IndexedDB intent and exact ACK', () =
             await commitLocal(owner, profile(172, consent), profile(171, consent));
             return { revision: batch.expectedRevision + 1, lastSeq: batch.lastSeq };
         }) };
-        expect(await reconcileCloudflareDeliveryReceiptOnly(owner, adk, receiptOnly, () => true, consent))
+        expect(await reconcileCloudflareDeliveryReceiptOnly(owner, adk, receiptOnly, () => true, receiptScope))
             .toBe('acknowledged');
         const after = (await readLocal(owner))!;
         expect(after.data.profile?.height).toBe('172');

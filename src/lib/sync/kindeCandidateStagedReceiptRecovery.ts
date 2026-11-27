@@ -62,6 +62,9 @@ export async function recoverKindeCandidateStagedReceipt({
             || local.cloudflareReplicaClaim || local.cloudflareReplicaRetirement
             || local.cloudflareReplicaCancellation) throw new KindeCandidateBoundaryError();
         if (!local.cloudflareDelivery) return 'idle';
+        if (local.cloudflareDelivery.batch.expectedFenceEpoch !== expected.fenceEpoch) {
+            throw new KindeCandidateBoundaryError();
+        }
 
         // The already-issued ADK is only needed to authenticate original
         // ciphertext; no new cloud key or replica may be provisioned here.
@@ -77,7 +80,8 @@ export async function recoverKindeCandidateStagedReceipt({
         checkAccess(beforeAck, first);
         const transport = createCloudflareReplicaTransport(send);
         const outcome = await reconcileCloudflareDeliveryReceiptOnly(
-            owner, accountKey, { receipt: batch => transport.receipt(batch) }, scoped, first.legalConsent,
+            owner, accountKey, { receipt: batch => transport.receipt(batch) }, scoped,
+            { trustedLegalConsent: first.legalConsent, expectedFenceEpoch: expected.fenceEpoch },
         );
         requireScoped();
         const afterAck = await readKindeCandidateAccess({ ...request, stillCurrent: scoped });
