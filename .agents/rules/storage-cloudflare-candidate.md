@@ -8,6 +8,22 @@
 
 ## Checkpoint candidati CF-03/04
 
+### CF-04 — Barriera journal per il rientro di una replica ritirata (candidato 27/11/2026)
+
+Prima di sigillare una nuova richiesta D1, `stageCloudflareReplicaClaim()`
+rifiuta un archivio che possiede sia una replica precedente sia operazioni
+offline nel journal. Una prima registrazione senza replica può invece
+conservare e successivamente inviare gli intenti già durevoli. Poiché una
+scheda concorrente può aggiungere modifiche **dopo** lo staging,
+`adoptReplicaCheckpoint()` rifiuta anche il commit di una nuova incarnazione
+Cloudflare se a quel momento esistono pending della replica precedente.
+Lo stesso slot/ID/generazione può riconciliare il proprio checkpoint senza
+riscrivere le sequenze. La barriera non elimina il claim già sigillato,
+il journal o i dati device: il recupero richiede riconciliazione esplicita.
+Le adozioni legacy non Cloudflare rimangono regolate dal proprio contratto.
+Questa protezione **non implementa ancora** il rientro autorizzato dei
+pending né risolve i conflitti semantici: SYNC-7D resta aperto.
+
 ### CF-04 — Annullamento esplicito di claim/retirement sigillati (candidato 25/11/2026)
 
 La schermata candidata legge una richiesta già sigillata nell'archivio owner-scoped soltanto con sessione Kinde, consenso, cookie CSRF, epoch e vault device correnti. La conferma utente conserva la `mutationId` osservata; il bridge rilegge l'intento prima di chiamare il boundary `cancelCloudflareReplicaMutation()`. Non si crea un nuovo vault/claim e non si annulla un'altra operazione se una scheda concorrente ha sostituito l'intento.

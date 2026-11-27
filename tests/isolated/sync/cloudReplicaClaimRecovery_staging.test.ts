@@ -9,6 +9,28 @@ import { CloudReplicaCapacityError, CloudReplicaCloudKeyRequiredError } from '..
 import { readLocal, commitLocal, adoptReplicaCheckpoint } from '../../../src/lib/sync/localRepository';
 
 describe('D1 claim: durable staging and first replay', () => {
+    it('still stages the first replica with edits already committed to the local journal', async () => {
+        await commitLocal(owner, data(171), data(170));
+        const before = (await readLocal(owner))!;
+        expect(before.replica).toBeNull();
+        expect(before.pending.length).toBeGreaterThan(0);
+
+        const verified = await readAuthenticatedCloudflareCheckpoint(
+            async () => ({ revision: 0, fenceEpoch: 5, consentRevision: 1, documents: [] }),
+            uid, key, 1, () => true,
+        );
+        const staged = await stageCloudflareReplicaClaim(owner, verified,
+            { revision: 0, fenceEpoch: 5, consentRevision: 1, replicas: {} },
+            'first-device-with-offline-work', () => true,
+        );
+
+        const after = (await readLocal(owner))!;
+        expect(staged.currentReplica).toBeNull();
+        expect(after.pending).toEqual(before.pending);
+        expect(after.data).toEqual(before.data);
+        expect(after.cloudflareReplicaClaim).toEqual(staged);
+    });
+
     it('persists the request before network and atomically adopts after a fresh AEAD scan', async () => {
         const { staged, snapshot } = await prepare();
         expect(staged.mutationId).toMatch(/^[0-9a-f-]{36}$/);
