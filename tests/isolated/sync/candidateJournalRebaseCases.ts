@@ -6,6 +6,7 @@ export function registerCandidateJournalRebaseCases({
     owner, storeKey, adk, profile, savedDelivery, changedRemote, transport,
     readLocal, deliverCloudflareJournalCandidate, CloudReplicaTransportError,
     readAccountCloudDocument, parseSyncMeta, sealCloudDocument, commitLocal,
+    seed, updateArchiveRecord, stageCloudflareDelivery,
 }: CandidateJournalTestContext): void {
     describe('verified 409 rebase, AEAD and competing-device recovery', () => {
     it('rebases a provably uncommitted 409 only after full AEAD scan and two stable controls', async () => {
@@ -34,7 +35,7 @@ export function registerCandidateJournalRebaseCases({
             .not.toEqual(before.documents[0].document._sealed);
         const opened = readAccountCloudDocument(replacement.documents[0].document,
             'CF04 candidate rebase regression', owner.slice(5), '', adk);
-        expect(parseSyncMeta(opened.sync).clock.s01).toBe(1);
+        expect(parseSyncMeta(opened.sync).clock.s00).toBe(1);
 
         // A second invocation replays the persisted replacement and does not
         // scan, reseal, or infer a prior successful acknowledgement.
@@ -44,6 +45,92 @@ export function registerCandidateJournalRebaseCases({
         expect(remote.scanAll).toHaveBeenCalledOnce();
         expect(remote.control).toHaveBeenCalledTimes(2);
         expect((await readLocal(owner))!.pending).toEqual([]);
+    });
+
+    it('rebases when the competing commit changed only a different document', async () => {
+        const setup = await savedDelivery();
+        const { control, scan } = changedRemote(setup);
+        const remote = transport(setup.control, setup.snapshot);
+        remote.commit.mockRejectedValueOnce(new CloudReplicaTransportError(409));
+        remote.commitOutcome.mockResolvedValueOnce({ outcome: 'not-committed', currentRevision: 2 });
+        remote.control.mockResolvedValue(control);
+        remote.scanAll.mockResolvedValue({ ...scan, documents: [{
+            path: 'nutrition_months/2026-11', revision: 2,
+            document: sealCloudDocument(adk, owner.slice(5), 'nutrition_months/2026-11', {}, {
+                protocolVersion: 3, clock: { s01: 1 }, fields: {},
+                writer: { slot: 's01', replicaId: 'other-cloud-writer', generation: 1,
+                    seq: 1, consentRevision: 1 },
+            }),
+        }] });
+
+        expect(await deliverCloudflareJournalCandidate(owner, adk, remote, 'csrf-session', () => true))
+            .toBe('retry-staged');
+        expect((await readLocal(owner))!.pending).toEqual(setup.local.pending);
+        expect((await readLocal(owner))!.cloudflareDelivery?.batch.expectedRevision).toBe(2);
+    });
+
+    it('does not confuse trusted local legal fields with a peer profile conflict before first cloud root', async () => {
+        const setup = await seed();
+        await updateArchiveRecord<unknown>(owner, raw => {
+            const record = raw as { baseline: Record<string, unknown>; data: Record<string, unknown> };
+            const trustedLegal = { hasAcceptedTerms: true, hasAcceptedHealthData: true,
+                acceptedAt: '2026-11-20T00:00:00.000Z',
+                privacyVersion: '1.3.9', termsVersion: '1.2.5' };
+            return { ...record,
+                baseline: { ...record.baseline, legalConsent: trustedLegal },
+                data: { ...record.data, legalConsent: trustedLegal },
+            };
+        });
+        await stageCloudflareDelivery(owner, setup.local.pending, setup.snapshot, setup.control,
+            setup.replica, 'batch000000009912', adk, () => true);
+        const { control, scan } = changedRemote(setup);
+        const remote = transport(setup.control, setup.snapshot);
+        remote.commit.mockRejectedValueOnce(new CloudReplicaTransportError(409));
+        remote.commitOutcome.mockResolvedValueOnce({ outcome: 'not-committed', currentRevision: 2 });
+        remote.control.mockResolvedValue(control);
+        remote.scanAll.mockResolvedValue(scan);
+
+        expect(await deliverCloudflareJournalCandidate(owner, adk, remote, 'csrf-session', () => true))
+            .toBe('retry-staged');
+        expect((await readLocal(owner))!.data.legalConsent?.hasAcceptedHealthData).toBe(true);
+    });
+
+    it.each([
+        { height: 168, stampPath: 'profile/height' },
+        { height: 170, stampPath: 'profile/height' },
+        { height: 168, stampPath: 'profile/neck' },
+        { height: 168, stampPath: null },
+        { height: 170, stampPath: null },
+    ])('preserves the original intent after a conflicting or unattributed root write (%o)', async ({ height, stampPath }) => {
+        const setup = await savedDelivery();
+        const original = (await readLocal(owner))!.cloudflareDelivery;
+        const { control, scan } = changedRemote(setup);
+        const competingRoot = sealCloudDocument(adk, owner.slice(5), '', {
+            profile: { height: String(height), ...(stampPath === 'profile/neck' ? { neck: '37' } : {}) },
+        }, {
+            protocolVersion: 3, clock: { s01: 1 }, fields: stampPath ? {
+                [stampPath]: { actorId: 's01', seq: 1, clock: { s01: 1 } },
+            } : {},
+            writer: { slot: 's01', replicaId: 'other-cloud-writer', generation: 1,
+                seq: 1, consentRevision: 1 },
+        });
+        const remote = transport(setup.control, setup.snapshot);
+        remote.commit.mockRejectedValueOnce(new CloudReplicaTransportError(409));
+        remote.commitOutcome.mockResolvedValueOnce({ outcome: 'not-committed', currentRevision: 2 });
+        remote.control.mockResolvedValue(control);
+        remote.scanAll.mockResolvedValue({ ...scan, documents: [
+            { path: '', revision: 2, document: competingRoot },
+        ] });
+        const before = await get(storeKey);
+
+        expect(await deliverCloudflareJournalCandidate(owner, adk, remote, 'csrf-session', () => true))
+            .toBe('reconciliation-required');
+        expect(remote.control).toHaveBeenCalledTimes(2);
+        expect(remote.scanAll).toHaveBeenCalledOnce();
+        expect(remote.commit).toHaveBeenCalledOnce();
+        expect(await get(storeKey)).toBe(before);
+        expect((await readLocal(owner))!.cloudflareDelivery).toEqual(original);
+        expect((await readLocal(owner))!.pending).toEqual(setup.local.pending);
     });
 
     it('keeps the sealed delivery if a non-commit proof is followed by a foreign control', async () => {
@@ -135,7 +222,7 @@ export function registerCandidateJournalRebaseCases({
             { protocolVersion: 3, clock: { s01: 1 }, fields: {},
                 writer: { slot: 's01', replicaId: 'other-cloud-writer', generation: 1,
                     seq: 1, consentRevision: 1 } });
-        remote.scanAll.mockResolvedValue({ ...scan, documents: [...scan.documents, {
+        remote.scanAll.mockResolvedValue({ ...scan, documents: [{
             path: 'nutrition_months/2026-11', revision: 2, document: forged,
         }] });
         const before = await get(storeKey);

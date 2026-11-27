@@ -121,10 +121,13 @@ function changedRemote(setup: Awaited<ReturnType<typeof seed>>) {
             },
         },
     };
+    // The peer wrote a disjoint, causally stamped profile scalar.
     const remoteDocument = sealCloudDocument(adk, owner.slice(5), '', {
-        profile: { height: '168' },
+        profile: { height: '170', neck: '37' },
     }, {
-        protocolVersion: 3, clock: { s01: 1 }, fields: {},
+        protocolVersion: 3, clock: { s01: 1 }, fields: {
+            'profile/neck': { actorId: 's01', seq: 1, clock: { s01: 1 } },
+        },
         writer: { slot: 's01', replicaId: 'other-cloud-writer', generation: 1,
             seq: 1, consentRevision: 1 },
     });
