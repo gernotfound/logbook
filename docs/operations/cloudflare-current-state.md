@@ -1,17 +1,21 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
-**Ultimo readback frontend, 27/11/2026:** [PR #1489](https://github.com/gernotfound/logbook/pull/1489)
-integrata in [`main` `929b5145`](https://github.com/gernotfound/logbook/commit/929b5145c09d90f4a34b4446a9e2e68b6bdeb055),
-v2.752.0. [CI PR](https://github.com/gernotfound/logbook/actions/runs/46011831581),
-[gate main](https://github.com/gernotfound/logbook/actions/runs/46012414991) e
-[Static Assets/smoke](https://github.com/gernotfound/logbook/actions/runs/46012820226)
-`success`. Readback provider: deployment `d6fda4be-ccca-45ec-b38a-9b571ad96376`,
-versione `a673718a-ba53-4f3c-9960-8bf6b50876b3` al 100%; soli binding
+**Ultimo readback frontend verificato prima del candidato corrente, 27/11/2026:**
+[PR #1490](https://github.com/gernotfound/logbook/pull/1490)
+integrata in [`main` `f93dcb05`](https://github.com/gernotfound/logbook/commit/f93dcb05b010a00330c55eef2406332997de9cde),
+v2.753.0. [CI PR](https://github.com/gernotfound/logbook/actions/runs/46016484053),
+[gate main/CodeQL](https://github.com/gernotfound/logbook/actions/runs/46017164909) e
+[Static Assets/smoke](https://github.com/gernotfound/logbook/actions/runs/46017555939)
+`success` sugli SHA pertinenti. Readback provider: deployment
+`332257d6-bff9-422e-b1d2-66fa83ef821b`, versione
+`be7767e1-4745-452e-8561-a71c42c2b81b` al 100%; soli binding
 `APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`, **nessun `D1_API`**. Worker API e Kinde
 privati senza nuovo deploy; Firestore senza deploy Rules/indici. La PR ha
-aggiunto il controllo read-only del journal offline delle repliche ritirate,
-ma non un replay né un recovery. Il preflight causale successivo, descritto
-in [contratto candidato](../../.agents/rules/storage-cloudflare-candidate.md),
+aggiunto il preflight causale puro del journal ritirato, dopo la diagnostica
+read-only della [PR #1489](https://github.com/gernotfound/logbook/pull/1489).
+Il candidato corrente collega il preflight a una scansione AEAD e a guard
+Kinde/vault/registro, **richiedendo un'ADK già autorizzata dal chiamante**:
+non monta un'azione UI, non richiede una nuova ADK, non muta il journal e
 non abilita sincronizzazione, fitness pubblico o GO multi-device. Evidenze
 e residui in [CF-04 #1058](https://github.com/gernotfound/logbook/issues/1058).
 
