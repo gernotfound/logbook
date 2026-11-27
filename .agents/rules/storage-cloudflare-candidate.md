@@ -14,6 +14,22 @@ avere le stesse revisioni, lo stesso epoch e registri di replica equivalenti.
 
 ## Checkpoint candidati CF-03/04
 
+### CF-04 — Bridge preflight autenticato, senza provisioning ADK (27/11/2026)
+
+`inspectKindeCandidateRetiredReplicaPreflight()` collega l'osservazione
+causale a una sessione Kinde e a consenso trusted correnti, un vault device
+già esistente, due letture owner-bound identiche di `/v1/sync/control` e una
+scansione D1 completa revision-fenced aperta con AEAD. Prima di restituire
+l'esito numerico, verifica nuovamente la ricevuta legale, l'archivio locale,
+il cookie CSRF e la generazione Auth. **Il chiamante deve già possedere una
+ADK autorizzata, e azzerarla dopo l'operazione**: il bridge non usa
+`/v1/cloud-key/sync`, che può emettere una chiave e scrivere nel ledger D1.
+Nessuna mutazione business, nuovo actor, claim, ack, hydration o cambio
+membership passa da questo boundary. Anche un `baseline-unchanged` non
+autorizza recovery automatico e scade al primo cambio concorrente. Il
+bridge è candidato non montato in UI; restano SYNC-7D/7E e l'eventuale
+fornitura rigorosamente read-only di ADK nel flusso diagnostico.
+
 ### CF-04 — Preflight causale del rientro, nessuna scrittura (27/11/2026)
 
 `preflightRetiredReplicaRecovery()` è un controllo puro **successivo** alla

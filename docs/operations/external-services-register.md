@@ -4,6 +4,23 @@
 
 ## CF-04 · Diagnostica journal e readback frontend · 27 novembre 2026
 
+**Readback successivo:** [PR #1490](https://github.com/gernotfound/logbook/pull/1490),
+v2.753.0, squash su [`main` `f93dcb05`](https://github.com/gernotfound/logbook/commit/f93dcb05b010a00330c55eef2406332997de9cde).
+[CI PR](https://github.com/gernotfound/logbook/actions/runs/46016484053),
+[Main Release Gate/CodeQL](https://github.com/gernotfound/logbook/actions/runs/46017164909)
+e [Static Assets/smoke](https://github.com/gernotfound/logbook/actions/runs/46017555939)
+`success`. Readback diretto `thelogbook-frontend`: deployment
+`332257d6-bff9-422e-b1d2-66fa83ef821b` delle 14:38:27 UTC, versione
+`be7767e1-4745-452e-8561-a71c42c2b81b` al 100%, con i soli binding
+`APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`; **`D1_API` assente**. Nessun nuovo
+deploy API/Kinde privato o Firestore Rules/indici. Aggiunto un preflight
+puramente locale del confronto causale, testato su IndexedDB e ciphertext
+AEAD reali; non è montato né autorizza recupero, claim o ACK. Il successivo
+boundary candidato con sessione Kinde/vault/scan non acquisisce la ADK e
+resta anch'esso senza montaggio pubblico, rilascio API o prova multi-device.
+
+**Checkpoint precedente:**
+
 [PR #1489](https://github.com/gernotfound/logbook/pull/1489), versione
 2.752.0, squash su [`main` `929b5145`](https://github.com/gernotfound/logbook/commit/929b5145c09d90f4a34b4446a9e2e68b6bdeb055).
 [CI PR exact-SHA](https://github.com/gernotfound/logbook/actions/runs/46011831581),
