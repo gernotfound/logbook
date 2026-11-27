@@ -6,9 +6,93 @@ import { get } from 'idb-keyval';
 import { readAuthenticatedCloudflareCheckpoint } from '../../../src/lib/sync/cloudReplicaCheckpoint';
 import { stageCloudflareReplicaClaim, resumeCloudflareReplicaClaim } from '../../../src/lib/sync/cloudReplicaClaimRecovery';
 import { CloudReplicaCapacityError, CloudReplicaCloudKeyRequiredError } from '../../../src/lib/sync/cloudReplicaTransport';
+import type { CloudReplicaControlSnapshot } from '../../../src/lib/sync/cloudReplicaTransport';
 import { readLocal, commitLocal, adoptReplicaCheckpoint } from '../../../src/lib/sync/localRepository';
+import { updateArchiveRecord } from '../../../src/lib/sync/secureArchiveRepository';
 
 describe('D1 claim: durable staging and first replay', () => {
+    async function stagedReplacementWithLateOfflineEdits() {
+        const now = Date.now();
+        const previous = {
+            slot: 's00', replicaId: 'previous-device', generation: 1,
+            checkpointAtMs: now, leaseUntilMs: now + 86400000,
+        };
+        await adoptReplicaCheckpoint(owner, { identity: previous, baseSeq: 0 }, {
+            clock: {}, syncMetaByDocument: {},
+        });
+        const verified = await readAuthenticatedCloudflareCheckpoint(
+            async () => ({ revision: 0, fenceEpoch: 5, consentRevision: 1, documents: [] }),
+            uid, key, 1, () => true,
+        );
+        const staged = await stageCloudflareReplicaClaim(owner, verified,
+            { uid, revision: 0, fenceEpoch: 5, consentRevision: 1, replicas: {} },
+            'new-device-after-retirement', () => true,
+        );
+        await commitLocal(owner, data(171), data(170));
+        const saved = (await readLocal(owner))!;
+        expect(saved.pending.length).toBeGreaterThan(0);
+        expect(saved.pending.every(op => op.actorId === previous.slot)).toBe(true);
+        return { previous, staged, saved };
+    }
+
+    it.each(['missing', 'retired', 'expired', 'wrong-owner'] as const)(
+        'does not replay a replacement claim with late offline edits and %s membership', async scenario => {
+            const { previous, staged, saved } = await stagedReplacementWithLateOfflineEdits();
+            const sealed = await get(storage);
+            const remote = transport(async revision => ({ revision, fenceEpoch: 5, consentRevision: 1, documents: [] }));
+            const membership: CloudReplicaControlSnapshot['replicas'] = scenario === 'missing' ? {} : {
+                s00: { ...previous, lastSeq: 0, checkpointClock: {},
+                    status: scenario === 'retired' ? 'retired' as const : 'active' as const,
+                    leaseUntilMs: scenario === 'expired' ? Date.now() - 600000 : previous.leaseUntilMs },
+            };
+            remote.control.mockResolvedValueOnce({ uid: scenario === 'wrong-owner' ? 'other' : uid,
+                revision: 0, fenceEpoch: 5, consentRevision: 1, replicas: membership });
+
+            await expect(resumeCloudflareReplicaClaim(owner, key, remote, 'session-csrf', () => true))
+                .resolves.toBe('reconciliation-required');
+            expect(remote.replayStoredClaim).not.toHaveBeenCalled();
+            expect(remote.scanAll).not.toHaveBeenCalled();
+            expect(await get(storage)).toBe(sealed);
+            expect(await readLocal(owner)).toEqual(saved);
+            expect((await readLocal(owner))!.cloudflareReplicaClaim).toEqual(staged);
+        });
+
+    it('still permits an exact active replica checkpoint when offline edits arrive after staging', async () => {
+        const { previous, staged, saved } = await stagedReplacementWithLateOfflineEdits();
+        const remote = transport(async revision => ({ revision, fenceEpoch: 5, consentRevision: 1, documents: [] }));
+        remote.control.mockResolvedValueOnce({ uid, revision: 0, fenceEpoch: 5, consentRevision: 1,
+            replicas: { s00: { ...previous, status: 'active', lastSeq: 0, checkpointClock: {} } },
+        });
+        remote.replayStoredClaim.mockRejectedValueOnce(new Error('lost reply'));
+
+        await expect(resumeCloudflareReplicaClaim(owner, key, remote, 'session-csrf', () => true))
+            .rejects.toThrow('lost reply');
+        expect(remote.replayStoredClaim).toHaveBeenCalledWith(staged, 'session-csrf');
+        expect((await readLocal(owner))!.pending).toEqual(saved.pending);
+        expect((await readLocal(owner))!.cloudflareReplicaClaim).toEqual(staged);
+    });
+
+    it('does not replay when another tab seals cancellation during the remote control read', async () => {
+        const { previous, staged, saved } = await stagedReplacementWithLateOfflineEdits();
+        const remote = transport(async revision => ({ revision, fenceEpoch: 5, consentRevision: 1, documents: [] }));
+        remote.control.mockImplementationOnce(async () => {
+            await updateArchiveRecord<unknown>(owner, raw => ({
+                ...(raw as Record<string, unknown>), cloudflareReplicaCancellation: staged.mutationId,
+            }));
+            return { uid, revision: 0, fenceEpoch: 5, consentRevision: 1,
+                replicas: { s00: { ...previous, status: 'active', lastSeq: 0, checkpointClock: {} } },
+            };
+        });
+
+        await expect(resumeCloudflareReplicaClaim(owner, key, remote, 'session-csrf', () => true))
+            .resolves.toBe('reconciliation-required');
+        expect(remote.replayStoredClaim).not.toHaveBeenCalled();
+        const after = (await readLocal(owner))!;
+        expect(after.cloudflareReplicaCancellation).toBe(staged.mutationId);
+        expect(after.cloudflareReplicaClaim).toEqual(staged);
+        expect(after.pending).toEqual(saved.pending);
+    });
+
     it('keeps the encrypted archive intact when the first control names another owner', async () => {
         const verified = await readAuthenticatedCloudflareCheckpoint(
             async () => ({ revision: 0, fenceEpoch: 5, consentRevision: 1, documents: [] }),
