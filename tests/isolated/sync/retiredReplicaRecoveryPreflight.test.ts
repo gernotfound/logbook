@@ -15,6 +15,7 @@ import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigrat
 import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
 import { updateArchiveRecord } from '../../../src/lib/sync/secureArchiveRepository';
 import type { SyncMeta } from '../../../src/lib/sync/semanticProjection';
+import { fieldKey } from '../../../src/lib/sync/semanticProjection/metadata';
 
 const catalogSource = vi.hoisted(() => ({ read: vi.fn() }));
 vi.mock('../../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: catalogSource.read }));
@@ -94,13 +95,61 @@ describe('retired replica recovery preflight, no mutation or new causal identity
         expect(preflightRetiredReplicaRecovery(uid, (await readLocal(owner))!,
             await checkpoint(undefined, meta), control(), catalog)).toEqual({
             kind: 'reconciliation-required', reason: 'cloud-diverged',
+            evidence: { changedCloudFieldStamps: 0,
+                pendingWithOverlappingCloudStamps: 0, unclassifiedDocuments: 1 },
+        });
+    });
+
+    it('treats a writer-only metadata change as unclassified instead of evidence of independence', async () => {
+        const meta: SyncMeta = { ...emptyMeta, writer: { ...emptyMeta.writer!, seq: 1 } };
+        expect(preflightRetiredReplicaRecovery(uid, (await readLocal(owner))!,
+            await checkpoint(undefined, meta), control(), catalog)).toEqual({
+            kind: 'reconciliation-required', reason: 'cloud-diverged',
+            evidence: { changedCloudFieldStamps: 0,
+                pendingWithOverlappingCloudStamps: 0, unclassifiedDocuments: 1 },
         });
     });
 
     it('detects a remote business conflict without reducing it to local-last-write', async () => {
         expect(preflightRetiredReplicaRecovery(uid, (await readLocal(owner))!,
             await checkpoint(projectDocuments(data(173), catalog).get('')!), control(), catalog))
-            .toEqual({ kind: 'reconciliation-required', reason: 'cloud-diverged' });
+            .toEqual({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
+                changedCloudFieldStamps: 0, pendingWithOverlappingCloudStamps: 0,
+                unclassifiedDocuments: 1,
+            } });
+    });
+
+    it('counts same-field and ancestor causal overlap without selecting a winner or revealing values', async () => {
+        const local = (await readLocal(owner))!;
+        expect(local.pending.some(op => op.path.join('/') === 'profile/height')).toBe(true);
+        for (const path of [['profile', 'height'], ['profile']]) {
+            const meta: SyncMeta = { ...emptyMeta, clock: { s01: 1 }, fields: {
+                [fieldKey(path)]: { actorId: 's01', seq: 1, clock: { s01: 1 } },
+            } };
+            const original = await get(storageKey);
+            const result = preflightRetiredReplicaRecovery(uid, local,
+                await checkpoint(projectDocuments(data(173), catalog).get('')!, meta), control(), catalog);
+            expect(result).toEqual({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
+                changedCloudFieldStamps: 1, pendingWithOverlappingCloudStamps: 1,
+                unclassifiedDocuments: 0,
+            } });
+            expect(await get(storageKey)).toBe(original);
+        }
+    });
+
+    it('reports remote changes to a different field without claiming they are safe to replay', async () => {
+        const local = (await readLocal(owner))!;
+        const withGender = UserDataSchema.parse({ profile: { height: '170', gender: 'other' },
+            legalConsent: legal }) as unknown as UserData;
+        const meta: SyncMeta = { ...emptyMeta, clock: { s01: 1 }, fields: {
+            [fieldKey(['profile', 'gender'])]: { actorId: 's01', seq: 1, clock: { s01: 1 } },
+        } };
+        expect(preflightRetiredReplicaRecovery(uid, local,
+            await checkpoint(projectDocuments(withGender, catalog).get('')!, meta), control(), catalog))
+            .toEqual({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
+                changedCloudFieldStamps: 1, pendingWithOverlappingCloudStamps: 0,
+                unclassifiedDocuments: 0,
+            } });
     });
 
     it('requires every document from the complete AEAD scan, including remote-only months', async () => {
@@ -120,7 +169,10 @@ describe('retired replica recovery preflight, no mutation or new causal identity
             ],
         }), uid, accountKey, 1, () => true);
         expect(preflightRetiredReplicaRecovery(uid, (await readLocal(owner))!, cloud, control(), catalog))
-            .toEqual({ kind: 'reconciliation-required', reason: 'cloud-diverged' });
+            .toEqual({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
+                changedCloudFieldStamps: 0, pendingWithOverlappingCloudStamps: 0,
+                unclassifiedDocuments: 1,
+            } });
     });
 
     it('never promotes a live original slot or an apparent lost ACK to a new writer', async () => {

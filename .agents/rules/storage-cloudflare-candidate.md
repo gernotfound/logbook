@@ -55,6 +55,15 @@ autorizzata, due control stabili, guard sessione e prova trusted prima/dopo,
 poi fencing atomico prima di qualsiasi mutazione. Il preflight non è montato
 in UI e non rende disponibile il recupero SYNC-7D/7E.
 
+Quando la baseline cloud diverge, il preflight restituisce anche evidenze
+aggregate, prive di valori o percorsi sanitari: numero di stamp causali
+modificati, numero di operazioni locali con path/guard sovrapposto e numero
+di documenti la cui divergenza non è attribuibile a field stamp (inclusi
+clock avanzati senza modifica business, documenti extra/mancanti o dati
+cambiati senza metadata). Sono **indicatori di possibili collisioni**, non
+una risoluzione dei conflitti: zero sovrapposizioni non prova indipendenza
+semantica o autorizza replay, nuovo actor, ACK o una scelta UX automatica.
+
 ### CF-04 — Barriera journal per il rientro di una replica ritirata (candidato 27/11/2026)
 
 La diagnostica candidata `inspectKindeCandidateOfflineReplicaJournal()` apre

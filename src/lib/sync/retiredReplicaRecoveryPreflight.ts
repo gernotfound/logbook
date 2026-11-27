@@ -7,12 +7,72 @@ import type { LocalEnvelope } from './localEnvelopeValidation';
 import { userOwner } from './owner';
 import { isReplicaMembershipEligible, parseReplicaControl } from './replicaProtocol';
 import { applySemanticOperations, parseSyncMeta } from './semanticProjection';
+import { pathFromFieldKey } from './semanticProjection/metadata';
+
+type RetiredReplicaDivergenceEvidence = Readonly<{
+    changedCloudFieldStamps: number;
+    pendingWithOverlappingCloudStamps: number;
+    unclassifiedDocuments: number;
+}>;
 
 export type RetiredReplicaRecoveryPreflight =
     | { kind: 'baseline-unchanged'; pendingOperations: number; cloudRevision: number }
     | { kind: 'reconciliation-required'; reason:
         'no-pending' | 'transition' | 'no-old-replica' | 'replica-active' | 'possible-lost-ack'
-        | 'cloud-diverged' | 'local-replay-diverged' };
+        | 'local-replay-diverged' }
+    | { kind: 'reconciliation-required'; reason: 'cloud-diverged'; evidence: RetiredReplicaDivergenceEvidence };
+
+function pathsOverlap(left: readonly string[], right: readonly string[]): boolean {
+    const prefixLength = Math.min(left.length, right.length);
+    return left.slice(0, prefixLength).every((segment, index) => segment === right[index]);
+}
+
+/**
+ * Counts causal witnesses, not user-visible conflicts or safe-to-replay edits.
+ * A field-level non-overlap cannot prove semantic independence (guards,
+ * derived state and absent/compacted stamps also matter). No values or paths
+ * leave this summary, and recovery must still obtain fresh, atomic fences.
+ */
+function describeCloudDivergence(
+    local: LocalEnvelope,
+    cloud: AuthenticatedCloudflareCheckpoint,
+    base: ReturnType<typeof projectDocuments>,
+): RetiredReplicaDivergenceEvidence {
+    let changedCloudFieldStamps = 0;
+    let unclassifiedDocuments = 0;
+    const overlappingPending = new Set<number>();
+    const paths = new Set([...base.keys(), ...cloud.documents.keys(), ...Object.keys(local.syncMetaByDocument)]);
+    for (const path of paths) {
+        const baseline = base.get(path);
+        const remote = cloud.documents.get(path);
+        if (!baseline || !remote || !Object.hasOwn(local.syncMetaByDocument, path)) {
+            unclassifiedDocuments++;
+            continue;
+        }
+        const previousMeta = parseSyncMeta(local.syncMetaByDocument[path]);
+        const currentMeta = parseSyncMeta(remote.sync);
+        const fieldKeys = new Set([...Object.keys(previousMeta.fields), ...Object.keys(currentMeta.fields)]);
+        let changedFields = 0;
+        for (const key of fieldKeys) {
+            if (equal(previousMeta.fields[key], currentMeta.fields[key])) continue;
+            changedFields++;
+            changedCloudFieldStamps++;
+            const changedPath = pathFromFieldKey(key);
+            local.pending.forEach((operation, index) => {
+                if (operation.docPath === path && (pathsOverlap(operation.path, changedPath)
+                    || (operation.guard && pathsOverlap(operation.guard.path, changedPath)))) {
+                    overlappingPending.add(index);
+                }
+            });
+        }
+        // A changed document or frontier without field witnesses (e.g. ABA,
+        // compaction or an out-of-band writer) cannot be classified by paths.
+        if (changedFields === 0 && (!equal(baseline, remote.business)
+            || !equal(previousMeta, currentMeta))) unclassifiedDocuments++;
+    }
+    return { changedCloudFieldStamps,
+        pendingWithOverlappingCloudStamps: overlappingPending.size, unclassifiedDocuments };
+}
 
 /**
  * Read-only precondition for a future explicit recovery. Even an unchanged
@@ -63,18 +123,18 @@ export function preflightRetiredReplicaRecovery(
 
     const base = projectDocuments(local.baseline, catalog);
     const current = projectDocuments(local.data, catalog);
-    if (base.size !== cloud.documents.size
-        || Object.keys(local.syncMetaByDocument).length !== cloud.documents.size) {
-        return { kind: 'reconciliation-required', reason: 'cloud-diverged' };
-    }
+    let diverged = base.size !== cloud.documents.size
+        || Object.keys(local.syncMetaByDocument).length !== cloud.documents.size;
     for (const [path, expected] of base) {
         const verified = cloud.documents.get(path);
         if (!verified || !equal(expected, verified.business)
             || !Object.hasOwn(local.syncMetaByDocument, path)
             || !equal(parseSyncMeta(local.syncMetaByDocument[path]), parseSyncMeta(verified.sync))) {
-            return { kind: 'reconciliation-required', reason: 'cloud-diverged' };
+            diverged = true;
         }
     }
+    if (diverged) return { kind: 'reconciliation-required', reason: 'cloud-diverged',
+        evidence: describeCloudDivergence(local, cloud, base) };
     const replay = applySemanticOperations(base, local.pending, local.syncMetaByDocument).documents;
     if (replay.size !== current.size || [...current].some(([path, desired]) => !equal(replay.get(path), desired))) {
         return { kind: 'reconciliation-required', reason: 'local-replay-diverged' };
