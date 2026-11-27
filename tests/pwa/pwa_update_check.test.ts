@@ -329,6 +329,137 @@ describe('PWA update activation and navigation', () => {
     }
   });
 
+  it('treats a slow registration lookup as cancellable waiting, not as an update failure', async () => {
+    vi.useFakeTimers();
+    try {
+      const registration = {
+        waiting: null,
+        installing: null,
+        update: vi.fn(async () => registration),
+      } as unknown as ServiceWorkerRegistration;
+      let finishLookup!: (value: ServiceWorkerRegistration) => void;
+      const container = new EventTarget() as ServiceWorkerContainer;
+      Object.defineProperty(container, 'getRegistration', {
+        value: vi.fn(() => new Promise<ServiceWorkerRegistration>(resolve => { finishLookup = resolve; })),
+      });
+      const reload = vi.fn();
+      const delayed = vi.fn();
+      const abort = new AbortController();
+      const result = applyPWAUpdate(container, reload, 80, { signal: abort.signal, onActivationDelayed: delayed });
+
+      await vi.advanceTimersByTimeAsync(80);
+      expect(delayed).toHaveBeenCalledOnce();
+      expect(reload).not.toHaveBeenCalled();
+
+      finishLookup(registration);
+      await result;
+      expect(reload).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('waits through a slow update check and installation before requesting worker activation', async () => {
+    vi.useFakeTimers();
+    try {
+      const worker = new FakeServiceWorker() as FakeServiceWorker & { postMessage: ReturnType<typeof vi.fn> };
+      worker.postMessage = vi.fn();
+      const registration = {
+        waiting: null as ServiceWorker | null,
+        installing: null as ServiceWorker | null,
+        update: vi.fn(() => new Promise<ServiceWorkerRegistration>(resolve => {
+          setTimeout(() => {
+            registration.installing = worker as unknown as ServiceWorker;
+            resolve(registration as unknown as ServiceWorkerRegistration);
+          }, 120);
+        })),
+      };
+      const reload = vi.fn();
+      const delayed = vi.fn();
+      const abort = new AbortController();
+      const result = applyPWAUpdate(
+        fakeContainer(registration as unknown as ServiceWorkerRegistration),
+        reload, 80, { signal: abort.signal, onActivationDelayed: delayed },
+      );
+
+      await vi.advanceTimersByTimeAsync(120);
+      expect(delayed).toHaveBeenCalledOnce();
+      expect(reload).not.toHaveBeenCalled();
+      expect(worker.postMessage).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(100);
+      expect(reload).not.toHaveBeenCalled();
+      registration.waiting = worker as unknown as ServiceWorker;
+      worker.state = 'installed';
+      worker.dispatchEvent(new Event('statechange'));
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(worker.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' });
+      expect(reload).not.toHaveBeenCalled();
+
+      worker.state = 'activated';
+      worker.dispatchEvent(new Event('statechange'));
+      await result;
+      expect(reload).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('cancels a stalled registration lookup and never reloads after a late response', async () => {
+    vi.useFakeTimers();
+    try {
+      let finishLookup!: (value: ServiceWorkerRegistration) => void;
+      const container = new EventTarget() as ServiceWorkerContainer;
+      Object.defineProperty(container, 'getRegistration', {
+        value: vi.fn(() => new Promise<ServiceWorkerRegistration>(resolve => { finishLookup = resolve; })),
+      });
+      const reload = vi.fn();
+      const delayed = vi.fn();
+      const abort = new AbortController();
+      const result = applyPWAUpdate(container, reload, 80, { signal: abort.signal, onActivationDelayed: delayed });
+      const rejected = expect(result).rejects.toMatchObject({ name: 'AbortError' });
+
+      await vi.advanceTimersByTimeAsync(80);
+      expect(delayed).toHaveBeenCalledOnce();
+      abort.abort();
+      await rejected;
+      finishLookup({ waiting: null, installing: null, update: vi.fn() } as unknown as ServiceWorkerRegistration);
+      await vi.advanceTimersByTimeAsync(100);
+      expect(reload).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('cancels a stalled update check without navigating after its late completion', async () => {
+    vi.useFakeTimers();
+    try {
+      let finishUpdate!: () => void;
+      const registration = {
+        waiting: null,
+        installing: null,
+        update: vi.fn(() => new Promise<void>(resolve => { finishUpdate = resolve; })),
+      } as unknown as ServiceWorkerRegistration;
+      const reload = vi.fn();
+      const delayed = vi.fn();
+      const abort = new AbortController();
+      const result = applyPWAUpdate(fakeContainer(registration), reload, 80, {
+        signal: abort.signal, onActivationDelayed: delayed,
+      });
+      const rejected = expect(result).rejects.toMatchObject({ name: 'AbortError' });
+      await vi.advanceTimersByTimeAsync(80);
+      expect(delayed).toHaveBeenCalledOnce();
+      abort.abort();
+      await rejected;
+      finishUpdate();
+      await vi.advanceTimersByTimeAsync(100);
+      expect(reload).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('falls back to a protected reload when no service worker is supported', async () => {
     const reload = vi.fn();
     await applyPWAUpdate(undefined, reload);

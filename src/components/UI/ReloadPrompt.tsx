@@ -195,7 +195,7 @@ const ReloadPrompt: React.FC = () => {
       </div>
       {updateError && <p role="alert" className="ui-reload-prompt-2" style={{ margin: 0 }}>{updateError}</p>}
       {activationDelayed && <p role="status" className="ui-reload-prompt-2" style={{ margin: 0 }}>
-        Il browser sta impiegando più tempo per attivare la nuova versione. Puoi attendere oppure chiudere l’avviso e riprovare.
+        Il browser sta impiegando più tempo per preparare l’aggiornamento. Puoi attendere oppure chiudere l’avviso e riprovare.
       </p>}
 
       <div className="reload-prompt-actions" style={{ display: "flex", gap: "0.625rem", width: "100%", justifyContent: "center" }}>
