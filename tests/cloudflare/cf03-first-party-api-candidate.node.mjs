@@ -227,7 +227,76 @@ void test('private JSON body reader times out a stalled stream and does not awai
     assert.equal(response.status, 408);
     assert.deepEqual(await response.json(), { error: 'request-body-timeout' });
     await cancelled;
+    assert.equal(body.locked, false, 'timed-out body reader must release its lock');
     assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
+    assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts').get().n, 0);
+  });
+});
+
+void test('first-party gateway preserves the private 408 timeout without an ACK or database mutation', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  await withFixture(async db => {
+    let reachedApi = 0;
+    let pulled = false;
+    let notifyCancel;
+    const cancelled = new Promise(resolve => { notifyCancel = resolve; });
+    const body = new ReadableStream({
+      pull() {
+        pulled = true;
+        return new Promise(() => {});
+      },
+      cancel() {
+        notifyCancel();
+        return new Promise(() => {});
+      },
+    }, { highWaterMark: 0 });
+    const env = {
+      APP_ORIGIN: privateOrigin,
+      D1_API: { fetch: request => {
+        reachedApi += 1;
+        return apiWorker.fetch(request, makeEnv(db));
+      } },
+    };
+    const pending = routeCandidateFirstPartyApi(privateApiRequest(body), env);
+    for (let attempt = 0; attempt < 20 && !pulled; attempt += 1) {
+      await new Promise(resolve => setImmediate(resolve));
+    }
+    assert.equal(reachedApi, 1, 'the gateway must reach the private API');
+    assert.equal(pulled, true, 'the private API must start reading the body');
+    t.mock.timers.tick(2_000);
+    const response = await pending;
+    assert.equal(response.status, 408);
+    assert.deepEqual(await response.json(), { error: 'request-body-timeout' });
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.equal(response.headers.has('set-cookie'), false);
+    assert.equal(response.headers.has('location'), false);
+    await cancelled;
+    assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
+    assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts').get().n, 0);
+  });
+});
+
+void test('private JSON body reader accepts a paced valid stream within its idle budget', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  await withFixture(async db => {
+    let notifyPull;
+    const pulling = new Promise(resolve => { notifyPull = resolve; });
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{'));
+        setTimeout(() => {
+          controller.enqueue(new TextEncoder().encode('}'));
+          controller.close();
+        }, 1_500);
+      },
+      pull() { notifyPull(); },
+    });
+    const pending = apiWorker.fetch(privateApiRequest(body), makeEnv(db));
+    await pulling;
+    t.mock.timers.tick(1_500);
+    const response = await pending;
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).revision, 0);
     assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts').get().n, 0);
   });
 });
@@ -292,6 +361,7 @@ void test('private JSON body reader cancels oversized streams without awaiting c
   assert.equal(response.status, 413);
   assert.deepEqual(await response.json(), { error: 'payload-too-large' });
   await cancelled;
+  assert.equal(body.locked, false, 'oversized body reader must release its lock');
   assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts').get().n, 0);
 }));

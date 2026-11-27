@@ -141,6 +141,28 @@ export function registerCandidateJournalDeliveryCases({
         expect((await readLocal(owner))!.pending).toEqual([]);
     });
 
+    it('preserves the same sealed delivery intent after a private API body timeout', async () => {
+        const { control, snapshot, local } = await seed();
+        const remote = transport(control, snapshot);
+        remote.commit.mockRejectedValue(new CloudReplicaTransportError(408));
+        await expect(deliverCloudflareJournalCandidate(owner, adk, remote, 'csrf-session', () => true))
+            .rejects.toMatchObject({ status: 408 });
+        const staged = (await readLocal(owner))!;
+        const firstBatch = structuredClone(staged.cloudflareDelivery!.batch);
+        const sealedBeforeRetry = await get(storeKey);
+        expect(staged.pending).toEqual(local.pending);
+        expect(staged.cloudflareDelivery).toBeDefined();
+
+        await expect(deliverCloudflareJournalCandidate(owner, adk, remote, 'csrf-session', () => true))
+            .rejects.toMatchObject({ status: 408 });
+        expect(remote.control).toHaveBeenCalledOnce();
+        expect(remote.read).toHaveBeenCalledOnce();
+        expect(remote.commit).toHaveBeenCalledTimes(2);
+        expect(remote.commit.mock.calls[1][0]).toEqual(firstBatch);
+        expect(await get(storeKey)).toBe(sealedBeforeRetry);
+        expect((await readLocal(owner))!.pending).toEqual(local.pending);
+    });
+
     it('takes one fresh control and document read when a second replica advances D1 before staging', async () => {
         const setup = await seed();
         const { control, scan } = changedRemote(setup);

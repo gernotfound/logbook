@@ -80,8 +80,8 @@ async function jsonBounded(request, maxBytes) {
     }
   } finally {
     clearTimeout(totalTimer);
-    if (complete) reader.releaseLock();
-    else void reader.cancel().catch(() => {});
+    if (!complete) void reader.cancel().catch(() => {});
+    try { reader.releaseLock(); } catch { /* A timed-out read may still be pending. */ }
   }
   const bytes = new Uint8Array(size);
   let offset = 0;
