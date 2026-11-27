@@ -10,6 +10,7 @@ import {
     inspectKindeCandidatePendingReplicaMutation, cancelKindeCandidatePendingReplicaMutation,
 } from '../../lib/sync/kindeCandidateReplicaCancellationBridge';
 import { prepareKindeCandidateOwner } from '../../lib/sync/kindeCandidateOwnerBootstrap';
+import { inspectKindeCandidateOfflineReplicaJournal } from '../../lib/sync/kindeCandidateOfflineReplicaJournal';
 
 vi.mock('../../lib/sync/kindeCandidateReplicaRegistry', () => ({
     inspectKindeCandidateReplicaRegistry: vi.fn(),
@@ -19,6 +20,9 @@ vi.mock('../../lib/sync/kindeCandidateReplicaRetirementBridge', () => ({
 }));
 vi.mock('../../lib/sync/kindeCandidateReplicaCancellationBridge', () => ({
     inspectKindeCandidatePendingReplicaMutation: vi.fn(), cancelKindeCandidatePendingReplicaMutation: vi.fn(),
+}));
+vi.mock('../../lib/sync/kindeCandidateOfflineReplicaJournal', () => ({
+    inspectKindeCandidateOfflineReplicaJournal: vi.fn(),
 }));
 
 const registry = {
@@ -40,6 +44,7 @@ function authenticated() {
     vi.mocked(recoverKindeCandidateReplicaRetirement).mockResolvedValue('idle');
     vi.mocked(inspectKindeCandidatePendingReplicaMutation).mockResolvedValue(null);
     vi.mocked(cancelKindeCandidatePendingReplicaMutation).mockResolvedValue('cancelled');
+    vi.mocked(inspectKindeCandidateOfflineReplicaJournal).mockResolvedValue({ kind: 'no-pending' });
 }
 
 describe('candidate-only replica registry presentation', () => {
@@ -48,12 +53,58 @@ describe('candidate-only replica registry presentation', () => {
         const publicEntry = render(<KindeAccountEntry identityOnly />);
         await screen.findByText(/Sessione Kinde verificata/);
         expect(screen.queryByRole('button', { name: 'Consulta il registro' })).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Controlla modifiche offline su questo dispositivo' })).toBeNull();
         publicEntry.unmount();
 
         render(<KindeAccountEntry guestArchivePresent candidateMode="preparation" />);
         await screen.findByText(/archivio ospite/);
         expect(screen.queryByRole('button', { name: 'Consulta il registro' })).toBeNull();
         expect(inspectKindeCandidateReplicaRegistry).not.toHaveBeenCalled();
+        expect(inspectKindeCandidateOfflineReplicaJournal).not.toHaveBeenCalled();
+    });
+
+    it('shows a retired offline journal as blocked without offering a claim or deleting edits', async () => {
+        authenticated();
+        vi.mocked(inspectKindeCandidateOfflineReplicaJournal).mockResolvedValue({
+            kind: 'retired-pending', slot: 's04', generation: 2, reason: 'replaced', pendingOperations: 3,
+        });
+        render(<KindeAccountEntry candidateMode="preparation" />);
+        fireEvent.click(await screen.findByRole('button', {
+            name: 'Controlla modifiche offline su questo dispositivo',
+        }));
+        await screen.findByText(/3 operazioni restano nel journal locale senza ACK verificato/);
+        expect(screen.getByText(/non tentare di riattribuire automaticamente/)).toBeTruthy();
+        expect(inspectKindeCandidateOfflineReplicaJournal).toHaveBeenCalledWith({
+            expected: { uid: principal.uid, fenceEpoch: 1, healthConsentRevision: 1 },
+            stillCurrent: expect.any(Function),
+        });
+        expect(prepareKindeCandidateOwner).not.toHaveBeenCalled();
+        expect(retireKindeCandidateReplica).not.toHaveBeenCalled();
+    });
+
+    it('does not present an unreadable offline vault as an empty journal', async () => {
+        authenticated();
+        vi.mocked(inspectKindeCandidateOfflineReplicaJournal).mockRejectedValueOnce(new Error('vault unavailable'));
+        render(<KindeAccountEntry candidateMode="preparation" />);
+        const button = await screen.findByRole('button', {
+            name: 'Controlla modifiche offline su questo dispositivo',
+        });
+        fireEvent.click(button);
+        await screen.findByText(/Non è possibile verificare il journal locale/);
+        expect(screen.queryByText(/Nessuna operazione nel journal/)).toBeNull();
+        fireEvent.click(button);
+        await screen.findByText(/Nessuna operazione nel journal corrente/);
+    });
+
+    it('warns that historical consent journals survive even when the current queue is empty', async () => {
+        authenticated();
+        vi.mocked(inspectKindeCandidateOfflineReplicaJournal).mockResolvedValue({
+            kind: 'archived-consent-pending', archivedOperations: 2,
+        });
+        render(<KindeAccountEntry candidateMode="preparation" />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Controlla modifiche offline su questo dispositivo' }));
+        await screen.findByText(/conserva 2 operazioni storiche di un consenso precedente/);
+        expect(screen.queryByText(/Nessuna operazione nel journal corrente/)).toBeNull();
     });
 
     it('shows technical membership without inventing device names or online state', async () => {

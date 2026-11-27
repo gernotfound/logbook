@@ -10,6 +10,8 @@ type State = { kind: 'idle' | 'loading' | 'unavailable' }
     | { kind: 'observed'; control: CloudReplicaControlSnapshot };
 type PendingState = { kind: 'idle' | 'loading' | 'none' | 'unavailable' }
     | { kind: 'observed'; mutation: CandidatePendingReplicaMutation };
+type OfflineState = { kind: 'idle' | 'loading' | 'unavailable' }
+    | { kind: 'observed'; result: Awaited<ReturnType<Session['inspectCandidateOfflineReplicaJournal']>> };
 
 function dateText(milliseconds: number): string {
     const date = new Date(milliseconds);
@@ -26,6 +28,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
     const [pendingState, setPendingState] = useState<PendingState>({ kind: 'idle' });
     const [cancelConfirmed, setCancelConfirmed] = useState(false);
     const [cancelOutcome, setCancelOutcome] = useState<'idle' | 'working' | 'cancelled' | 'committed' | 'pending' | 'unknown'>('idle');
+    const [offlineState, setOfflineState] = useState<OfflineState>({ kind: 'idle' });
     const mounted = useRef(false);
     const running = useRef(false);
 
@@ -43,6 +46,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
         setPendingState({ kind: 'idle' });
         setCancelConfirmed(false);
         setCancelOutcome('idle');
+        setOfflineState({ kind: 'idle' });
         setState({ kind: 'loading' });
         void session.inspectCandidateReplicas().then(observed => {
             if (mounted.current) setState({ kind: 'observed', control: observed.control });
@@ -58,6 +62,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
         setPendingState({ kind: 'idle' });
         setCancelConfirmed(false);
         setCancelOutcome('idle');
+        setOfflineState({ kind: 'idle' });
         void session.manageCandidateReplicaRetirement(witness).then(outcome => {
             if (!mounted.current) return;
             // The previously observed registry is no longer an authorization
@@ -85,6 +90,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
         setMaintenance('idle');
         setCancelConfirmed(false);
         setCancelOutcome('idle');
+        setOfflineState({ kind: 'idle' });
         setPendingState({ kind: 'loading' });
         void session.manageCandidateReplicaCancellation().then(mutation => {
             if (mounted.current) setPendingState(mutation ? { kind: 'observed', mutation } : { kind: 'none' });
@@ -107,10 +113,29 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
         }).finally(() => { running.current = false; });
     };
 
+    const inspectOffline = () => {
+        if (running.current || session.busy) return;
+        running.current = true;
+        setState({ kind: 'idle' });
+        setPendingState({ kind: 'idle' });
+        setSelected(null);
+        setConfirmed(false);
+        setMaintenance('idle');
+        setCancelConfirmed(false);
+        setCancelOutcome('idle');
+        setOfflineState({ kind: 'loading' });
+        void session.inspectCandidateOfflineReplicaJournal().then(result => {
+            if (mounted.current) setOfflineState({ kind: 'observed', result });
+        }).catch(() => {
+            if (mounted.current) setOfflineState({ kind: 'unavailable' });
+        }).finally(() => { running.current = false; });
+    };
+
     const entries = state.kind === 'observed'
         ? Object.entries(state.control.replicas).sort(([a], [b]) => a.localeCompare(b)) : [];
     const active = entries.filter(([, entry]) => entry.status === 'active').length;
     const disabled = session.busy || state.kind === 'loading' || pendingState.kind === 'loading'
+        || offlineState.kind === 'loading'
         || maintenance === 'working' || cancelOutcome === 'working';
 
     return (
@@ -128,6 +153,20 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
             <button type="button" className="btn" onClick={inspectPending} disabled={disabled}>
                 {pendingState.kind === 'loading' ? 'Verifica richiesta locale…' : 'Esamina una richiesta da annullare'}
             </button>
+            <button type="button" className="btn" onClick={inspectOffline} disabled={disabled}>
+                {offlineState.kind === 'loading' ? 'Controllo modifiche offline…' : 'Controlla modifiche offline su questo dispositivo'}
+            </button>
+            {offlineState.kind === 'loading' && <p role="status">Verifica dell’archivio cifrato in corso, senza sincronizzare o modificare i dati…</p>}
+            {offlineState.kind === 'unavailable' && <p role="alert">Non è possibile verificare il journal locale con questa sessione e questo archivio. Nessuna operazione è stata eseguita: non cancellare i dati del dispositivo.</p>}
+            {offlineState.kind === 'observed' && <div className="kinde-replica-registry__confirmation">
+                {offlineState.result.kind === 'no-pending' && <p role="status">Nessuna operazione nel journal corrente di questo archivio al momento della verifica. Questo non verifica eventuali bozze device o altri dispositivi offline.</p>}
+                {offlineState.result.kind === 'archived-consent-pending' && <p role="alert">Il journal corrente è vuoto, ma l’archivio conserva {offlineState.result.archivedOperations} operazioni storiche di un consenso precedente. Non sono autorizzate al replay con il consenso corrente: conserva la copia per un recupero esplicito.</p>}
+                {offlineState.result.kind === 'transition-pending' && <p role="alert">Esiste una transizione di sincronizzazione da riconciliare prima di valutare il recupero. Operazioni nel journal: {offlineState.result.pendingOperations}. Usa la verifica della richiesta in sospeso; nessun dato è stato scartato.</p>}
+                {offlineState.result.kind === 'first-claim-pending' && <p role="status">Questo archivio conserva {offlineState.result.pendingOperations} operazioni locali e non ha ancora una replica assegnata. Non è un rientro di replica ritirata; non è stata effettuata alcuna registrazione.</p>}
+                {offlineState.result.kind === 'active-pending' && <p role="status">La replica {offlineState.result.slot} (generazione {offlineState.result.generation}) risultava attiva nel registro verificato. Restano {offlineState.result.pendingOperations} operazioni locali non confermate: questa osservazione non è un ACK né autorizza il replay senza i controlli ordinari.</p>}
+                {offlineState.result.kind === 'retired-pending' && <p role="alert"><strong>Recupero necessario:</strong> {offlineState.result.pendingOperations} operazioni restano nel journal locale senza ACK verificato della replica {offlineState.result.slot} (generazione {offlineState.result.generation}). La sua registrazione non è più utilizzabile ({offlineState.result.reason === 'retired' ? 'ritirata' : offlineState.result.reason === 'replaced' ? 'sostituita' : offlineState.result.reason === 'expired' ? 'scaduta' : 'non presente nel registro'}). Non eliminare l’archivio e non tentare di riattribuire automaticamente le modifiche: la riconciliazione causale è ancora da completare.</p>}
+                <p>Questa è una verifica di sola lettura, non un recupero: il cloud può evolvere successivamente. Le modifiche e le bozze del dispositivo non sono state cancellate.</p>
+            </div>}
             {pendingState.kind === 'loading' && <p role="status">Lettura della richiesta cifrata in corso…</p>}
             {pendingState.kind === 'none' && <p role="status">Nessuna richiesta di registrazione o ritiro in sospeso in questo archivio.</p>}
             {pendingState.kind === 'unavailable' && <p role="alert">Impossibile verificare una richiesta locale: nessun annullamento eseguito.</p>}
