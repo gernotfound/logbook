@@ -23,6 +23,11 @@ conservare e successivamente inviare gli intenti già durevoli. Poiché una
 scheda concorrente può aggiungere modifiche **dopo** lo staging,
 `adoptReplicaCheckpoint()` rifiuta anche il commit di una nuova incarnazione
 Cloudflare se a quel momento esistono pending della replica precedente.
+La ripresa di un claim sigillato che ha nel frattempo acquisito pending della
+replica precedente consulta prima il registro owner-bound: senza la stessa
+incarnazione ancora attiva e con lease valido non invia il replay, evitando
+di occupare inutilmente un posto D1. Un controllo valido non sostituisce il
+fence finale IndexedDB, perché la membership può cambiare dopo la lettura.
 Lo stesso slot/ID/generazione può riconciliare il proprio checkpoint senza
 riscrivere le sequenze. La barriera non elimina il claim già sigillato,
 il journal o i dati device: il recupero richiede riconciliazione esplicita.

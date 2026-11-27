@@ -195,6 +195,29 @@ export async function resumeCloudflareReplicaClaim(
         throw new Error('Barriera integrità D1: claim sospeso.');
     }
 
+    // A second tab may have added offline operations to the previous replica
+    // after this request was sealed. Do not send a request that could replace
+    // that incarnation and occupy a new D1 membership before the local
+    // journal can be reconciled. The final IndexedDB adoption fence is still
+    // necessary because the remote membership may change after this read.
+    if (intent.currentReplica && before.pending.length > 0) {
+        if (!equal(tuple(before.replica), intent.currentReplica)) return 'reconciliation-required';
+        const control = await transport.control();
+        current(guard);
+        const entry = control.replicas[intent.currentReplica.slot];
+        if (control.uid !== uid || control.fenceEpoch !== intent.expectedFenceEpoch
+            || control.consentRevision !== intent.consentRevision
+            || !entry || entry.status !== 'active'
+            || entry.replicaId !== intent.currentReplica.replicaId
+            || entry.generation !== intent.currentReplica.generation
+            || entry.leaseUntilMs <= Date.now()) return 'reconciliation-required';
+        const latest = await readLocal(owner);
+        current(guard);
+        if (!latest || !equal(latest.cloudflareReplicaClaim, intent)
+            || !equal(tuple(latest.replica), intent.currentReplica)
+            || latest.cloudflareReplicaCancellation || latest.cloudIntegrityFence) return 'reconciliation-required';
+    }
+
     let receipt: CloudReplicaMutationResult;
     try {
         receipt = await transport.replayStoredClaim(intent, csrfToken);
