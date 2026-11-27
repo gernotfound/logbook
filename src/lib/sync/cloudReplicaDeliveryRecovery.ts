@@ -1,7 +1,11 @@
 import equal from 'fast-deep-equal';
+import type { UserData } from '../../types';
+import { UserDataSchema } from '../schema';
+import { assertCloudBusinessPreserved } from './cloudBusinessIntegrity';
 import { readAuthenticatedCloudflareCheckpoint } from './cloudReplicaCheckpoint';
 import { prepareCloudflareCommit } from './cloudReplicaCommit';
 import { parseCloudflareDeliveryIntent, type CloudflareDeliveryIntent } from './cloudReplicaDeliveryRecord';
+import { rootDocument } from './documentProjection';
 import type {
     CloudReplicaCompleteScan, createCloudflareReplicaTransport,
 } from './cloudReplicaTransport';
@@ -9,6 +13,10 @@ import { readLocal } from './localArchiveBootstrap';
 import { normalizeStorageOwner } from './owner';
 import { updateArchiveRecord } from './secureArchiveRepository';
 import { validateLocalEnvelope } from './localEnvelopeValidation';
+import type { LocalEnvelope } from './localEnvelopeValidation';
+import { coversVectorClock, mergeVectors, parseSyncMeta } from './semanticProjection';
+import { pathFromFieldKey } from './semanticProjection/metadata';
+import type { NormalizedCloudDocument } from '../schemaEvolution';
 
 type Transport = Pick<ReturnType<typeof createCloudflareReplicaTransport>,
     'commitOutcome' | 'control' | 'scanAll'>;
@@ -19,10 +27,61 @@ function requireCurrent(guard: Guard): void {
 }
 
 /**
+ * A changed root can be rebased automatically only for independent profile
+ * scalars. The complete new business root must equal the durable baseline
+ * plus fields backed by previously unseen, disjoint causal stamps. This
+ * rejects ABA, missing metadata and implicit dependencies (guards, ordering,
+ * derived fields, collections); those require explicit reconciliation.
+ */
+function independentProfileRebase(
+    local: LocalEnvelope,
+    operations: CloudflareDeliveryIntent['operations'],
+    verified: NormalizedCloudDocument | undefined,
+): boolean {
+    if (!verified || !operations.length || operations.some(op => op.docPath !== ''
+        || op.path.length !== 2 || op.path[0] !== 'profile' || op.guard
+        || op.path[1] === '$order')) return false;
+
+    const touched = new Set(operations.map(op => op.path[1]));
+    const sourceClock = mergeVectors(...operations.map(op => op.clock));
+    const meta = parseSyncMeta(verified.sync);
+    let accountedClock = sourceClock;
+    const independent = new Set<string>();
+    for (const [key, stamp] of Object.entries(meta.fields)) {
+        const witnesses = [stamp.clock, ...(stamp.deleteClock ? [stamp.deleteClock] : []),
+            ...(stamp.candidates?.map(candidate => candidate.clock) ?? [])];
+        const path = pathFromFieldKey(key);
+        if (path.length === 2 && path[0] === 'profile' && touched.has(path[1])
+            && operations.some(op => op.path[1] === path[1]
+                && witnesses.some(clock => !coversVectorClock(op.clock, clock)))) return false;
+        if (witnesses.every(clock => coversVectorClock(sourceClock, clock))) continue;
+        if (path.length !== 2 || path[0] !== 'profile' || touched.has(path[1])) return false;
+        independent.add(path[1]);
+        accountedClock = mergeVectors(accountedClock, ...witnesses);
+    }
+    if (!independent.size || !coversVectorClock(accountedClock, meta.clock)) return false;
+
+    const baseline = rootDocument(local.baseline);
+    const remote = rootDocument(UserDataSchema.parse(verified.business) as unknown as UserData);
+    assertCloudBusinessPreserved('', verified.business, remote);
+    const expected = structuredClone(baseline);
+    const expectedProfile = { ...(baseline.profile as Record<string, unknown> | null ?? {}) };
+    const remoteProfile = remote.profile as Record<string, unknown> | null;
+    for (const field of independent) {
+        if (remoteProfile && Object.hasOwn(remoteProfile, field)) expectedProfile[field] = remoteProfile[field];
+        else delete expectedProfile[field];
+    }
+    expected.profile = expectedProfile;
+    return equal(expected, remote);
+}
+
+/**
  * After a 409, only a primary-SQL proof that the ORIGINAL immutable batch
  * cannot commit permits rotating its ciphertext and batch ID. A complete
  * authenticated scan plus two stable control reads bind the replacement to
- * the newest causal state. No network write or ACK occurs in this function.
+ * the newest causal state. A document changed since the original CAS cannot
+ * be automatically rebased without a narrow proof of semantic independence.
+ * No network write or ACK occurs in this function.
  */
 export async function restageUncommittedCloudflareDelivery(
     ownerInput: string,
@@ -93,6 +152,14 @@ export async function restageUncommittedCloudflareDelivery(
 
     const byPath = new Map(scan.documents.map(item => [item.path, item]));
     const paths = [...new Set(original.operations.map(operation => operation.docPath))];
+    // Every D1 document write records the committing control revision.
+    // Unchanged documents can be safely re-sealed; changed documents need
+    // actual causal and business witnesses, not just a successful AEAD scan.
+    if (paths.some(path => (byPath.get(path)?.revision ?? 0) > original.batch.expectedRevision
+        && (path !== '' || !independentProfileRebase(local, original.operations,
+            checkpoint.documents.get(path))))) {
+        return 'reconciliation-required';
+    }
     const snapshot = {
         revision: checkpoint.revision, fenceEpoch: checkpoint.fenceEpoch,
         consentRevision: checkpoint.consentRevision,
@@ -117,6 +184,8 @@ export async function restageUncommittedCloudflareDelivery(
         if (!saved || saved.cloudIntegrityFence || saved.cloudflareReplicaClaim
             || saved.cloudflareReplicaRetirement
             || !equal(saved.cloudflareDelivery, original)
+            || !equal(saved.baseline, local.baseline)
+            || !equal(saved.syncMetaByDocument, local.syncMetaByDocument)
             || saved.consentRevision !== original.batch.consentRevision
             || !saved.replica
             || saved.replica.slot !== original.replica.slot
