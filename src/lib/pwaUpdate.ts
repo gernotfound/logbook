@@ -1,25 +1,32 @@
 const DEFAULT_UPDATE_SETTLE_TIMEOUT_MS = 5000;
 
-function waitForWorkerStateChange(worker: ServiceWorker, timeoutMs: number): Promise<void> {
+function waitForWorkerStateChange(worker: ServiceWorker, timeoutMs: number, signal?: AbortSignal): Promise<void> {
+  throwIfCancelled(signal);
   if (worker.state === 'installed' || worker.state === 'activated' || worker.state === 'redundant') {
     return Promise.resolve();
   }
 
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
     let settled = false;
-    const finish = () => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const finish = (error?: Error) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      if (timer !== undefined) clearTimeout(timer);
       worker.removeEventListener('statechange', handleStateChange);
-      resolve();
+      signal?.removeEventListener('abort', onAbort);
+      if (error) reject(error);
+      else resolve();
     };
     const handleStateChange = () => {
       if (worker.state === 'installed' || worker.state === 'activated' || worker.state === 'redundant') finish();
     };
-    const timer = setTimeout(finish, timeoutMs);
+    const onAbort = () => finish(new DOMException('Aggiornamento annullato.', 'AbortError'));
+    if (Number.isFinite(timeoutMs)) timer = setTimeout(() => finish(), timeoutMs);
     worker.addEventListener('statechange', handleStateChange);
-    handleStateChange();
+    signal?.addEventListener('abort', onAbort, { once: true });
+    if (signal?.aborted) onAbort();
+    else handleStateChange();
   });
 }
 
@@ -33,16 +40,19 @@ function waitForWorkerStateChange(worker: ServiceWorker, timeoutMs: number): Pro
 export async function checkForWaitingServiceWorker(
   registration: ServiceWorkerRegistration,
   timeoutMs = DEFAULT_UPDATE_SETTLE_TIMEOUT_MS,
+  signal?: AbortSignal,
 ): Promise<boolean> {
+  throwIfCancelled(signal);
   if (registration.waiting) return true;
 
-  await registration.update();
+  await waitForCancellation(registration.update(), signal);
   if (registration.waiting) return true;
 
   const candidate = registration.installing;
   if (!candidate) return false;
 
-  await waitForWorkerStateChange(candidate, timeoutMs);
+  await waitForWorkerStateChange(candidate, timeoutMs, signal);
+  throwIfCancelled(signal);
   return Boolean(registration.waiting);
 }
 
@@ -57,6 +67,20 @@ function boundedUpdateStep<T>(operation: Promise<T>, timeoutMs: number): Promise
     }),
   ]).finally(() => {
     if (timeout !== undefined) clearTimeout(timeout);
+  });
+}
+
+function waitForCancellation<T>(operation: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return operation;
+  throwIfCancelled(signal);
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(new DOMException('Aggiornamento annullato.', 'AbortError'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    operation.then(
+      value => { signal.removeEventListener('abort', onAbort); resolve(value); },
+      error => { signal.removeEventListener('abort', onAbort); reject(error); },
+    );
+    if (signal.aborted) onAbort();
   });
 }
 
@@ -149,16 +173,35 @@ export async function applyPWAUpdate(
   throwIfCancelled(options.signal);
   let activatedReplacement = false;
   if (container && typeof container.getRegistration === 'function') {
-    const registration = await boundedUpdateStep(container.getRegistration(), timeoutMs);
-    if (registration) {
-      if (!registration.waiting) {
-        await boundedUpdateStep(checkForWaitingServiceWorker(registration, timeoutMs), timeoutMs);
+    // The UI supplies an abort signal: a slow browser check is cancellable,
+    // but five seconds alone cannot prove the new worker is unavailable.
+    const slowTimer = options.signal ? setTimeout(() => {
+      if (!options.signal?.aborted) options.onActivationDelayed?.();
+    }, timeoutMs) : undefined;
+    let registration: ServiceWorkerRegistration | undefined;
+    try {
+      const registrationRequest = container.getRegistration();
+      registration = options.signal
+        ? await waitForCancellation(registrationRequest, options.signal)
+        : await boundedUpdateStep(registrationRequest, timeoutMs);
+      if (registration) {
+        if (!registration.waiting) {
+          const check = checkForWaitingServiceWorker(
+            registration,
+            options.signal ? Number.POSITIVE_INFINITY : timeoutMs,
+            options.signal,
+          );
+          if (options.signal) await check;
+          else await boundedUpdateStep(check, timeoutMs);
+        }
       }
-      throwIfCancelled(options.signal);
-      if (registration.waiting) {
-        await activateWaitingWorker(registration.waiting, container, timeoutMs, options);
-        activatedReplacement = true;
-      }
+    } finally {
+      if (slowTimer !== undefined) clearTimeout(slowTimer);
+    }
+    throwIfCancelled(options.signal);
+    if (registration?.waiting) {
+      await activateWaitingWorker(registration.waiting, container, timeoutMs, options);
+      activatedReplacement = true;
     }
   }
   // When the registration is missing or unsupported, the old shell may be
