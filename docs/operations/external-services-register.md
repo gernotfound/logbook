@@ -2,6 +2,38 @@
 
 **Stato di riferimento:** per l'ultimo readback Cloudflare consultare [quadro operativo](cloudflare-current-state.md). I valori sotto sono checkpoint datati, non una fotografia aggiornata automaticamente del provider.
 
+## UI guest separata e rilascio Static Assets · 27 novembre 2026
+
+[PR #1474](https://github.com/gernotfound/logbook/pull/1474) su
+[`main` `8c9523c1`](https://github.com/gernotfound/logbook/commit/8c9523c16aa7b26222d51ac239acad510c799044),
+v2.737.0; tree `7c091036` identico al candidato `bdd1c8cb`.
+[CI PR Canonical/CodeQL/Chromium/WebKit](https://github.com/gernotfound/logbook/actions/runs/45914455597),
+[gate e CodeQL post-merge](https://github.com/gernotfound/logbook/actions/runs/45914870701)
+e [frontend Static Assets con smoke HTTPS](https://github.com/gernotfound/logbook/actions/runs/45915114100)
+`success`. Readback diretto Cloudflare: `thelogbook-frontend` deployment
+`f02262b3-a5a0-4c99-a0dc-d9788158510b` e versione
+`874282aa-145e-477e-a012-6bc1e9d6aa5c` al **100%**; binding
+`APP_ORIGIN` (`plain_text`), `ASSETS` (`assets`), `KINDE_HTTP` (`service`),
+**nessun `D1_API`**. [API/Auth Gate](https://github.com/gernotfound/logbook/actions/runs/45915114216)
+e [Kinde](https://github.com/gernotfound/logbook/actions/runs/45915114144)
+`success`, ma deploy privati saltati. [Firestore](https://github.com/gernotfound/logbook/actions/runs/45915114182)
+`success` con riconciliazione e nessun deploy Rules/indici.
+
+`AccountCard` isola la UI guest dal modulo Firebase e lascia invariati i
+controlli account legacy, caricati solo in stato autenticato non guest.
+I due gate App legacy (email e consenso sospeso) sono lazy con fallback
+bloccante; il build PWA precache i chunk. Test import guest/App con
+moduli Firebase proibiti, test session routing e regressioni di UI
+superati; chiusura statica del bundle locale: 41 moduli senza chunk
+Firebase. La prima run CI ha rilevato un test UI sincrono dopo il nuovo
+lazy-loading, corretto e rivalidato nel candidato finale. Un thread
+automatico di review su `providerData.map(...).includes('google.com')`
+è stato verificato come falso positivo perché confronta elementi di
+un array di ID provider, non sottostringhe di URL; risolto con evidenza.
+Restano da provare rete/browser/PWA reali, consenso, Auth/ADK, diritti,
+sync/recovery e GO account fitness. Nessuna scrittura manuale su D1,
+IAM, DNS, OAuth/posta Production, segreti, dati reali o dismissioni.
+
 ## Confine Impostazioni legacy e Static Assets · 27 novembre 2026
 
 [PR #1472](https://github.com/gernotfound/logbook/pull/1472) integrata in

@@ -1,5 +1,29 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
+**Checkpoint UI guest e frontend, 27/11/2026:** [PR #1474](https://github.com/gernotfound/logbook/pull/1474)
+integrata con squash in [`main` `8c9523c1`](https://github.com/gernotfound/logbook/commit/8c9523c16aa7b26222d51ac239acad510c799044),
+v2.737.0, tree `7c091036` identico al candidato `bdd1c8cb`.
+[CI PR exact-SHA, Canonical, CodeQL, Chromium e WebKit](https://github.com/gernotfound/logbook/actions/runs/45914455597),
+[Main Release Gate e CodeQL](https://github.com/gernotfound/logbook/actions/runs/45914870701)
+e [Static Assets/smoke](https://github.com/gernotfound/logbook/actions/runs/45915114100):
+tutti `success`. Readback Cloudflare frontend: deployment
+`f02262b3-a5a0-4c99-a0dc-d9788158510b`, versione
+`874282aa-145e-477e-a012-6bc1e9d6aa5c` al 100%, soli binding
+`APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`, **nessun `D1_API`**.
+[API privata](https://github.com/gernotfound/logbook/actions/runs/45915114216)
+e [Kinde privato](https://github.com/gernotfound/logbook/actions/runs/45915114144)
+`success` ma deploy skipped; [Firestore](https://github.com/gernotfound/logbook/actions/runs/45915114182)
+riconciliato senza deploy Rules/indici.
+
+`AccountCard` ora rende la modalità guest senza importare Firebase e carica
+il modulo legacy solo per account non-guest; i gate App di verifica email
+e consenso sospeso sono caricati on-demand con fallback bloccante. Test import
+App/guest con Firebase proibito e build con 41 moduli statici senza chunk
+Firebase; i chunk asincroni sono nel precache PWA. Non è una prova runtime
+universale né un GO per fitness Kinde/D1, consenso, ADK, sync, erasure,
+Safari/iOS, OAuth/posta Production o dismissioni. Nessun cambio manuale
+provider o dati reali. [Registro servizi](external-services-register.md).
+
 **Checkpoint Impostazioni/legacy, 27/11/2026:** [PR #1472](https://github.com/gernotfound/logbook/pull/1472)
 integrata con squash in [`main` `91e518cf`](https://github.com/gernotfound/logbook/commit/91e518cfc01479617d2945bfcc820368c35225b7),
 v2.735.0, tree identico al candidato `f86f09bd` (`33be0e40`).
