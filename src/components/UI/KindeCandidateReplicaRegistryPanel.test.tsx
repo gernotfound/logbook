@@ -12,6 +12,7 @@ import {
 import { prepareKindeCandidateOwner } from '../../lib/sync/kindeCandidateOwnerBootstrap';
 import { inspectKindeCandidateOfflineReplicaJournal } from '../../lib/sync/kindeCandidateOfflineReplicaJournal';
 import { inspectKindeCandidateRetiredReplicaWithExistingKey } from '../../lib/sync/kindeCandidateRetiredReplicaReadOnly';
+import { recoverKindeCandidateStagedReceipt } from '../../lib/sync/kindeCandidateStagedReceiptRecovery';
 
 vi.mock('../../lib/sync/kindeCandidateReplicaRegistry', () => ({
     inspectKindeCandidateReplicaRegistry: vi.fn(),
@@ -27,6 +28,9 @@ vi.mock('../../lib/sync/kindeCandidateOfflineReplicaJournal', () => ({
 }));
 vi.mock('../../lib/sync/kindeCandidateRetiredReplicaReadOnly', () => ({
     inspectKindeCandidateRetiredReplicaWithExistingKey: vi.fn(),
+}));
+vi.mock('../../lib/sync/kindeCandidateStagedReceiptRecovery', () => ({
+    recoverKindeCandidateStagedReceipt: vi.fn(),
 }));
 
 const registry = {
@@ -52,6 +56,7 @@ function authenticated() {
     vi.mocked(inspectKindeCandidateRetiredReplicaWithExistingKey).mockResolvedValue({
         kind: 'baseline-unchanged', pendingOperations: 3, cloudRevision: 5,
     });
+    vi.mocked(recoverKindeCandidateStagedReceipt).mockResolvedValue('unconfirmed');
 }
 
 describe('candidate-only replica registry presentation', () => {
@@ -62,6 +67,7 @@ describe('candidate-only replica registry presentation', () => {
         expect(screen.queryByRole('button', { name: 'Consulta il registro' })).toBeNull();
         expect(screen.queryByRole('button', { name: 'Controlla modifiche offline su questo dispositivo' })).toBeNull();
         expect(screen.queryByRole('button', { name: 'Analizza la copia cloud e i possibili conflitti' })).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Verifica la ricevuta di un invio sigillato' })).toBeNull();
         publicEntry.unmount();
 
         render(<KindeAccountEntry guestArchivePresent candidateMode="preparation" />);
@@ -70,6 +76,44 @@ describe('candidate-only replica registry presentation', () => {
         expect(inspectKindeCandidateReplicaRegistry).not.toHaveBeenCalled();
         expect(inspectKindeCandidateOfflineReplicaJournal).not.toHaveBeenCalled();
         expect(inspectKindeCandidateRetiredReplicaWithExistingKey).not.toHaveBeenCalled();
+        expect(recoverKindeCandidateStagedReceipt).not.toHaveBeenCalled();
+    });
+
+    it('checks only a sealed delivery after observing a pending transition, preserving uncertainty', async () => {
+        authenticated();
+        vi.mocked(inspectKindeCandidateOfflineReplicaJournal).mockResolvedValue({
+            kind: 'transition-pending', pendingOperations: 2,
+        });
+        render(<KindeAccountEntry candidateMode="preparation" />);
+        const check = 'Verifica la ricevuta di un invio sigillato';
+        expect(screen.queryByRole('button', { name: check })).toBeNull();
+        fireEvent.click(await screen.findByRole('button', { name: 'Controlla modifiche offline su questo dispositivo' }));
+        fireEvent.click(await screen.findByRole('button', { name: check }));
+        await screen.findByText(/Nessuna ricevuta storica verificabile/);
+        expect(recoverKindeCandidateStagedReceipt).toHaveBeenCalledWith({
+            expected: { uid: principal.uid, fenceEpoch: 1, healthConsentRevision: 1 },
+            stillCurrent: expect.any(Function),
+        });
+        expect(screen.queryByText(/il suo ACK è stato salvato/)).toBeNull();
+        expect(prepareKindeCandidateOwner).not.toHaveBeenCalled();
+    });
+
+    it('distinguishes a verified historical ACK from an unknown error after the operation', async () => {
+        authenticated();
+        vi.mocked(inspectKindeCandidateOfflineReplicaJournal).mockResolvedValue({
+            kind: 'transition-pending', pendingOperations: 1,
+        });
+        vi.mocked(recoverKindeCandidateStagedReceipt).mockResolvedValueOnce('acknowledged')
+            .mockRejectedValueOnce(new Error('session changed'));
+        render(<KindeAccountEntry candidateMode="preparation" />);
+        const inspect = await screen.findByRole('button', { name: 'Controlla modifiche offline su questo dispositivo' });
+        fireEvent.click(inspect);
+        fireEvent.click(await screen.findByRole('button', { name: 'Verifica la ricevuta di un invio sigillato' }));
+        await screen.findByText(/il suo ACK è stato salvato/);
+        fireEvent.click(inspect);
+        fireEvent.click(await screen.findByRole('button', { name: 'Verifica la ricevuta di un invio sigillato' }));
+        await screen.findByText(/Un ACK potrebbe essere stato salvato prima dell’errore/);
+        expect(screen.queryByText(/il suo ACK è stato salvato/)).toBeNull();
     });
 
     it('shows a retired offline journal as blocked without offering a claim or deleting edits', async () => {
