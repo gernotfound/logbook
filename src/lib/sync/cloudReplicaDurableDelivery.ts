@@ -5,7 +5,7 @@ import { applyRemoteDocuments, type DocumentData } from './documentProjection';
 import { readAccountCloudDocument } from './cloudDocumentRead';
 import { prepareCloudflareCommit } from './cloudReplicaCommit';
 import type {
-    CloudReplicaControlSnapshot, CloudReplicaSnapshot, createCloudflareReplicaTransport,
+    CloudReplicaBatch, CloudReplicaControlSnapshot, CloudReplicaSnapshot, createCloudflareReplicaTransport,
 } from './cloudReplicaTransport';
 import { parseCloudflareDeliveryIntent, type CloudflareDeliveryIntent } from './cloudReplicaDeliveryRecord';
 import { readLocal } from './localArchiveBootstrap';
@@ -18,6 +18,7 @@ import { boundedPendingTransactionBatch } from './syncBatching';
 import { validateLocalEnvelope } from './localEnvelopeValidation';
 
 type DeliveryTransport = Pick<ReturnType<typeof createCloudflareReplicaTransport>, 'commit' | 'receipt'>;
+type ReceiptTransport = Pick<DeliveryTransport, 'receipt'>;
 type SessionGuard = () => boolean;
 
 function checkedOwner(owner: string): { owner: string; uid: string } {
@@ -84,18 +85,18 @@ export async function stageCloudflareDelivery(
  * This candidate is deliberately NOT wired to the active Firestore journal.
  * Real Auth, ADK, hydration and local checkpoint adoption remain separate gates.
  */
-export async function resumeCloudflareDelivery(
+async function reconcileStoredCloudflareDelivery(
     ownerInput: string,
     accountKey: Uint8Array,
-    transport: DeliveryTransport,
-    csrfToken: string,
+    transport: ReceiptTransport,
     guard: SessionGuard,
-    trustedLegalConsent?: LegalConsent,
-): Promise<'idle' | 'acknowledged'> {
+    trustedLegalConsent: LegalConsent | undefined,
+    retryCommit?: (batch: CloudReplicaBatch) => Promise<unknown>,
+): Promise<'idle' | 'unconfirmed' | 'acknowledged'> {
     const { owner, uid } = checkedOwner(ownerInput);
     current(guard);
-    if (!(accountKey instanceof Uint8Array) || accountKey.length !== 32 || !csrfToken) {
-        throw new Error('Chiave o sessione D1 mancante: journal preservato.');
+    if (!(accountKey instanceof Uint8Array) || accountKey.length !== 32) {
+        throw new Error('Chiave D1 mancante: journal preservato.');
     }
     const local = await readLocal(owner);
     current(guard);
@@ -123,8 +124,11 @@ export async function resumeCloudflareDelivery(
     let confirmed = await transport.receipt(intent.batch);
     current(guard);
     if (!confirmed) {
+        // An old generation may already be retired or reused. The receipt
+        // lookup can close a lost ACK without ever replaying its stale writer.
+        if (!retryCommit) return 'unconfirmed';
         try {
-            await transport.commit(intent.batch, csrfToken);
+            await retryCommit(intent.batch);
         } catch (error) {
             // A failed HTTP response can follow a successful D1 transaction.
             // The only admissible recovery is the exact saved batch receipt.
@@ -153,4 +157,37 @@ export async function resumeCloudflareDelivery(
         ...(trustedLegalConsent ? { trustedLegalConsent } : {}),
     }, guard);
     return 'acknowledged';
+}
+
+/**
+ * A historical, content-bound receipt can finish only the original durable
+ * delivery's local ACK. A missing receipt is inconclusive: never re-send an
+ * old-generation writer or discard its ciphertext/journal while recovering.
+ * The caller must have separately verified the live owner, consent and ADK.
+ */
+export async function reconcileCloudflareDeliveryReceiptOnly(
+    ownerInput: string,
+    accountKey: Uint8Array,
+    transport: ReceiptTransport,
+    guard: SessionGuard,
+    trustedLegalConsent: LegalConsent,
+): Promise<'idle' | 'unconfirmed' | 'acknowledged'> {
+    if (!trustedLegalConsent) throw new Error('Consenso D1 non verificato: journal preservato.');
+    return reconcileStoredCloudflareDelivery(ownerInput, accountKey, transport, guard, trustedLegalConsent);
+}
+
+/** Resume a still-eligible candidate batch, preserving its sealed bytes across an ambiguous response. */
+export async function resumeCloudflareDelivery(
+    ownerInput: string,
+    accountKey: Uint8Array,
+    transport: DeliveryTransport,
+    csrfToken: string,
+    guard: SessionGuard,
+    trustedLegalConsent?: LegalConsent,
+): Promise<'idle' | 'acknowledged'> {
+    if (!csrfToken) throw new Error('Sessione D1 mancante: journal preservato.');
+    const result = await reconcileStoredCloudflareDelivery(ownerInput, accountKey, transport, guard,
+        trustedLegalConsent, batch => transport.commit(batch, csrfToken));
+    if (result === 'unconfirmed') throw new Error('Ricevuta D1 non confermata: journal preservato.');
+    return result;
 }
