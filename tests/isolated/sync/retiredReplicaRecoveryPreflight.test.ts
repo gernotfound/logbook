@@ -218,17 +218,29 @@ describe('retired replica recovery preflight, no mutation or new causal identity
         }), catalog, nowMs).kind).toBe('baseline-unchanged');
     });
 
-    it('observes a replaced or missing incarnation only as a provisional unchanged baseline', async () => {
+    it('accepts a monotone replacement only as a provisional unchanged baseline', async () => {
         const local = (await readLocal(owner))!;
         const cloud = await checkpoint();
+        expect(preflightRetiredReplicaRecovery(uid, local, cloud,
+            control({ replicaId: 'replacement', generation: 3, status: 'active' }), catalog))
+            .toEqual({ kind: 'baseline-unchanged', pendingOperations: local.pending.length,
+                cloudRevision: 8 });
+    });
+
+    it('rejects missing, regressed or contradictory lineage without changing encrypted pending', async () => {
+        const local = (await readLocal(owner))!;
+        const sealed = await get(storageKey);
+        const cloud = await checkpoint();
         for (const register of [
-            control({ replicaId: 'replacement', generation: 3, status: 'active' }),
             { ...control(), replicas: {} },
+            control({ replicaId: 'other-same-generation' }),
+            control({ replicaId: 'old-generation', generation: 1 }),
         ]) {
             expect(preflightRetiredReplicaRecovery(uid, local, cloud, register, catalog))
-                .toEqual({ kind: 'baseline-unchanged', pendingOperations: local.pending.length,
-                    cloudRevision: 8 });
+                .toEqual({ kind: 'reconciliation-required', reason: 'unverifiable-lineage' });
         }
+        expect(await get(storageKey)).toBe(sealed);
+        expect(await readLocal(owner)).toEqual(local);
     });
 
     it('rejects owner/fence mismatch, bad ciphertext and unfinished mutation before recovery', async () => {
