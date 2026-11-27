@@ -75,6 +75,14 @@ clock avanzati senza modifica business, documenti extra/mancanti o dati
 cambiati senza metadata). Sono **indicatori di possibili collisioni**, non
 una risoluzione dei conflitti: zero sovrapposizioni non prova indipendenza
 semantica o autorizza replay, nuovo actor, ACK o una scelta UX automatica.
+Il contatore dei documenti non classificabili include anche modifiche
+business prive di stamp e avanzamenti di clock non spiegati **quando nello
+stesso documento coesistono altri stamp legittimamente cambiati**. La
+presenza di un solo field stamp non classifica l'intero documento: la
+diagnosi usa il diff semantico e richiede che gli eventi causali nuovi
+siano coperti dai testimoni disponibili; un diff non rappresentabile è
+non classificabile. Il conteggio resta conservativo, non una dimostrazione
+di assenza di conflitti né un permesso di merge automatico.
 
 ### CF-04 — Barriera journal per il rientro di una replica ritirata (candidato 27/11/2026)
 
