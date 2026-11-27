@@ -70,6 +70,25 @@ void test('new replica enrollment commits one guarded registration and is replay
   assert.equal(db.sqlite.prepare("SELECT last_seq FROM sync_replicas WHERE uid=? AND slot='s01'").get(owner).last_seq, 1);
 }));
 
+void test('an unchanged control revision can enroll a new incarnation after the old lease expires', () => withFixture(async db => {
+  const input = claim('expired-lease-race-01', 0, 'replacement-after-lease', {}, replica);
+  const observed = await call(db, 'control', {});
+  assert.equal(observed.status, 200);
+  assert.equal(observed.body.revision, 0);
+  assert.equal(observed.body.replicas.s00.status, 'active');
+  assert.ok(observed.body.replicas.s00.leaseUntilMs > Date.now());
+
+  // Membership eligibility is clock-dependent, not part of the revision CAS.
+  db.sqlite.prepare('UPDATE sync_replicas SET lease_until_ms = ? WHERE uid = ? AND slot = ?')
+    .run(Date.now() - 600000, owner, replica.slot);
+  const result = await call(db, 'replica/claim', input);
+  assert.equal(result.status, 200);
+  assert.equal(result.body.action, 'register');
+  assert.notEqual(result.body.replica.slot, replica.slot);
+  assert.equal(result.body.replica.replicaId, input.candidateReplicaId);
+  assert.equal((await call(db, 'replica/status', input)).body.outcome, 'committed');
+}));
+
 void test('a retired replica ID cannot rejoin after its slot is reused by a new generation', () => withFixture(async db => {
   const identityIndex = db.sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'sync_replica_mutations' AND name = 'sync_replica_history_identity'").get();
   assert.equal(identityIndex?.name, 'sync_replica_history_identity');

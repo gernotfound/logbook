@@ -196,10 +196,11 @@ export async function resumeCloudflareReplicaClaim(
     }
 
     // A second tab may have added offline operations to the previous replica
-    // after this request was sealed. Do not send a request that could replace
-    // that incarnation and occupy a new D1 membership before the local
-    // journal can be reconciled. The final IndexedDB adoption fence is still
-    // necessary because the remote membership may change after this read.
+    // after staging. Live control alone does not make replay safe: the lease
+    // can expire before the server chooses checkpoint vs slot replacement.
+    // Only a primary-ledger proof of the original immutable commit guarantees
+    // replay cannot make a new membership write. Adoption still needs the
+    // original incarnation and the final IndexedDB fence.
     if (intent.currentReplica && before.pending.length > 0) {
         if (!equal(tuple(before.replica), intent.currentReplica)) return 'reconciliation-required';
         const control = await transport.control();
@@ -211,6 +212,9 @@ export async function resumeCloudflareReplicaClaim(
             || entry.replicaId !== intent.currentReplica.replicaId
             || entry.generation !== intent.currentReplica.generation
             || entry.leaseUntilMs <= Date.now()) return 'reconciliation-required';
+        const outcome = await transport.claimMutationOutcome(intent, csrfToken);
+        current(guard);
+        if (outcome.outcome !== 'committed') return 'reconciliation-required';
         const latest = await readLocal(owner);
         current(guard);
         if (!latest || !equal(latest.cloudflareReplicaClaim, intent)
@@ -240,6 +244,12 @@ export async function resumeCloudflareReplicaClaim(
         || receipt.revision !== intent.expectedRevision + 1
         || !Number.isSafeInteger(receipt.currentRevision)
         || receipt.currentRevision < receipt.revision) return 'reconciliation-required';
+    // Even an immutable historical receipt cannot reassign late operations
+    // authored under a different replica incarnation.
+    if (intent.currentReplica && before.pending.length > 0
+        && (receipt.action !== 'checkpoint' || !equal(tuple(receipt.replica), intent.currentReplica))) {
+        return 'reconciliation-required';
+    }
     // A receipt proves the original request but NOT what is currently in D1.
     const control = await transport.control();
     current(guard);
