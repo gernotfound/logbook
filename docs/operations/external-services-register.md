@@ -2,6 +2,29 @@
 
 **Stato di riferimento:** per l'ultimo readback Cloudflare consultare [quadro operativo](cloudflare-current-state.md). I valori sotto sono checkpoint datati, non una fotografia aggiornata automaticamente del provider.
 
+## CF-04 · Sequenza confermata e riuso D1 · 27 novembre 2026
+
+[PR #1504](https://github.com/gernotfound/logbook/pull/1504), v2.766.0,
+squash su [`main` `af5f309c`](https://github.com/gernotfound/logbook/commit/af5f309c92a3610c87c066d3d91d6b355d208d4a),
+tree `37f842f815062b328e45cf7dd29cc2f32efbdce0` uguale al
+candidato. [CI PR Canonical/CodeQL](https://github.com/gernotfound/logbook/actions/runs/46055626658),
+[gate main/CodeQL](https://github.com/gernotfound/logbook/actions/runs/46056072866)
+e [Static Assets/smoke HTTPS](https://github.com/gernotfound/logbook/actions/runs/46056391188)
+riusciti. Readback Cloudflare: `thelogbook-frontend` deployment
+`45848b27-1b9d-4a19-a88f-f9558d499c00`, versione
+`e27cfa4c-01bf-49f3-81cf-994aea033bca` al 100%, binding
+`APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`, nessun `D1_API`.
+[API D1 privata](https://github.com/gernotfound/logbook/actions/runs/46056391048)
+e [Kinde privato](https://github.com/gernotfound/logbook/actions/runs/46056391051):
+job riusciti, deploy saltati.
+[Firestore](https://github.com/gernotfound/logbook/actions/runs/46056391288):
+nessun deploy Rules/indici. Aggiunto test di regressione del riuso slot
+dopo un commit con `lastSeq=2`, conservazione ricevuta, fence della vecchia
+incarnazione e prosecuzione a sequenza 3; **nessuna modifica ai writer live**.
+Non sono stati testati recupero automatico del journal, conflitti reali,
+sync multi-device D1, consenso o privacy Production. SYNC-7D/7E aperti,
+fitness Cloudflare **NO-GO**. Nessuna scrittura manuale ai provider.
+
 ## CF-04 · Riuso slot D1 e readback Static Assets · 27 novembre 2026
 
 [PR #1502](https://github.com/gernotfound/logbook/pull/1502), v2.764.0:
