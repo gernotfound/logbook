@@ -9,7 +9,9 @@ import type { UserData, CachedGlobalCatalog, LegalConsent } from '../../../src/t
 import { UserDataSchema } from '../../../src/lib/schema';
 import { LEGAL_VERSIONS } from '../../../src/lib/legalVersions';
 import { adoptReplicaCheckpoint, acknowledgeThrough, commitLocal, initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
-import { stageCloudflareDelivery, resumeCloudflareDelivery } from '../../../src/lib/sync/cloudReplicaDurableDelivery';
+import {
+    stageCloudflareDelivery, resumeCloudflareDelivery, reconcileCloudflareDeliveryReceiptOnly,
+} from '../../../src/lib/sync/cloudReplicaDurableDelivery';
 import { stageCloudflareReplicaClaim } from '../../../src/lib/sync/cloudReplicaClaimRecovery';
 import { stageCloudflareReplicaRetirement } from '../../../src/lib/sync/cloudReplicaRetirementRecovery';
 import { readAuthenticatedCloudflareCheckpoint } from '../../../src/lib/sync/cloudReplicaCheckpoint';
@@ -231,6 +233,81 @@ describe('candidate D1 delivery: encrypted IndexedDB intent and exact ACK', () =
             .resolves.toBe('acknowledged');
         expect(recovered.commit).not.toHaveBeenCalled();
         expect((await readLocal(owner))?.pending).toEqual([]);
+    });
+
+    it('closes an old-generation lost ACK from its historical receipt without sending any new commit', async () => {
+        await stage(consent);
+        const original = (await readLocal(owner))!;
+        const originalBatch = structuredClone(original.cloudflareDelivery!.batch);
+        const receiptOnly = { receipt: vi.fn(async (batch: CloudReplicaBatch) => {
+            expect(batch).toEqual(originalBatch);
+            expect(batch.replica.generation).toBe(1);
+            // The primary D1 ledger can retain this receipt after the original
+            // incarnation is retired and the slot is reused by generation 2.
+            return { revision: batch.expectedRevision + 1, lastSeq: batch.lastSeq };
+        }) };
+        expect(await reconcileCloudflareDeliveryReceiptOnly(owner, adk, receiptOnly, () => true, consent))
+            .toBe('acknowledged');
+        expect(receiptOnly.receipt).toHaveBeenCalledOnce();
+        const after = (await readLocal(owner))!;
+        expect(after.cloudflareDelivery).toBeUndefined();
+        expect(after.pending).toEqual([]);
+        expect(after.baseline.profile?.height).toBe('171');
+        expect(after.replica).toEqual(original.replica);
+        expect(after.actorId).toBe(original.actorId);
+    });
+
+    it('retains the exact ciphertext and pending operations when a historical receipt is absent', async () => {
+        await stage(consent);
+        const before = (await readLocal(owner))!;
+        const sealed = await get(storeKey);
+        const receiptOnly = { receipt: vi.fn(async () => null) };
+        expect(await reconcileCloudflareDeliveryReceiptOnly(owner, adk, receiptOnly, () => true, consent))
+            .toBe('unconfirmed');
+        expect(receiptOnly.receipt).toHaveBeenCalledOnce();
+        expect(await get(storeKey)).toBe(sealed);
+        expect(await readLocal(owner)).toEqual(before);
+    });
+
+    it('refuses old-generation receipt ACK when consent or session changes before the local transaction', async () => {
+        await stage(consent);
+        const before = (await readLocal(owner))!;
+        const sealed = await get(storeKey);
+        let live = true;
+        const receiptOnly = { receipt: vi.fn(async (batch: CloudReplicaBatch) => {
+            live = false;
+            return { revision: batch.expectedRevision + 1, lastSeq: batch.lastSeq };
+        }) };
+        await expect(reconcileCloudflareDeliveryReceiptOnly(owner, adk, receiptOnly,
+            () => live, consent)).rejects.toThrow('sessione');
+        expect(await get(storeKey)).toBe(sealed);
+        expect(await readLocal(owner)).toEqual(before);
+
+        await expect(reconcileCloudflareDeliveryReceiptOnly(owner, adk, {
+            receipt: vi.fn(async (batch: CloudReplicaBatch) => ({
+                revision: batch.expectedRevision + 1, lastSeq: batch.lastSeq,
+            })),
+        }, () => true, { ...consent, acceptedAt: '2026-11-13T11:00:00.000Z' }))
+            .rejects.toThrow('Consenso D1 modificato');
+        expect(await get(storeKey)).toBe(sealed);
+        expect(await readLocal(owner)).toEqual(before);
+    });
+
+    it('preserves later offline edits in a receipt-only ACK and never creates another writer', async () => {
+        await stage(consent);
+        const first = (await readLocal(owner))!;
+        const receiptOnly = { receipt: vi.fn(async (batch: CloudReplicaBatch) => {
+            await commitLocal(owner, profile(172, consent), profile(171, consent));
+            return { revision: batch.expectedRevision + 1, lastSeq: batch.lastSeq };
+        }) };
+        expect(await reconcileCloudflareDeliveryReceiptOnly(owner, adk, receiptOnly, () => true, consent))
+            .toBe('acknowledged');
+        const after = (await readLocal(owner))!;
+        expect(after.data.profile?.height).toBe('172');
+        expect(after.baseline.profile?.height).toBe('171');
+        expect(after.pending).toHaveLength(1);
+        expect(after.pending[0].seq).toBeGreaterThan(first.pending.at(-1)!.seq);
+        expect(after.replica).toEqual(first.replica);
     });
 
     it('preserves a new local edit between remote commit and the older local ACK', async () => {

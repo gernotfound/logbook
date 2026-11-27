@@ -32,6 +32,11 @@ void test('slot reuse carries a committed sequence across generations without re
   const committed = attempt('old-replica-sequence-02', 2, 0);
   assert.equal((await call(db, 'commit', committed)).status, 200);
   assert.equal(db.sqlite.prepare("SELECT last_seq FROM sync_replicas WHERE uid=? AND slot='s00'").get(owner).last_seq, 2);
+  const originalReceipt = (await call(db, 'receipt', { batchId: committed.batchId })).body.receipt;
+  assert.equal(originalReceipt.revision, 1);
+  assert.equal(originalReceipt.lastSeq, 2);
+  assert.deepEqual(originalReceipt.replica, committed.replica);
+  assert.match(originalReceipt.requestHash, /^[a-f0-9]{64}$/);
 
   db.sqlite.prepare("UPDATE sync_replicas SET lease_until_ms=? WHERE uid=? AND slot='s00'")
     .run(Date.now() - 600000, owner);
@@ -52,6 +57,9 @@ void test('slot reuse carries a committed sequence across generations without re
   assert.equal(successor.body.replica.generation, 2);
   assert.equal(successor.body.baseSeq, 2);
   assert.equal(db.sqlite.prepare("SELECT last_seq FROM sync_replicas WHERE uid=? AND slot='s00'").get(owner).last_seq, 2);
+  // A retired device can query the original immutable receipt, but its old
+  // identity is not a grant to write after the successor takes its slot.
+  assert.deepEqual((await call(db, 'receipt', { batchId: committed.batchId })).body.receipt, originalReceipt);
 
   // The old receipt is durable historical evidence, not a renewed writer grant.
   const replay = await call(db, 'commit', committed);
@@ -70,6 +78,7 @@ void test('slot reuse carries a committed sequence across generations without re
   assert.equal(saved.body.revision, 4);
   assert.equal(saved.body.lastSeq, 3);
   assert.equal(db.sqlite.prepare("SELECT last_seq FROM sync_replicas WHERE uid=? AND slot='s00'").get(owner).last_seq, 3);
+  assert.deepEqual((await call(db, 'receipt', { batchId: committed.batchId })).body.receipt, originalReceipt);
 }));
 
 void test('account, consent, CSRF, lease and snapshot fences apply to replica maintenance', () => withFixture(async db => {
