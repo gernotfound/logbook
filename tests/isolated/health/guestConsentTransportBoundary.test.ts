@@ -12,6 +12,7 @@ import {
   isHealthConsentWritable, withdrawGuestHealthConsent,
 } from '../../../src/lib/healthConsent';
 import { installLegacyHealthConsentIdentity, readLegacyHealthConsentUser } from '../../../src/lib/healthConsentLegacyIdentity';
+import { writeDeviceValue } from '../../../src/lib/sync/deviceStorage';
 import { activateGuestSession, GUEST_SESSION_KEY, revokeGuestSession } from '../../../src/lib/sync/session';
 
 beforeEach(() => {
@@ -36,6 +37,17 @@ describe('Consent policy in the guest-only runtime', () => {
     expect(isHealthConsentWritable('user:someone')).toBe(false);
     revokeGuestSession();
     expect(isHealthConsentWritable('guest')).toBe(false);
+  });
+
+  it('denies unrecognized and malformed owners even during an active guest session', () => {
+    for (const owner of ['', 'other', 'device:other', 'user:', 'user:bad/path']) {
+      expect(isHealthConsentWritable(owner), owner).toBe(false);
+      expect(isHealthConsentCloudWritable(owner), owner).toBe(false);
+    }
+    expect(isHealthConsentWritable('guest')).toBe(true);
+    expect(isHealthConsentCloudWritable('guest')).toBe(false);
+    expect(() => writeDeviceValue('workout', 'private', 'device:other')).toThrow('Accesso fitness sospeso');
+    expect(localStorage.getItem('logbook:v2:device:other:workout')).toBeNull();
   });
 
   it('drops the legacy session reader only after the last provider lease', () => {
