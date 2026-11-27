@@ -96,17 +96,20 @@ export function registerCandidateJournalRebaseCases({
     });
 
     it.each([
-        { height: 168, stamped: true }, { height: 170, stamped: true },
-        { height: 168, stamped: false }, { height: 170, stamped: false },
-    ])('preserves the original intent after a conflicting or unattributed root write (%o)', async ({ height, stamped }) => {
+        { height: 168, stampPath: 'profile/height' },
+        { height: 170, stampPath: 'profile/height' },
+        { height: 168, stampPath: 'profile/neck' },
+        { height: 168, stampPath: null },
+        { height: 170, stampPath: null },
+    ])('preserves the original intent after a conflicting or unattributed root write (%o)', async ({ height, stampPath }) => {
         const setup = await savedDelivery();
         const original = (await readLocal(owner))!.cloudflareDelivery;
         const { control, scan } = changedRemote(setup);
         const competingRoot = sealCloudDocument(adk, owner.slice(5), '', {
-            profile: { height: String(height) },
+            profile: { height: String(height), ...(stampPath === 'profile/neck' ? { neck: '37' } : {}) },
         }, {
-            protocolVersion: 3, clock: { s01: 1 }, fields: stamped ? {
-                'profile/height': { actorId: 's01', seq: 1, clock: { s01: 1 } },
+            protocolVersion: 3, clock: { s01: 1 }, fields: stampPath ? {
+                [stampPath]: { actorId: 's01', seq: 1, clock: { s01: 1 } },
             } : {},
             writer: { slot: 's01', replicaId: 'other-cloud-writer', generation: 1,
                 seq: 1, consentRevision: 1 },
