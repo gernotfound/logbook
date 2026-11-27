@@ -662,6 +662,44 @@ test('recovers a Kinde edit made offline after a competing browser save', async 
     });
 });
 
+test('merges two offline Kinde tabs on one device before acknowledging their shared journal', async ({ browser }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
+        allowFirstCommit();
+        // A second tab in the SAME browser profile shares IndexedDB, vault
+        // control, cookies and replica identity, unlike the remote device.
+        const sibling = await first.context().newPage();
+        await sibling.goto(first.url());
+        await loadKindeReplica(sibling);
+
+        await first.context().setOffline(true);
+        await expect.poll(() => first.evaluate(() => navigator.onLine)).toBe(false);
+        await expect.poll(() => sibling.evaluate(() => navigator.onLine)).toBe(false);
+        const outcomes = await Promise.all([
+            first.evaluate(() => window.kindeReplicaFixture!.submit({
+                type: 'profile.patch', patch: { height: '184' },
+            })),
+            sibling.evaluate(() => window.kindeReplicaFixture!.submit({
+                type: 'profile.patch', patch: { neck: '37' },
+            })),
+        ]);
+        expect(outcomes.map(outcome => outcome.kind)).toEqual(['local-pending', 'local-pending']);
+        expect(firstCommitStatuses).toEqual([]);
+        expect(receipts()).toBe(0);
+
+        await first.context().setOffline(false);
+        await first.reload();
+        await loadKindeReplica(first);
+        const merged = { height: '184', neck: '37' };
+        expect(await first.evaluate(() => window.kindeReplicaFixture!.snapshot()?.data.profile)).toMatchObject(merged);
+        expect(await sibling.evaluate(async () => (await window.kindeReplicaFixture!.refresh()).data.profile))
+            .toMatchObject(merged);
+        expect(await second.evaluate(async () => (await window.kindeReplicaFixture!.refresh()).data.profile))
+            .toMatchObject(merged);
+        expect(firstCommitStatuses).toEqual([200]);
+        expect(receipts()).toBe(1);
+    });
+});
+
 test('does not recreate a meal deleted on another Kinde device before an edit', async ({ browser }) => {
     await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
         allowFirstCommit();
