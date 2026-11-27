@@ -9,6 +9,7 @@ import { LEGAL_VERSIONS } from './legalVersions';
 import { legacyHealthConsentUserStamp, readLegacyHealthConsentUser } from './healthConsentLegacyIdentity';
 import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from './sync/browserStorage';
 import { captureSessionForOwner, isActiveGuestSession, userOwner } from './sync/session';
+import { assertAuthenticatedOwner } from './sync/owner';
 import { getGuestHealthConsentStatus as readGuestHealthConsentStatus, markGuestHealthConsentWithdrawn } from './guestHealthConsent';
 
 async function serverRequest(user: User, method: 'GET' | 'POST', body?: unknown): Promise<ServerStatus> {
@@ -137,7 +138,9 @@ export function isHealthConsentWritable(owner: string): boolean {
     // must never authorize an edit even when its withdrawal marker is absent.
     return isActiveGuestSession() && getGuestHealthConsentStatus() === 'active';
   }
-  if (!owner.startsWith('user:')) return true;
+  // Consent checks are authorization gates, not owner-namespace normalizers.
+  // An unknown or malformed owner must never inherit write permission.
+  try { assertAuthenticatedOwner(owner); } catch { return false; }
   const uid = owner.slice(5);
   // A still-mounted editor for account A cannot write to A after login to B,
   // even if A's previously verified revision remains in this module's cache.
@@ -156,7 +159,7 @@ export function isHealthConsentWritable(owner: string): boolean {
 /** Cloud operations require a fresh server check in THIS online session. */
 export function isHealthConsentCloudWritable(owner: string): boolean {
   if (!isHealthConsentWritable(owner)) return false;
-  if (!owner.startsWith('user:')) return owner !== 'guest';
+  if (!owner.startsWith('user:')) return false;
   const uid = owner.slice(5);
   try { if (readLegacyHealthConsentUser()?.uid !== uid) return false; } catch { return false; }
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;

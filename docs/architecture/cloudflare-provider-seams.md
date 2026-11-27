@@ -19,6 +19,8 @@
 
 **Precache guest (incremento successivo):** il Service Worker conserva la disponibilità offline dei chunk applicativi, ma esclude i chunk SDK `firebase-*` dell'account legacy dal precache iniziale. Il codice legacy resta distribuibile online e non è rimosso. Il build verifica direttamente l'assenza di questi nomi dal manifesto generato; il test browser guest osserva che non vengano richiesti dopo la scelta locale. L'esclusione non è una prova che ogni modulo sia provider-free o che un account legacy sia utilizzabile offline.
 
+**Fence owner del consenso:** `isHealthConsentWritable` accetta solo `guest` nella sua generazione attiva o un owner autenticato canonico `user:<uid>` con prove Auth/consenso correnti; namespace sconosciuti e owner malformati falliscono chiusi anche se manca il provider legacy. `isHealthConsentCloudWritable` non conferisce mai permesso cloud al guest né a namespace diversi dall'account. Questa protezione client non sostituisce i controlli trusted Worker/D1.
+
 ## Struttura approvata, minima e incrementale
 
 1. **Dominio e formato**: mantenere una sola implementazione per `domainOperations`, proiezione dati, schema business, clock causali, AEAD e parsing stretti. Questi moduli non devono importare Firebase, Kinde, Workers o API di rete. Dove emerge un import concreto, estrarre una funzione pura con test comportamentali **prima** di spostare file.
