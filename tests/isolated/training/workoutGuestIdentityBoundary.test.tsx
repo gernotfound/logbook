@@ -1,17 +1,17 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../src/lib/firebase', () => {
+vi.mock('../../../src/lib/firebase', () => {
     throw new Error('Il percorso allenamento guest ha caricato Firebase');
 });
 
-import { useWorkoutSession } from '../../src/hooks/useWorkoutSession';
-import TrainingView from '../../src/components/Training/TrainingView';
-import { authenticatedIdentitySource } from '../../src/lib/sync/authenticatedIdentitySource';
-import { activateGuestSession, GUEST_SESSION_KEY, invalidateSession } from '../../src/lib/sync/session';
-import { useAppStore } from '../../src/store/useAppStore';
-import { useDialogStore } from '../../src/store/useDialogStore';
-import { releaseLegacyTestIdentityReader } from '../setup';
+import { useWorkoutSession } from '../../../src/hooks/useWorkoutSession';
+import TrainingView from '../../../src/components/Training/TrainingView';
+import { authenticatedIdentitySource } from '../../../src/lib/sync/authenticatedIdentitySource';
+import { activateGuestSession, GUEST_SESSION_KEY, invalidateSession } from '../../../src/lib/sync/session';
+import { useAppStore } from '../../../src/store/useAppStore';
+import { useDialogStore } from '../../../src/store/useDialogStore';
+import { releaseLegacyTestIdentityReader } from '../../setup';
 
 beforeEach(() => {
     releaseLegacyTestIdentityReader();
