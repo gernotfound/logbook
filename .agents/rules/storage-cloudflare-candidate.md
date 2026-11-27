@@ -16,6 +16,18 @@ avere le stesse revisioni, lo stesso epoch e registri di replica equivalenti.
 
 ### CF-04 — Bridge preflight autenticato, senza provisioning ADK (27/11/2026)
 
+La schermata di registro **solo candidata** espone ora, soltanto dopo aver
+osservato un journal locale di replica non più eleggibile, un pulsante
+esplicito per il confronto causale completo. Il metodo della sessione Kinde
+riusa il wrapper `recovery-inspect` con ADK **già emessa**, senza
+provisioning, e ricontrolla il medesimo epoch/cookie/consenso intorno
+all'operazione. L'interfaccia mostra solo conteggi aggregati e motivi di
+blocco: una baseline invariata è provvisoria, un possibile ACK perso non è
+un recupero, e zero sovrapposizioni non prova l'indipendenza semantica.
+Errore o chiave assente non vengono rappresentati come cloud vuoto.
+L'azione non è nel login pubblico `identityOnly`, non monta il fitness
+account e non crea replica, journal, ricevuta né ACK. SYNC-7D/7E restano aperti.
+
 Il wrapper candidato `inspectKindeCandidateRetiredReplicaWithExistingKey()`
 ottiene ora una ADK effimera esclusivamente da
 `POST /v1/cloud-key/recovery-inspect`. L'endpoint consulta la D1 primaria

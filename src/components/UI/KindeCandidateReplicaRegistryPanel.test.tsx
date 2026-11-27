@@ -11,6 +11,7 @@ import {
 } from '../../lib/sync/kindeCandidateReplicaCancellationBridge';
 import { prepareKindeCandidateOwner } from '../../lib/sync/kindeCandidateOwnerBootstrap';
 import { inspectKindeCandidateOfflineReplicaJournal } from '../../lib/sync/kindeCandidateOfflineReplicaJournal';
+import { inspectKindeCandidateRetiredReplicaWithExistingKey } from '../../lib/sync/kindeCandidateRetiredReplicaReadOnly';
 
 vi.mock('../../lib/sync/kindeCandidateReplicaRegistry', () => ({
     inspectKindeCandidateReplicaRegistry: vi.fn(),
@@ -23,6 +24,9 @@ vi.mock('../../lib/sync/kindeCandidateReplicaCancellationBridge', () => ({
 }));
 vi.mock('../../lib/sync/kindeCandidateOfflineReplicaJournal', () => ({
     inspectKindeCandidateOfflineReplicaJournal: vi.fn(),
+}));
+vi.mock('../../lib/sync/kindeCandidateRetiredReplicaReadOnly', () => ({
+    inspectKindeCandidateRetiredReplicaWithExistingKey: vi.fn(),
 }));
 
 const registry = {
@@ -45,6 +49,9 @@ function authenticated() {
     vi.mocked(inspectKindeCandidatePendingReplicaMutation).mockResolvedValue(null);
     vi.mocked(cancelKindeCandidatePendingReplicaMutation).mockResolvedValue('cancelled');
     vi.mocked(inspectKindeCandidateOfflineReplicaJournal).mockResolvedValue({ kind: 'no-pending' });
+    vi.mocked(inspectKindeCandidateRetiredReplicaWithExistingKey).mockResolvedValue({
+        kind: 'baseline-unchanged', pendingOperations: 3, cloudRevision: 5,
+    });
 }
 
 describe('candidate-only replica registry presentation', () => {
@@ -54,6 +61,7 @@ describe('candidate-only replica registry presentation', () => {
         await screen.findByText(/Sessione Kinde verificata/);
         expect(screen.queryByRole('button', { name: 'Consulta il registro' })).toBeNull();
         expect(screen.queryByRole('button', { name: 'Controlla modifiche offline su questo dispositivo' })).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Analizza la copia cloud e i possibili conflitti' })).toBeNull();
         publicEntry.unmount();
 
         render(<KindeAccountEntry guestArchivePresent candidateMode="preparation" />);
@@ -61,6 +69,7 @@ describe('candidate-only replica registry presentation', () => {
         expect(screen.queryByRole('button', { name: 'Consulta il registro' })).toBeNull();
         expect(inspectKindeCandidateReplicaRegistry).not.toHaveBeenCalled();
         expect(inspectKindeCandidateOfflineReplicaJournal).not.toHaveBeenCalled();
+        expect(inspectKindeCandidateRetiredReplicaWithExistingKey).not.toHaveBeenCalled();
     });
 
     it('shows a retired offline journal as blocked without offering a claim or deleting edits', async () => {
@@ -80,6 +89,84 @@ describe('candidate-only replica registry presentation', () => {
         });
         expect(prepareKindeCandidateOwner).not.toHaveBeenCalled();
         expect(retireKindeCandidateReplica).not.toHaveBeenCalled();
+        expect(inspectKindeCandidateRetiredReplicaWithExistingKey).not.toHaveBeenCalled();
+    });
+
+    it('offers an authenticated, read-only baseline comparison only after a retired journal was observed', async () => {
+        authenticated();
+        vi.mocked(inspectKindeCandidateOfflineReplicaJournal).mockResolvedValue({
+            kind: 'retired-pending', slot: 's04', generation: 2, reason: 'retired', pendingOperations: 3,
+        });
+        render(<KindeAccountEntry candidateMode="preparation" />);
+        const diagnosticName = 'Analizza la copia cloud e i possibili conflitti';
+        expect(screen.queryByRole('button', { name: diagnosticName })).toBeNull();
+        fireEvent.click(await screen.findByRole('button', { name: 'Controlla modifiche offline su questo dispositivo' }));
+        fireEvent.click(await screen.findByRole('button', { name: diagnosticName }));
+        await screen.findByText(/la copia remota corrispondeva alla base delle 3 operazioni locali/);
+        expect(inspectKindeCandidateRetiredReplicaWithExistingKey).toHaveBeenCalledWith({
+            expected: { uid: principal.uid, fenceEpoch: 1, healthConsentRevision: 1 },
+            stillCurrent: expect.any(Function),
+        });
+        expect(screen.getByText(/nessun ACK, claim, scelta di conflitto o riattribuzione/)).toBeTruthy();
+        expect(prepareKindeCandidateOwner).not.toHaveBeenCalled();
+        expect(retireKindeCandidateReplica).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole('button', { name: 'Controlla modifiche offline su questo dispositivo' }));
+        await screen.findByText(/3 operazioni restano nel journal locale/);
+        expect(screen.queryByText(/la copia remota corrispondeva alla base/)).toBeNull();
+    });
+
+    it('shows divergence counts without claiming disjoint fields are recoverable', async () => {
+        authenticated();
+        vi.mocked(inspectKindeCandidateOfflineReplicaJournal).mockResolvedValue({
+            kind: 'retired-pending', slot: 's04', generation: 2, reason: 'replaced', pendingOperations: 2,
+        });
+        vi.mocked(inspectKindeCandidateRetiredReplicaWithExistingKey).mockResolvedValue({
+            kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
+                changedCloudFieldStamps: 2, pendingWithOverlappingCloudStamps: 0, unclassifiedDocuments: 1,
+            },
+        });
+        render(<KindeAccountEntry candidateMode="preparation" />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Controlla modifiche offline su questo dispositivo' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Analizza la copia cloud e i possibili conflitti' }));
+        await screen.findByText(/2 stamp causali differenti, 0 operazioni con possibili sovrapposizioni/);
+        expect(screen.getByText(/Anche zero sovrapposizioni non dimostra/)).toBeTruthy();
+    });
+
+    it('does not interpret a possible lost ACK or a failed key inspection as recovered data', async () => {
+        authenticated();
+        vi.mocked(inspectKindeCandidateOfflineReplicaJournal).mockResolvedValue({
+            kind: 'retired-pending', slot: 's04', generation: 2, reason: 'expired', pendingOperations: 1,
+        });
+        vi.mocked(inspectKindeCandidateRetiredReplicaWithExistingKey).mockResolvedValueOnce({
+            kind: 'reconciliation-required', reason: 'possible-lost-ack',
+        }).mockRejectedValueOnce(new Error('ADK not issued'));
+        render(<KindeAccountEntry candidateMode="preparation" />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Controlla modifiche offline su questo dispositivo' }));
+        const diagnose = await screen.findByRole('button', { name: 'Analizza la copia cloud e i possibili conflitti' });
+        fireEvent.click(diagnose);
+        await screen.findByText(/potrebbe esistere un invio già applicato senza conferma locale/);
+        fireEvent.click(diagnose);
+        await screen.findByText(/Non è stato possibile verificare la copia cloud con una chiave cloud già emessa/);
+        expect(screen.queryByText(/potrebbe esistere un invio già applicato/)).toBeNull();
+        expect(inspectKindeCandidateRetiredReplicaWithExistingKey).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not publish a causal diagnosis after a session cookie rotation', async () => {
+        authenticated();
+        vi.mocked(inspectKindeCandidateOfflineReplicaJournal).mockResolvedValue({
+            kind: 'retired-pending', slot: 's04', generation: 2, reason: 'retired', pendingOperations: 1,
+        });
+        let finish!: (value: { kind: 'baseline-unchanged'; pendingOperations: number; cloudRevision: number }) => void;
+        vi.mocked(inspectKindeCandidateRetiredReplicaWithExistingKey).mockImplementationOnce(() =>
+            new Promise(resolve => { finish = resolve; }));
+        render(<KindeAccountEntry candidateMode="preparation" />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Controlla modifiche offline su questo dispositivo' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Analizza la copia cloud e i possibili conflitti' }));
+        await waitFor(() => expect(inspectKindeCandidateRetiredReplicaWithExistingKey).toHaveBeenCalledTimes(1));
+        browserWitness.csrf = REPLACEMENT_CSRF;
+        await act(async () => { finish({ kind: 'baseline-unchanged', pendingOperations: 1, cloudRevision: 5 }); });
+        await screen.findByText(/Non è stato possibile verificare la copia cloud con una chiave cloud già emessa/);
+        expect(screen.queryByText(/la copia remota corrispondeva alla base/)).toBeNull();
     });
 
     it('does not present an unreadable offline vault as an empty journal', async () => {

@@ -12,6 +12,8 @@ type PendingState = { kind: 'idle' | 'loading' | 'none' | 'unavailable' }
     | { kind: 'observed'; mutation: CandidatePendingReplicaMutation };
 type OfflineState = { kind: 'idle' | 'loading' | 'unavailable' }
     | { kind: 'observed'; result: Awaited<ReturnType<Session['inspectCandidateOfflineReplicaJournal']>> };
+type RecoveryState = { kind: 'idle' | 'loading' | 'unavailable' }
+    | { kind: 'observed'; result: Awaited<ReturnType<Session['inspectCandidateRetiredReplicaPreflight']>> };
 
 function dateText(milliseconds: number): string {
     const date = new Date(milliseconds);
@@ -29,6 +31,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
     const [cancelConfirmed, setCancelConfirmed] = useState(false);
     const [cancelOutcome, setCancelOutcome] = useState<'idle' | 'working' | 'cancelled' | 'committed' | 'pending' | 'unknown'>('idle');
     const [offlineState, setOfflineState] = useState<OfflineState>({ kind: 'idle' });
+    const [recoveryState, setRecoveryState] = useState<RecoveryState>({ kind: 'idle' });
     const mounted = useRef(false);
     const running = useRef(false);
 
@@ -47,6 +50,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
         setCancelConfirmed(false);
         setCancelOutcome('idle');
         setOfflineState({ kind: 'idle' });
+        setRecoveryState({ kind: 'idle' });
         setState({ kind: 'loading' });
         void session.inspectCandidateReplicas().then(observed => {
             if (mounted.current) setState({ kind: 'observed', control: observed.control });
@@ -63,6 +67,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
         setCancelConfirmed(false);
         setCancelOutcome('idle');
         setOfflineState({ kind: 'idle' });
+        setRecoveryState({ kind: 'idle' });
         void session.manageCandidateReplicaRetirement(witness).then(outcome => {
             if (!mounted.current) return;
             // The previously observed registry is no longer an authorization
@@ -91,6 +96,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
         setCancelConfirmed(false);
         setCancelOutcome('idle');
         setOfflineState({ kind: 'idle' });
+        setRecoveryState({ kind: 'idle' });
         setPendingState({ kind: 'loading' });
         void session.manageCandidateReplicaCancellation().then(mutation => {
             if (mounted.current) setPendingState(mutation ? { kind: 'observed', mutation } : { kind: 'none' });
@@ -124,10 +130,23 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
         setCancelConfirmed(false);
         setCancelOutcome('idle');
         setOfflineState({ kind: 'loading' });
+        setRecoveryState({ kind: 'idle' });
         void session.inspectCandidateOfflineReplicaJournal().then(result => {
             if (mounted.current) setOfflineState({ kind: 'observed', result });
         }).catch(() => {
             if (mounted.current) setOfflineState({ kind: 'unavailable' });
+        }).finally(() => { running.current = false; });
+    };
+
+    const inspectRecovery = () => {
+        if (running.current || session.busy || offlineState.kind !== 'observed'
+            || offlineState.result.kind !== 'retired-pending') return;
+        running.current = true;
+        setRecoveryState({ kind: 'loading' });
+        void session.inspectCandidateRetiredReplicaPreflight().then(result => {
+            if (mounted.current) setRecoveryState({ kind: 'observed', result });
+        }).catch(() => {
+            if (mounted.current) setRecoveryState({ kind: 'unavailable' });
         }).finally(() => { running.current = false; });
     };
 
@@ -136,6 +155,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
     const active = entries.filter(([, entry]) => entry.status === 'active').length;
     const disabled = session.busy || state.kind === 'loading' || pendingState.kind === 'loading'
         || offlineState.kind === 'loading'
+        || recoveryState.kind === 'loading'
         || maintenance === 'working' || cancelOutcome === 'working';
 
     return (
@@ -165,7 +185,24 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
                 {offlineState.result.kind === 'first-claim-pending' && <p role="status">Questo archivio conserva {offlineState.result.pendingOperations} operazioni locali e non ha ancora una replica assegnata. Non è un rientro di replica ritirata; non è stata effettuata alcuna registrazione.</p>}
                 {offlineState.result.kind === 'active-pending' && <p role="status">La replica {offlineState.result.slot} (generazione {offlineState.result.generation}) risultava attiva nel registro verificato. Restano {offlineState.result.pendingOperations} operazioni locali non confermate: questa osservazione non è un ACK né autorizza il replay senza i controlli ordinari.</p>}
                 {offlineState.result.kind === 'retired-pending' && <p role="alert"><strong>Recupero necessario:</strong> {offlineState.result.pendingOperations} operazioni restano nel journal locale senza ACK verificato della replica {offlineState.result.slot} (generazione {offlineState.result.generation}). La sua registrazione non è più utilizzabile ({offlineState.result.reason === 'retired' ? 'ritirata' : offlineState.result.reason === 'replaced' ? 'sostituita' : offlineState.result.reason === 'expired' ? 'scaduta' : 'non presente nel registro'}). Non eliminare l’archivio e non tentare di riattribuire automaticamente le modifiche: la riconciliazione causale è ancora da completare.</p>}
+                {offlineState.result.kind === 'retired-pending' && <button className="btn" type="button" disabled={disabled}
+                    onClick={inspectRecovery}>Analizza la copia cloud e i possibili conflitti</button>}
                 <p>Questa è una verifica di sola lettura, non un recupero: il cloud può evolvere successivamente. Le modifiche e le bozze del dispositivo non sono state cancellate.</p>
+            </div>}
+            {recoveryState.kind === 'loading' && <p role="status">Confronto cifrato completo con il cloud in corso, senza inviare modifiche…</p>}
+            {recoveryState.kind === 'unavailable' && <p role="alert">Non è stato possibile verificare la copia cloud con una chiave cloud già emessa e la sessione corrente. L’esito resta sconosciuto: conserva l’archivio locale.</p>}
+            {recoveryState.kind === 'observed' && <div className="kinde-replica-registry__confirmation">
+                {recoveryState.result.kind === 'baseline-unchanged'
+                    ? <p role="status">Alla revisione cloud {recoveryState.result.cloudRevision}, la copia remota corrispondeva alla base delle {recoveryState.result.pendingOperations} operazioni locali. Non sono state recuperate né confermate: occorrono ancora una nuova identità causale e prove aggiornate prima del trasferimento.</p>
+                    : recoveryState.result.reason === 'cloud-diverged'
+                        ? <p role="alert">La copia cloud è cambiata rispetto alla base locale. Sono stati osservati {recoveryState.result.evidence.changedCloudFieldStamps} stamp causali differenti, {recoveryState.result.evidence.pendingWithOverlappingCloudStamps} operazioni con possibili sovrapposizioni e {recoveryState.result.evidence.unclassifiedDocuments} documenti con divergenza non classificabile. Anche zero sovrapposizioni non dimostra che un recupero automatico sia sicuro.</p>
+                        : <p role="alert">Il confronto non permette il recupero: {recoveryState.result.reason === 'possible-lost-ack' ? 'potrebbe esistere un invio già applicato senza conferma locale.'
+                            : recoveryState.result.reason === 'replica-active' ? 'la replica originale è ancora eleggibile nel registro.'
+                                : recoveryState.result.reason === 'transition' ? 'esiste una richiesta o consegna cifrata da riconciliare.'
+                                    : recoveryState.result.reason === 'local-replay-diverged' ? 'il journal non riproduce esattamente lo stato locale.'
+                                        : recoveryState.result.reason === 'no-old-replica' ? 'manca un’identità causale originale verificabile.'
+                                            : 'non esistono più operazioni pendenti nella copia riletta.'}</p>}
+                <p>Diagnosi temporanea di sola lettura: nessun ACK, claim, scelta di conflitto o riattribuzione del journal. Non cancellare questa copia finché il recupero non sarà disponibile.</p>
             </div>}
             {pendingState.kind === 'loading' && <p role="status">Lettura della richiesta cifrata in corso…</p>}
             {pendingState.kind === 'none' && <p role="status">Nessuna richiesta di registrazione o ritiro in sospeso in questo archivio.</p>}
