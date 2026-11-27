@@ -7,7 +7,7 @@ import {
 } from './cloudReplicaTransport';
 import { parseCloudflareReplicaClaimIntent, type CloudflareReplicaClaimIntent } from './cloudReplicaClaimRecord';
 import { readLocal } from './localArchiveBootstrap';
-import { adoptReplicaCheckpoint } from './localReplicaCheckpoint';
+import { adoptReplicaCheckpoint, ReplicaPendingReconciliationRequiredError } from './localReplicaCheckpoint';
 import { normalizeStorageOwner } from './owner';
 import { checkpointFromCloudDocuments, type ReplicaIdentity } from './replicaProtocol';
 import { updateArchiveRecord } from './secureArchiveRepository';
@@ -99,11 +99,12 @@ async function replaceClaimIntent(
     control: CloudReplicaControlSnapshot,
     checkpointClock: Record<string, number>,
     guard: Guard,
-): Promise<'retry-staged'> {
+): Promise<'retry-staged' | 'reconciliation-required'> {
     const next = parseCloudflareReplicaClaimIntent({
         ...intent, mutationId: crypto.randomUUID(),
         expectedRevision: control.revision, checkpointClock,
     }, intent.consentRevision);
+    let lateOldPending = false;
     await updateArchiveRecord<unknown>(owner, raw => {
         current(guard);
         const saved = validateLocalEnvelope(raw, owner);
@@ -114,10 +115,17 @@ async function replaceClaimIntent(
             || !equal(tuple(saved.replica), intent.currentReplica)) {
             throw new Error('Rebase claim D1 concorrente o non autorizzato: intent e journal preservati.');
         }
+        // A second tab can append to the old replica while the primary proof
+        // and AEAD scan run. Do not seal a NEW, not-yet-committed claim over
+        // that journal; the first claim (no previous replica) is unaffected.
+        if (saved.replica && saved.pending.length > 0) {
+            lateOldPending = true;
+            return raw;
+        }
         return { ...saved, cloudflareReplicaClaim: next, revision: saved.revision + 1 };
     });
     current(guard);
-    return 'retry-staged';
+    return lateOldPending ? 'reconciliation-required' : 'retry-staged';
 }
 
 /**
@@ -244,11 +252,19 @@ export async function resumeCloudflareReplicaClaim(
         || receipt.revision !== intent.expectedRevision + 1
         || !Number.isSafeInteger(receipt.currentRevision)
         || receipt.currentRevision < receipt.revision) return 'reconciliation-required';
-    // Even an immutable historical receipt cannot reassign late operations
-    // authored under a different replica incarnation.
-    if (intent.currentReplica && before.pending.length > 0
-        && (receipt.action !== 'checkpoint' || !equal(tuple(receipt.replica), intent.currentReplica))) {
-        return 'reconciliation-required';
+    if (intent.currentReplica) {
+        // A write can arrive during the HTTP claim, after the first local
+        // snapshot. Recheck its durable journal before any adoption scan;
+        // the final IndexedDB fence still handles edits after this read.
+        const latest = await readLocal(owner);
+        current(guard);
+        if (!latest || !equal(latest.cloudflareReplicaClaim, intent)
+            || !equal(tuple(latest.replica), intent.currentReplica)
+            || latest.cloudflareReplicaCancellation || latest.cloudIntegrityFence) return 'reconciliation-required';
+        if (latest.pending.length > 0
+            && (receipt.action !== 'checkpoint' || !equal(tuple(receipt.replica), intent.currentReplica))) {
+            return 'reconciliation-required';
+        }
     }
     // A receipt proves the original request but NOT what is currently in D1.
     const control = await transport.control();
@@ -295,9 +311,17 @@ export async function resumeCloudflareReplicaClaim(
         docMap.set(path, { _sync: doc.sync });
     }
     const checkpoint = checkpointFromCloudDocuments(docMap);
-    await adoptReplicaCheckpoint(owner, {
-        identity: receipt.replica, baseSeq: receipt.baseSeq,
-    }, checkpoint, liveMembership, intent.mutationId);
+    try {
+        await adoptReplicaCheckpoint(owner, {
+            identity: receipt.replica, baseSeq: receipt.baseSeq,
+        }, checkpoint, liveMembership, intent.mutationId);
+    } catch (error) {
+        // The final owner transaction can observe a write newer than the
+        // response/AEAD reads. Only this precise causal fence is recoverable;
+        // unrelated archive, consent and storage failures must still surface.
+        if (error instanceof ReplicaPendingReconciliationRequiredError) return 'reconciliation-required';
+        throw error;
+    }
     current(liveMembership);
     return 'adopted';
 }

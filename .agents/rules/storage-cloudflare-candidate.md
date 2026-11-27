@@ -126,6 +126,22 @@ replica precedente consulta prima il registro owner-bound: senza la stessa
 incarnazione ancora attiva e con lease valido non invia il replay, evitando
 di occupare inutilmente un posto D1. Un controllo valido non sostituisce il
 fence finale IndexedDB, perché la membership può cambiare dopo la lettura.
+Anche quando il journal era vuoto alla prima lettura, la ripresa rilegge
+l'archivio **dopo la ricevuta HTTP**: se nel frattempo sono arrivati pending
+della vecchia replica, una ricevuta di nuova incarnazione richiede
+`reconciliation-required`, preservando l'intento e le modifiche, mentre un
+checkpoint della stessa incarnazione può proseguire con il fence atomico.
+Se l'edit arriva ancora più tardi, durante la scansione AEAD, il fence
+IndexedDB restituisce la stessa classificazione senza catturare altri
+errori di archiviazione, consenso o integrità.
+Nel rebase di un claim provato `not-committed` sulla primaria, la sostituzione
+atomica dell'intento rifiuta allo stesso modo i pending tardivi della vecchia
+replica, anche se la scansione AEAD e i due controlli erano riusciti. Non si
+ristadia una mutationId non committata sopra operazioni con identità causale
+precedente; il primo claim senza replica precedente conserva la sua eccezione.
+Una richiesta già in volo può comunque avere modificato D1 prima che il
+client osservi tali edit: questa barriera non annulla il commit remoto e non
+costituisce un percorso automatico di riconciliazione.
 Lo stesso slot/ID/generazione può riconciliare il proprio checkpoint senza
 riscrivere le sequenze. La barriera non elimina il claim già sigillato,
 il journal o i dati device: il recupero richiede riconciliazione esplicita.

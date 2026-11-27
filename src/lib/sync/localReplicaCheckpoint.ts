@@ -12,6 +12,7 @@ import { sequenceOperationsForBoundedTransactions } from './syncBatching';
 import type { ReplicaCheckpoint, CloudCheckpoint } from './replicaProtocol';
 
 type LocalWriteGuard = () => boolean;
+export class ReplicaPendingReconciliationRequiredError extends Error {}
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 const currentEnvelopeVersions = () => ({
     version: CURRENT_LOCAL_ENVELOPE,
@@ -67,7 +68,7 @@ export async function adoptReplicaCheckpoint(
         // Never re-diff those edits under a different incarnation implicitly.
         if (expectedCloudflareClaimId !== undefined && current.replica && !sameReplica
             && current.pending.length > 0) {
-            throw new Error('Replica D1 sostitutiva con journal offline: checkpoint sospeso senza reinterpretare gli intenti.');
+            throw new ReplicaPendingReconciliationRequiredError('Replica D1 sostitutiva con journal offline: checkpoint sospeso senza reinterpretare gli intenti.');
         }
 
         if (sameReplica) {

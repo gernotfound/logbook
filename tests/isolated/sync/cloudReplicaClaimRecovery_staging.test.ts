@@ -5,13 +5,13 @@ import { owner, uid, storage, key, data, prepare, transport } from './cloudRepli
 import { get } from 'idb-keyval';
 import { readAuthenticatedCloudflareCheckpoint } from '../../../src/lib/sync/cloudReplicaCheckpoint';
 import { stageCloudflareReplicaClaim, resumeCloudflareReplicaClaim } from '../../../src/lib/sync/cloudReplicaClaimRecovery';
-import { CloudReplicaCapacityError, CloudReplicaCloudKeyRequiredError } from '../../../src/lib/sync/cloudReplicaTransport';
+import { CloudReplicaCapacityError, CloudReplicaCloudKeyRequiredError, CloudReplicaTransportError } from '../../../src/lib/sync/cloudReplicaTransport';
 import type { CloudReplicaControlSnapshot } from '../../../src/lib/sync/cloudReplicaTransport';
 import { readLocal, commitLocal, adoptReplicaCheckpoint } from '../../../src/lib/sync/localRepository';
 import { updateArchiveRecord } from '../../../src/lib/sync/secureArchiveRepository';
 
 describe('D1 claim: durable staging and first replay', () => {
-    async function stagedReplacementWithLateOfflineEdits() {
+    async function stagedReplacementWithoutLateOfflineEdits() {
         const now = Date.now();
         const previous = {
             slot: 's00', replicaId: 'previous-device', generation: 1,
@@ -28,6 +28,12 @@ describe('D1 claim: durable staging and first replay', () => {
             { uid, revision: 0, fenceEpoch: 5, consentRevision: 1, replicas: {} },
             'new-device-after-retirement', () => true,
         );
+        expect((await readLocal(owner))!.pending).toHaveLength(0);
+        return { previous, staged };
+    }
+
+    async function stagedReplacementWithLateOfflineEdits() {
+        const { previous, staged } = await stagedReplacementWithoutLateOfflineEdits();
         await commitLocal(owner, data(171), data(170));
         const saved = (await readLocal(owner))!;
         expect(saved.pending.length).toBeGreaterThan(0);
@@ -122,6 +128,112 @@ describe('D1 claim: durable staging and first replay', () => {
         expect(await get(storage)).toBe(sealed);
         expect((await readLocal(owner))!.pending).toEqual(saved.pending);
         expect((await readLocal(owner))!.replica).toEqual(previous);
+    });
+
+    it('classifies a replacement receipt as reconciliation when another tab edits during the HTTP claim', async () => {
+        const { previous, staged } = await stagedReplacementWithoutLateOfflineEdits();
+        const remote = transport(async revision => ({ revision, fenceEpoch: 5, consentRevision: 1, documents: [] }));
+        const receiptReplica = { ...remote.replica, replicaId: staged.candidateReplicaId };
+        remote.control.mockResolvedValue({ uid, revision: 1, fenceEpoch: 5, consentRevision: 1,
+            replicas: { s01: { ...receiptReplica, status: 'active', lastSeq: 0, checkpointClock: {} } },
+        });
+        remote.replayStoredClaim.mockImplementationOnce(async request => {
+            await commitLocal(owner, data(171), data(170));
+            return { mutationId: request.mutationId, action: 'register', revision: 1,
+                currentRevision: 1, reconciliationRequired: false, replayed: false,
+                baseSeq: 0, replica: receiptReplica };
+        });
+
+        await expect(resumeCloudflareReplicaClaim(owner, key, remote, 'session-csrf', () => true))
+            .resolves.toBe('reconciliation-required');
+        expect(remote.replayStoredClaim).toHaveBeenCalledWith(staged, 'session-csrf');
+        expect(remote.scanAll).not.toHaveBeenCalled();
+        const after = (await readLocal(owner))!;
+        expect(after.cloudflareReplicaClaim).toEqual(staged);
+        expect(after.replica).toEqual(previous);
+        expect(after.data).toEqual(data(171));
+        expect(after.pending.length).toBeGreaterThan(0);
+        expect(after.pending.every(op => op.actorId === previous.slot)).toBe(true);
+    });
+
+    it('classifies edits during the authenticated scan using the atomic checkpoint fence', async () => {
+        const { previous, staged } = await stagedReplacementWithoutLateOfflineEdits();
+        const remote = transport(async revision => {
+            await commitLocal(owner, data(171), data(170));
+            return { revision, fenceEpoch: 5, consentRevision: 1, documents: [] };
+        });
+        const receiptReplica = { ...remote.replica, replicaId: staged.candidateReplicaId };
+        remote.replayStoredClaim.mockImplementationOnce(async request => ({
+            mutationId: request.mutationId, action: 'register', revision: 1,
+            currentRevision: 1, reconciliationRequired: false, replayed: false,
+            baseSeq: 0, replica: receiptReplica,
+        }));
+        remote.control.mockResolvedValue({ uid, revision: 1, fenceEpoch: 5, consentRevision: 1,
+            replicas: { s01: { ...receiptReplica, status: 'active', lastSeq: 0, checkpointClock: {} } },
+        });
+
+        await expect(resumeCloudflareReplicaClaim(owner, key, remote, 'session-csrf', () => true))
+            .resolves.toBe('reconciliation-required');
+        expect(remote.scanAll).toHaveBeenCalledOnce();
+        const after = (await readLocal(owner))!;
+        expect(after.cloudflareReplicaClaim).toEqual(staged);
+        expect(after.replica).toEqual(previous);
+        expect(after.data).toEqual(data(171));
+        expect(after.pending.length).toBeGreaterThan(0);
+    });
+
+    it('adopts a checkpoint of the same replica after another tab edits during the HTTP claim', async () => {
+        const { previous, staged } = await stagedReplacementWithoutLateOfflineEdits();
+        const remote = transport(async revision => ({ revision, fenceEpoch: 5, consentRevision: 1, documents: [] }));
+        const receiptReplica = { ...previous, checkpointAtMs: Date.now(), leaseUntilMs: Date.now() + 86400000 };
+        remote.control.mockResolvedValue({ uid, revision: 1, fenceEpoch: 5, consentRevision: 1,
+            replicas: { s00: { ...receiptReplica, status: 'active', lastSeq: 0, checkpointClock: {} } },
+        });
+        remote.replayStoredClaim.mockImplementationOnce(async request => {
+            await commitLocal(owner, data(171), data(170));
+            return { mutationId: request.mutationId, action: 'checkpoint', revision: 1,
+                currentRevision: 1, reconciliationRequired: false, replayed: false,
+                baseSeq: 0, replica: receiptReplica };
+        });
+
+        await expect(resumeCloudflareReplicaClaim(owner, key, remote, 'session-csrf', () => true))
+            .resolves.toBe('adopted');
+        expect(remote.replayStoredClaim).toHaveBeenCalledWith(staged, 'session-csrf');
+        const after = (await readLocal(owner))!;
+        expect(after.cloudflareReplicaClaim).toBeUndefined();
+        expect(after.replica).toEqual(receiptReplica);
+        expect(after.pending.length).toBeGreaterThan(0);
+        expect(after.pending.every(op => op.actorId === previous.slot)).toBe(true);
+        expect(after.data).toEqual(data(171));
+    });
+
+    it('does not restage a new uncommitted mutation after concurrent old-replica edits during rebase', async () => {
+        const { previous, staged } = await stagedReplacementWithoutLateOfflineEdits();
+        const remote = transport(async revision => ({ revision, fenceEpoch: 5, consentRevision: 1, documents: [] }));
+        remote.replayStoredClaim.mockRejectedValueOnce(new CloudReplicaTransportError(409));
+        remote.claimMutationOutcome.mockResolvedValueOnce({ outcome: 'not-committed', currentRevision: 2 });
+        let controlReads = 0;
+        let afterOfflineEdit: string | undefined;
+        remote.control.mockImplementation(async () => {
+            if (++controlReads === 2) {
+                await commitLocal(owner, data(171), data(170));
+                afterOfflineEdit = await get(storage);
+            }
+            return { uid, revision: 2, fenceEpoch: 5, consentRevision: 1, replicas: {} };
+        });
+        remote.scanAll.mockResolvedValueOnce({ revision: 2, fenceEpoch: 5,
+            consentRevision: 1, documents: [] });
+
+        await expect(resumeCloudflareReplicaClaim(owner, key, remote, 'session-csrf', () => true))
+            .resolves.toBe('reconciliation-required');
+        expect(controlReads).toBe(2);
+        expect(remote.replayStoredClaim).toHaveBeenCalledTimes(1);
+        expect(await get(storage)).toBe(afterOfflineEdit);
+        const after = (await readLocal(owner))!;
+        expect(after.cloudflareReplicaClaim).toEqual(staged);
+        expect(after.replica).toEqual(previous);
+        expect(after.pending.length).toBeGreaterThan(0);
+        expect(after.pending.every(op => op.actorId === previous.slot)).toBe(true);
     });
 
     it('preserves the sealed claim and pending if the primary mutation proof fails', async () => {
