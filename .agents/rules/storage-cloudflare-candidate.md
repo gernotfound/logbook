@@ -67,8 +67,11 @@ lettura del vault autenticato e alla scansione AEAD completa della D1. Confronta
 owner, revisione, epoch, consenso, registro dell'incarnazione originale,
 documenti business e metadati causali della baseline locale. Controlla anche
 che il replay delle operazioni originarie riproduca il dato locale senza
-reinterpretarlo. Una sequenza già coperta dal `lastSeq` della **stessa**
-incarnazione segnala possibile ACK perso, non permesso di eliminarla. Baseline
+reinterpretarlo. Una sequenza pendente già coperta dal `lastSeq` dello **slot**
+segnala possibile ACK perso anche se lo slot ora contiene una generazione
+successiva: D1 conserva il contatore monotono al riuso, che da solo non
+attesta quale incarnazione abbia consegnato l'operazione. Senza ricevuta
+hash-bound non si può eliminare o riattribuire il journal. Baseline
 divergente, documento extra/mancante, metadato avanzato anche con stesso
 valore business (ABA), transizione pendente o replay locale incongruente
 richiedono riconciliazione separata. `baseline-unchanged` è soltanto

@@ -146,6 +146,12 @@ describe('Kinde candidate: authenticated retired replica preflight', () => {
         await expect(inspect(network({ before: control(8, seq) }))).resolves.toEqual({
             kind: 'reconciliation-required', reason: 'possible-lost-ack',
         });
+        const reused = control(8, seq);
+        reused.replicas.s03.replicaId = 'another-device';
+        reused.replicas.s03.generation = replica.generation + 1;
+        await expect(inspect(network({ before: reused }))).resolves.toEqual({
+            kind: 'reconciliation-required', reason: 'possible-lost-ack',
+        });
         expect(await get(storage)).toBe(sealed);
     });
 

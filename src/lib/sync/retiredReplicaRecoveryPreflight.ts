@@ -170,10 +170,11 @@ export function preflightRetiredReplicaRecovery(
     if (sameIncarnation && entry && isReplicaMembershipEligible(entry, nowMs)) {
         return { kind: 'reconciliation-required', reason: 'replica-active' };
     }
-    // A remote lastSeq from the original incarnation may cover a delivered
-    // prefix whose local receipt was lost. Only a content-bound receipt and
-    // guarded local ACK can close it; never reissue it under a new actor.
-    if (sameIncarnation && local.pending.some(op => op.seq <= entry.lastSeq)) {
+    // D1 inherits lastSeq when a slot is reused. Even a NEW generation with
+    // an overlapping sequence cannot disprove a lost ACK from its predecessor:
+    // the counter alone identifies neither the committed incarnation nor its
+    // immutable body. Only a content-bound receipt can close that journal.
+    if (entry && local.pending.some(op => op.seq <= entry.lastSeq)) {
         return { kind: 'reconciliation-required', reason: 'possible-lost-ack' };
     }
 
