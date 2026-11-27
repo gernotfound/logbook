@@ -2,6 +2,30 @@
 
 **Stato di riferimento:** per l'ultimo readback Cloudflare consultare [quadro operativo](cloudflare-current-state.md). I valori sotto sono checkpoint datati, non una fotografia aggiornata automaticamente del provider.
 
+## CF-04 · Riuso slot D1 e readback Static Assets · 27 novembre 2026
+
+[PR #1502](https://github.com/gernotfound/logbook/pull/1502), v2.764.0:
+squash su [`main` `a2d286cb`](https://github.com/gernotfound/logbook/commit/a2d286cba166eb84f11cdfdaffc2e3b46ff73719),
+tree `27fc22ac3d60ee890234ea6fe6e3e7ed11c3ffa4` identico al
+candidato `702c2458`.
+[CI PR Canonical/CodeQL](https://github.com/gernotfound/logbook/actions/runs/46049735604),
+[gate main/CodeQL](https://github.com/gernotfound/logbook/actions/runs/46050191579)
+e [deploy Static Assets con smoke](https://github.com/gernotfound/logbook/actions/runs/46050586676)
+riusciti. Readback provider del frontend: deployment
+`9a1ac721-39b0-4ca8-8b9b-856ebe33c6cd`, versione
+`eca2613b-a6dc-4a8e-a40e-323df8390922` al 100%, soli binding
+`APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`, nessun `D1_API`.
+[API D1 privata](https://github.com/gernotfound/logbook/actions/runs/46050586834)
+e [Kinde privato](https://github.com/gernotfound/logbook/actions/runs/46050586777):
+job riusciti ma passi deploy saltati.
+[Firestore](https://github.com/gernotfound/logbook/actions/runs/46050586985):
+nessun deploy Rules/indici. Correzione di sola diagnosi per possibili ACK
+persi dopo riuso di slot D1; non sono stati verificati recovery effettivo,
+sync multi-device reale, privacy e consenso Production. Nessuna nuova
+attivazione o scrittura manuale su provider. SYNC-7D/7E ancora aperti in
+[#1058](https://github.com/gernotfound/logbook/issues/1058); fitness
+Cloudflare **NO-GO**.
+
 ## CF-04 · Chiave esistente per ispezione causale · 27 novembre 2026
 
 Il più recente `main` verificato prima del candidato è

@@ -1,6 +1,24 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
-**Ultimo readback frontend verificato prima del candidato corrente, 27/11/2026:**
+**Ultimo readback frontend verificato, 27/11/2026, dopo CF-04 #1502:**
+la [PR #1502](https://github.com/gernotfound/logbook/pull/1502)
+(v2.764.0) è integrata in [`main` `a2d286cb`](https://github.com/gernotfound/logbook/commit/a2d286cba166eb84f11cdfdaffc2e3b46ff73719)
+con tree identico a quello del candidato. [CI PR exact-SHA, Canonical e
+CodeQL](https://github.com/gernotfound/logbook/actions/runs/46049735604),
+[Main Release Gate e CodeQL](https://github.com/gernotfound/logbook/actions/runs/46050191579)
+e [Static Assets con smoke HTTPS](https://github.com/gernotfound/logbook/actions/runs/46050586676)
+sono `success` sui rispettivi SHA. Readback diretto Cloudflare:
+`thelogbook-frontend` deployment `9a1ac721-39b0-4ca8-8b9b-856ebe33c6cd`,
+versione `eca2613b-a6dc-4a8e-a40e-323df8390922` al 100%, binding
+`APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`, **senza `D1_API`**. I job API D1
+privata e Kinde hanno saltato il deploy; Firestore non ha distribuito
+Rules/indici. Il cambiamento classifica come possibile ACK perso anche
+l'overlap con `lastSeq` di uno slot D1 riutilizzato; la diagnosi resta
+read-only, senza replay, ACK o recupero automatico. Nessun test end-to-end
+multi-device reale: SYNC-7D/7E e fitness Cloudflare **NO-GO**. Prove e
+residui in [CF-04 #1058](https://github.com/gernotfound/logbook/issues/1058).
+
+**Checkpoint storico frontend precedente, 27/11/2026:**
 [PR #1493](https://github.com/gernotfound/logbook/pull/1493)
 integrata in [`main` `a8b89fbb`](https://github.com/gernotfound/logbook/commit/a8b89fbbf0d0e36e2ea8409139a92ae5da5f2310),
 v2.756.0, con CI PR/CodeQL, gate main e Static Assets/HTTPS smoke verdi
