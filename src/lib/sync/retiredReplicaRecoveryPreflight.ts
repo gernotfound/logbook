@@ -36,10 +36,12 @@ function hasIgnoredBusinessChange(path: string, baseline: DocumentData, remote: 
     for (const day of new Set([...Object.keys(baseline), ...Object.keys(remote)])) {
         const before = baseline[day];
         const after = remote[day];
-        if (!before || !after || typeof before !== 'object' || typeof after !== 'object'
-            || Array.isArray(before) || Array.isArray(after)) continue;
-        const left = before as Record<string, unknown>;
-        const right = after as Record<string, unknown>;
+        if ((before !== undefined && (!before || typeof before !== 'object' || Array.isArray(before)))
+            || (after !== undefined && (!after || typeof after !== 'object' || Array.isArray(after)))) return true;
+        // A newly added/removed day still changes ignored totals. A field
+        // stamp on the day must not make those omitted changes disappear.
+        const left = (before ?? {}) as Record<string, unknown>;
+        const right = (after ?? {}) as Record<string, unknown>;
         for (const key of new Set([...Object.keys(left), ...Object.keys(right)])) {
             if (getMergePolicy(path, [day, key]) === 'ignore' && !equal(left[key], right[key])) return true;
         }

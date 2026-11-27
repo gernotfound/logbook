@@ -321,4 +321,38 @@ describe('retired replica recovery preflight, no mutation or new causal identity
                 unclassifiedDocuments: 1,
             } });
     });
+
+    it('classifies ignored totals when a stamped nutrition day is newly created', async () => {
+        const original = (await readLocal(owner))!;
+        const baseline = UserDataSchema.parse({ ...data(170), nutrition: {
+            '2026-11-12': { date: '2026-11-12', weight: 70, kcal: 100 },
+        } }) as unknown as UserData;
+        const local = { ...original, baseline, data: UserDataSchema.parse({
+            ...baseline, profile: { height: '171' },
+        }) as unknown as UserData, syncMetaByDocument: {
+            ...original.syncMetaByDocument, 'nutrition_months/2026-11': emptyMeta,
+        } };
+        const remote = UserDataSchema.parse({ ...baseline, nutrition: {
+            ...baseline.nutrition,
+            '2026-11-13': { date: '2026-11-13', weight: 71, kcal: 101 },
+        } }) as unknown as UserData;
+        const documents = projectDocuments(remote, catalog);
+        const monthMeta: SyncMeta = { ...emptyMeta, clock: { s01: 1 }, fields: {
+            [fieldKey(['2026-11-13'])]: { actorId: 's01', seq: 1, clock: { s01: 1 } },
+        } };
+        const cloud = await readAuthenticatedCloudflareCheckpoint(async () => ({
+            revision: 8, fenceEpoch: 5, consentRevision: 1, documents: [
+                { path: '', revision: 8,
+                    document: sealCloudDocument(accountKey, uid, '', documents.get('')!, emptyMeta) },
+                { path: 'nutrition_months/2026-11', revision: 8,
+                    document: sealCloudDocument(accountKey, uid, 'nutrition_months/2026-11',
+                        documents.get('nutrition_months/2026-11')!, monthMeta) },
+            ],
+        }), uid, accountKey, 1, () => true);
+        expect(preflightRetiredReplicaRecovery(uid, local, cloud, control(), catalog))
+            .toEqual({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
+                changedCloudFieldStamps: 1, pendingWithOverlappingCloudStamps: 0,
+                unclassifiedDocuments: 1,
+            } });
+    });
 });
