@@ -2,6 +2,30 @@
 
 **Stato di riferimento:** per l'ultimo readback Cloudflare consultare [quadro operativo](cloudflare-current-state.md). I valori sotto sono checkpoint datati, non una fotografia aggiornata automaticamente del provider.
 
+## CF-04 · Recupero receipt-only di batch ritirato · 27 novembre 2026
+
+[PR #1506](https://github.com/gernotfound/logbook/pull/1506), v2.768.0,
+squash su [`main` `f9c96aa`](https://github.com/gernotfound/logbook/commit/f9c96aa583755a0bdf0ae6deecdd978a3880f1df),
+tree `744f822e0143c3e302e23029d1dfb0b29b920d58` identico al
+candidato. [CI PR Canonical/CodeQL](https://github.com/gernotfound/logbook/actions/runs/46059625882),
+[gate main/CodeQL](https://github.com/gernotfound/logbook/actions/runs/46060060472)
+e [Static Assets/smoke HTTPS](https://github.com/gernotfound/logbook/actions/runs/46060337195)
+riusciti. Readback diretto Cloudflare: `thelogbook-frontend` deployment
+`f40ea73a-ddb0-4c8d-b52b-9110a0e83887`, versione
+`5059d98c-d3d9-4a65-9844-9eb042dd13f0` al 100%, soli binding
+`APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`, **nessun `D1_API`**.
+[API D1 privata](https://github.com/gernotfound/logbook/actions/runs/46060337172)
+e [Kinde privato](https://github.com/gernotfound/logbook/actions/runs/46060337177):
+job `success`, passi deploy `skipped`;
+[Firestore](https://github.com/gernotfound/logbook/actions/runs/46060337114):
+Rules/indici non distribuiti. Il solo codice candidato ora può completare
+un ACK locale di un batch già staged con receipt hash-bound, senza nuovo
+commit o nuovo writer; receipt assente significa `unconfirmed`, senza
+cancellare dati cifrati. Test SQLite/D1 e IndexedDB isolati, non runtime
+fitness o D1 live. Trasferimento degli edit offline mai inviati (SYNC-7D),
+conflitti (SYNC-7E), Safari e multi-device reali non verificati: **NO-GO**.
+Nessuna mutazione manuale provider, DNS, billing o dismissione.
+
 ## CF-04 · Sequenza confermata e riuso D1 · 27 novembre 2026
 
 [PR #1504](https://github.com/gernotfound/logbook/pull/1504), v2.766.0,
