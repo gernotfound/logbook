@@ -5,7 +5,7 @@ const catalogSource = vi.hoisted(() => ({ read: vi.fn() }));
 vi.mock('../../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: catalogSource.read }));
 
 import { get } from 'idb-keyval';
-import { CloudReplicaTransportError } from '../../../src/lib/sync/cloudReplicaTransport';
+import { CloudReplicaTransportError, type CloudReplicaControlSnapshot } from '../../../src/lib/sync/cloudReplicaTransport';
 import { cancelCloudflareReplicaMutation } from '../../../src/lib/sync/cloudReplicaMutationCancellation';
 import { stageCloudflareReplicaRetirement, resumeCloudflareReplicaRetirement } from '../../../src/lib/sync/cloudReplicaRetirementRecovery';
 import { adoptReplicaCheckpoint, commitLocal, readLocal } from '../../../src/lib/sync/localRepository';
@@ -21,7 +21,7 @@ describe('candidate D1 durable expired-replica retirement', () => {
         const { target, control, intent } = await stagedRetirement();
         const sealed = await get(storage);
         for (const untrusted of [{ ...control, uid: undefined }, { ...control, uid: 'another-owner' }]) {
-            await expect(stageCloudflareReplicaRetirement(owner, untrusted, target, () => true))
+            await expect(stageCloudflareReplicaRetirement(owner, untrusted as CloudReplicaControlSnapshot, target, () => true))
                 .rejects.toThrow('non ritirabile');
             expect(await get(storage)).toBe(sealed);
         }
@@ -37,7 +37,7 @@ describe('candidate D1 durable expired-replica retirement', () => {
         const active = { uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
             replicas: { s02: { ...target, status: 'active' as const, lastSeq: 8, checkpointClock: {} } } };
         for (const untrusted of [{ ...active, uid: undefined }, { ...active, uid: 'another-owner' }]) {
-            remote.control.mockResolvedValueOnce(untrusted);
+            remote.control.mockResolvedValueOnce(untrusted as CloudReplicaControlSnapshot);
             await expect(resumeCloudflareReplicaRetirement(owner, remote, 'session-csrf', () => true))
                 .resolves.toBe('reconciliation-required');
             expect(await get(storage)).toBe(sealed);
@@ -47,7 +47,7 @@ describe('candidate D1 durable expired-replica retirement', () => {
         const retired = { uid, revision: 1, fenceEpoch: 5, consentRevision: 1,
             replicas: { s02: { ...target, status: 'retired' as const, lastSeq: 8, checkpointClock: {} } } };
         for (const untrusted of [{ ...retired, uid: undefined }, { ...retired, uid: 'another-owner' }]) {
-            remote.control.mockResolvedValueOnce(untrusted);
+            remote.control.mockResolvedValueOnce(untrusted as CloudReplicaControlSnapshot);
             await expect(resumeCloudflareReplicaRetirement(owner, remote, 'session-csrf', () => true))
                 .resolves.toBe('reconciliation-required');
             expect(await get(storage)).toBe(sealed);

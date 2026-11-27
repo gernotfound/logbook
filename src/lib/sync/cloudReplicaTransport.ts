@@ -44,9 +44,7 @@ const CLOUD_REQUEST_TIMEOUT_MS = 15_000;
 const DOCUMENT_PATH = /^(?:(?:history_months|nutrition_months)\/\d{4}-(?:0[1-9]|1[0-2]))?$/;
 
 export interface CloudReplicaControlSnapshot {
-    // Real Worker responses bind the authenticated UID. Legacy isolated
-    // fixtures may omit it; Kinde ownership observers reject unbound reads.
-    uid?: string;
+    uid: string;
     revision: number;
     fenceEpoch: number;
     consentRevision: number;
@@ -360,9 +358,8 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
             if (!isRecord(raw) || !safeRevision(raw.revision)
                 || !safeRevision(raw.fenceEpoch) || raw.fenceEpoch < 1
                 || !safeRevision(raw.consentRevision) || raw.consentRevision < 1
-                || (raw.uid !== undefined && (typeof raw.uid !== 'string'
-                    || raw.uid.length < 1 || raw.uid.length > 128
-                    || raw.uid.trim() !== raw.uid || raw.uid.includes('/')))
+                || typeof raw.uid !== 'string' || raw.uid.length < 1 || raw.uid.length > 128
+                || raw.uid.trim() !== raw.uid || raw.uid.includes('/')
                 || !isRecord(raw.replicas)) throw new CloudReplicaTransportError(0);
             try {
                 const parsed = parseReplicaControl({
@@ -370,7 +367,7 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
                     replicas: raw.replicas, mutation: { slot: 's00', action: 'checkpoint' },
                 });
                 return {
-                    ...(typeof raw.uid === 'string' ? { uid: raw.uid } : {}),
+                    uid: raw.uid,
                     revision: raw.revision, fenceEpoch: raw.fenceEpoch,
                     consentRevision: raw.consentRevision,
                     replicas: parsed.replicas,

@@ -110,6 +110,7 @@ export async function deliverCloudflareJournalCandidate(
     for (let attempt = 0; attempt < 2; attempt++) {
         const control = await transport.control();
         requireCurrent(guard);
+        if (control.uid !== owner.slice(5)) throw new CloudReplicaStaleSnapshotError();
         if (control.consentRevision !== prepared.consentRevision) {
             throw new Error('Consenso cloud D1 differente: journal preservato.');
         }

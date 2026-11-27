@@ -84,7 +84,7 @@ describe('Cloudflare transport: primary non-commit and replica claim', () => {
     });
 
     it('loads an authenticated replica register and rejects malformed clocks', async () => {
-        const content = { revision: 4, fenceEpoch: 7, consentRevision: 1,
+        const content = { uid: 'owner-fixture', revision: 4, fenceEpoch: 7, consentRevision: 1,
             replicas: { s00: {
                 replicaId: 'fixture-device', generation: 1, status: 'active',
                 leaseUntilMs: Date.now() + 86400000, checkpointAtMs: Date.now(),
@@ -93,14 +93,11 @@ describe('Cloudflare transport: primary non-commit and replica claim', () => {
         const client = createCloudflareReplicaTransport(vi.fn(async () =>
             new Response(JSON.stringify(content))) as typeof fetch);
         expect(await client.control()).toEqual(content);
-        const owned = { ...content, uid: 'k_' + 'A'.repeat(43) };
-        const withOwner = createCloudflareReplicaTransport(vi.fn(async () =>
-            new Response(JSON.stringify(owned))) as typeof fetch);
-        expect(await withOwner.control()).toEqual(owned);
         for (const bad of [
-            { ...owned, uid: 'bad/uid' },
-            { ...owned, uid: ' spaced ' },
-            { ...owned, uid: 42 },
+            { ...content, uid: undefined },
+            { ...content, uid: 'bad/uid' },
+            { ...content, uid: ' spaced ' },
+            { ...content, uid: 42 },
             { ...content, replicas: { s99: content.replicas.s00 } },
             { ...content, replicas: { s00: { ...content.replicas.s00, checkpointClock: { wrong: 1 } } } },
             { ...content, replicas: { s00: { ...content.replicas.s00, generation: 0 } } },
@@ -123,7 +120,7 @@ describe('Cloudflare transport: primary non-commit and replica claim', () => {
         const checkpoint = await readAuthenticatedCloudflareCheckpoint(
             scan, 'owner-fixture', key, 1, () => true,
         );
-        const control = { revision: 5, fenceEpoch: 3, consentRevision: 1, replicas: {} };
+        const control = { uid: 'owner-fixture', revision: 5, fenceEpoch: 3, consentRevision: 1, replicas: {} };
         const mutationId = 'mutation0000000099';
         const result = { mutationId, action: 'register', revision: 6,
             replica: { slot: 's01', replicaId: 'device-new', generation: 1,
@@ -176,7 +173,7 @@ describe('Cloudflare transport: primary non-commit and replica claim', () => {
         const transport = createCloudflareReplicaTransport(sender as typeof fetch);
         try {
             await transport.claimCheckpoint(checkpoint, {
-                revision: 5, fenceEpoch: 3, consentRevision: 1, replicas: {},
+                uid: 'owner-fixture', revision: 5, fenceEpoch: 3, consentRevision: 1, replicas: {},
             }, 'new-device', null, id, 'csrf');
             expect.unreachable();
         } catch (error) {
@@ -188,7 +185,7 @@ describe('Cloudflare transport: primary non-commit and replica claim', () => {
         const invalid = createCloudflareReplicaTransport(vi.fn(async () =>
             new Response(JSON.stringify({ ...historic, reconciliationRequired: false }))) as typeof fetch);
         await expect(invalid.claimCheckpoint(checkpoint, {
-            revision: 5, fenceEpoch: 3, consentRevision: 1, replicas: {},
+            uid: 'owner-fixture', revision: 5, fenceEpoch: 3, consentRevision: 1, replicas: {},
         }, 'new-device', null, id, 'csrf')).rejects.toBeInstanceOf(CloudReplicaTransportError);
     });
 });

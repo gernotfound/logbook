@@ -112,7 +112,7 @@ async function stagedClaimWithExistingReplica() {
         'a', accountKey, 1, () => true,
     );
     const staged = await stageCloudflareReplicaClaim('a', verified,
-        { revision: 0, fenceEpoch: 5, consentRevision: 1, replicas: {} },
+        { uid: 'a', revision: 0, fenceEpoch: 5, consentRevision: 1, replicas: {} },
         'replacement-device', () => true,
     );
     expect(staged.currentReplica).toEqual({
@@ -133,7 +133,7 @@ describe('durable local replica checkpoint adoption', () => {
         const ciphertext = await get(key('a'));
 
         await expect(stageCloudflareReplicaClaim('a', verified,
-            { revision: 0, fenceEpoch: 5, consentRevision: 1, replicas: {} },
+            { uid: 'a', revision: 0, fenceEpoch: 5, consentRevision: 1, replicas: {} },
             'replacement-after-retirement', () => true,
         )).rejects.toThrow('journal offline');
 

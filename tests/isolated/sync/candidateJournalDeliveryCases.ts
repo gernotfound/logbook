@@ -23,6 +23,16 @@ export function registerCandidateJournalDeliveryCases({
         expect(await readLocal(owner)).toEqual(before);
     });
 
+    it('refuses a foreign control before reading cloud documents for the local journal', async () => {
+        const setup = await seed();
+        const api = transport({ ...setup.control, uid: 'other-owner' }, setup.snapshot);
+        await expect(deliverCloudflareJournalCandidate(owner, adk, api, 'csrf-session', () => true))
+            .rejects.toThrow('Snapshot remoto');
+        expect(api.read).not.toHaveBeenCalled();
+        expect(api.commit).not.toHaveBeenCalled();
+        expect(await readLocal(owner)).toEqual(setup.local);
+    });
+
     it('blocks a new batch when D1 reports a different epoch from the session proof', async () => {
         const setup = await seed();
         const api = transport(setup.control, setup.snapshot);
@@ -229,7 +239,7 @@ export function registerCandidateJournalDeliveryCases({
 
     it('does not turn an already empty account journal into a cloud commit', async () => {
         await initializeLocal(owner, profile(170));
-        const remote = transport({ revision: 0, fenceEpoch: 5, consentRevision: 1, replicas: {} },
+        const remote = transport({ uid: owner.slice(5), revision: 0, fenceEpoch: 5, consentRevision: 1, replicas: {} },
             { revision: 0, fenceEpoch: 5, consentRevision: 1, documents: [] });
         await expect(deliverCloudflareJournalCandidate(owner, adk, remote, 'csrf-session', () => true))
             .resolves.toBe('idle');

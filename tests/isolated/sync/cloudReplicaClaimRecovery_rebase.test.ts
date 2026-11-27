@@ -18,12 +18,12 @@ describe('D1 claim: 409 rebase and authenticated checkpoint fences', () => {
         });
         const other = { ...remote.replica, replicaId: 'competing-device' };
         const registered = { ...remote.replica, slot: 's02' };
-        const control2 = { revision: 2, fenceEpoch: 5, consentRevision: 1,
+        const control2 = { uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
             replicas: {
                 s01: { ...other, lastSeq: 0, status: 'active' as const,
                     checkpointClock: { s00: 1 } },
             } };
-        const control3 = { revision: 3, fenceEpoch: 5, consentRevision: 1,
+        const control3 = { uid, revision: 3, fenceEpoch: 5, consentRevision: 1,
             replicas: {
                 ...control2.replicas,
                 s02: { ...registered, lastSeq: 0, status: 'active' as const,
@@ -108,7 +108,7 @@ describe('D1 claim: 409 rebase and authenticated checkpoint fences', () => {
         remote.claimMutationOutcome.mockResolvedValueOnce({
             outcome: 'not-committed', currentRevision: 2,
         });
-        const control = { revision: 2, fenceEpoch: 5, consentRevision: 1, replicas: {} };
+        const control = { uid, revision: 2, fenceEpoch: 5, consentRevision: 1, replicas: {} };
         remote.control.mockResolvedValueOnce(control).mockResolvedValueOnce(control);
         const changed = sealCloudDocument(key, uid, '', { profile: { height: '169' } }, {
             protocolVersion: 3, clock: { s00: 2 }, fields: {},
@@ -136,7 +136,7 @@ describe('D1 claim: 409 rebase and authenticated checkpoint fences', () => {
         remote.claimMutationOutcome.mockResolvedValueOnce({
             outcome: 'not-committed', currentRevision: 2,
         });
-        const control = { revision: 2, fenceEpoch: 5, consentRevision: 1, replicas: {} };
+        const control = { uid, revision: 2, fenceEpoch: 5, consentRevision: 1, replicas: {} };
         remote.control.mockResolvedValueOnce(control).mockResolvedValueOnce({
             ...control, revision: 3,
         });
@@ -157,7 +157,7 @@ describe('D1 claim: 409 rebase and authenticated checkpoint fences', () => {
             outcome: 'not-committed', currentRevision: 2,
         });
         remote.control.mockResolvedValueOnce({
-            revision: 2, fenceEpoch: 5, consentRevision: 1, replicas: {},
+            uid, revision: 2, fenceEpoch: 5, consentRevision: 1, replicas: {},
         });
         const forged = sealCloudDocument(new Uint8Array(32).fill(99), uid, '', {
             profile: { height: '168' },

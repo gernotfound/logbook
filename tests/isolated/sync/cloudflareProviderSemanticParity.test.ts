@@ -14,7 +14,7 @@ const initialMeta: SyncMeta = {
 };
 const root = sealCloudDocument(key, owner, '', { profile: { height: '170' } }, initialMeta);
 const control: CloudReplicaControlSnapshot = {
-    revision: 4, fenceEpoch: 8, consentRevision: 1,
+    uid: owner, revision: 4, fenceEpoch: 8, consentRevision: 1,
     replicas: { s00: { ...replica, status: 'active', lastSeq: 0,
         checkpointClock: {}, checkpointAtMs: Date.now(), leaseUntilMs: Date.now() + 86400000 } },
 };

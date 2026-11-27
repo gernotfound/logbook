@@ -61,7 +61,7 @@ export async function prepare() {
     const verified = await readAuthenticatedCloudflareCheckpoint(
         () => snapshot(0), uid, key, 1, () => true,
     );
-    const control = { revision: 0, fenceEpoch: 5, consentRevision: 1, replicas: {} };
+    const control = { uid, revision: 0, fenceEpoch: 5, consentRevision: 1, replicas: {} };
     const staged = await stageCloudflareReplicaClaim(owner, verified, control,
         'durable-new-device', () => true);
     return { snapshot, staged };
@@ -92,7 +92,7 @@ export function transport(snapshot: (revision: number) => Promise<{
             return { outcome: 'inconclusive', currentRevision: 0 };
         }),
         control: vi.fn(async (): Promise<CloudReplicaControlSnapshot> => ({
-            revision: 1, fenceEpoch: 5, consentRevision: 1,
+            uid, revision: 1, fenceEpoch: 5, consentRevision: 1,
             replicas: {
                 s01: { ...replica, lastSeq: 0, status: 'active' as const,
                     checkpointClock: { s00: 1 } },

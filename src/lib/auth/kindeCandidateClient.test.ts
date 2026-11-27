@@ -337,7 +337,7 @@ describe('candidate first-party Kinde client boundary', () => {
             );
             await expect(inspectKindeCandidateReplicaControl({ send: mixed, stillCurrent: () => true, browserCookies: cookie }))
                 .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
-            expect(mixed).toHaveBeenCalledTimes(7);
+            expect(mixed).toHaveBeenCalledTimes('uid' in middleControl ? 7 : 4);
         }
     });
 

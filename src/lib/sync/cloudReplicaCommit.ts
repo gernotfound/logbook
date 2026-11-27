@@ -29,7 +29,7 @@ export function prepareCloudflareCommit(
     isCurrent: () => boolean,
 ): { batch: CloudReplicaBatch; outcome: PreparedEncryptedDocumentChanges } {
     if (!isCurrent()) throw new CloudReplicaStaleSnapshotError();
-    if (!Number.isSafeInteger(snapshot.revision) || snapshot.revision < 0
+    if (control.uid !== uid || !Number.isSafeInteger(snapshot.revision) || snapshot.revision < 0
         || !Number.isSafeInteger(snapshot.fenceEpoch) || snapshot.fenceEpoch < 1
         || control.revision !== snapshot.revision || control.fenceEpoch !== snapshot.fenceEpoch
         || control.consentRevision !== snapshot.consentRevision

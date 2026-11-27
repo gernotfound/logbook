@@ -6,6 +6,12 @@
 
 **Autorità:** [Storage e sync](storage-and-sync.md), [`AGENTS.md`](../../AGENTS.md), [Ciclo account](account-lifecycle.md) e [stato Cloudflare](../../docs/operations/cloudflare-current-state.md).
 
+Il Worker identifica il proprietario autenticato in ogni risposta di
+`/v1/sync/control`. Il client richiede questo campo e lo confronta con
+l’account dell’archivio prima di sigillare un claim o una consegna, adottare
+una replica o sostituire un intento dopo un conflitto. Due account possono
+avere le stesse revisioni, lo stesso epoch e registri di replica equivalenti.
+
 ## Checkpoint candidati CF-03/04
 
 ### CF-04 — Barriera journal per il rientro di una replica ritirata (candidato 27/11/2026)

@@ -4,11 +4,28 @@ import { get } from 'idb-keyval';
 import { sealCloudDocument } from '../../../src/lib/sync/cloudDocumentCipher';
 import { readAuthenticatedCloudflareCheckpoint } from '../../../src/lib/sync/cloudReplicaCheckpoint';
 import { stageCloudflareReplicaClaim, resumeCloudflareReplicaClaim } from '../../../src/lib/sync/cloudReplicaClaimRecovery';
-import { CloudReplicaMutationReconciliationRequiredError } from '../../../src/lib/sync/cloudReplicaTransport';
+import { CloudReplicaMutationReconciliationRequiredError, CloudReplicaTransportError } from '../../../src/lib/sync/cloudReplicaTransport';
 import { readLocal, adoptReplicaCheckpoint } from '../../../src/lib/sync/localRepository';
 import { updateArchiveRecord } from '../../../src/lib/sync/secureArchiveRepository';
 
 describe('D1 claim: retirement, concurrency, consent and corrupt ciphertext', () => {
+    it.each(['committed', 'not-committed'])('preserves the sealed claim on a foreign control after %s', async outcome => {
+        const { snapshot } = await prepare();
+        const remote = transport(snapshot);
+        const control = await remote.control();
+        const revision = outcome === 'committed' ? 1 : 2;
+        if (outcome === 'not-committed') {
+            remote.replayStoredClaim.mockRejectedValueOnce(new CloudReplicaTransportError(409));
+            remote.claimMutationOutcome.mockResolvedValueOnce({ outcome, currentRevision: revision });
+        }
+        remote.control.mockResolvedValue({ ...control, uid: 'other-owner', revision });
+        const sealed = await get(storage);
+        await expect(resumeCloudflareReplicaClaim(owner, key, remote, 'session-csrf', () => true))
+            .resolves.toBe('reconciliation-required');
+        expect(remote.scanAll).not.toHaveBeenCalled();
+        expect(await get(storage)).toBe(sealed);
+    });
+
     it('preserves historical claim if the replica was retired or reused', async () => {
         const { staged, snapshot } = await prepare();
         const remote = transport(snapshot);
@@ -21,7 +38,7 @@ describe('D1 claim: retirement, concurrency, consent and corrupt ciphertext', ()
             }),
         );
         remote.control.mockResolvedValueOnce({
-            revision: 2, fenceEpoch: 5, consentRevision: 1,
+            uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
             replicas: { s01: { ...remote.replica, generation: 2, replicaId: 'reused-other-device',
                 lastSeq: 0, status: 'active' as const, checkpointClock: { s00: 1 } } },
         });
@@ -43,11 +60,11 @@ describe('D1 claim: retirement, concurrency, consent and corrupt ciphertext', ()
             }),
         );
         remote.control.mockResolvedValueOnce({
-            revision: 2, fenceEpoch: 5, consentRevision: 1,
+            uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
             replicas: { s01: { ...remote.replica, lastSeq: 0,
                 status: 'active' as const, checkpointClock: { s00: 1 } } },
         }).mockResolvedValueOnce({
-            revision: 3, fenceEpoch: 5, consentRevision: 1,
+            uid, revision: 3, fenceEpoch: 5, consentRevision: 1,
             replicas: { s01: { ...remote.replica, lastSeq: 0,
                 status: 'active' as const, checkpointClock: { s00: 1 } } },
         });
@@ -64,7 +81,7 @@ describe('D1 claim: retirement, concurrency, consent and corrupt ciphertext', ()
         const remote = transport(snapshot);
         const before = await get(storage);
         remote.control.mockResolvedValueOnce({
-            revision: 2, fenceEpoch: 5, consentRevision: 1,
+            uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
             replicas: { s01: { ...remote.replica, lastSeq: 0, status: 'active',
                 checkpointClock: { s00: 1 } } },
         });
@@ -93,7 +110,7 @@ describe('D1 claim: retirement, concurrency, consent and corrupt ciphertext', ()
             uid, key, 1, () => true,
         );
         await expect(stageCloudflareReplicaClaim(owner, verified,
-            { revision: 0, fenceEpoch: 5, consentRevision: 1, replicas: {} },
+            { uid, revision: 0, fenceEpoch: 5, consentRevision: 1, replicas: {} },
             'other-device', () => true)).rejects.toThrow('Claim D1 non installabile');
         await expect(adoptReplicaCheckpoint(owner, {
             identity: { slot: 's00', replicaId: 'other', generation: 1,

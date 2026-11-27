@@ -21,7 +21,7 @@ describe('D1 claim: causal clock recovery and AEAD verification', () => {
                 baseSeq: 0, replica: remote.replica,
             }),
         );
-        const control = { revision: 2, fenceEpoch: 5, consentRevision: 1,
+        const control = { uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
             replicas: {
                 s01: { ...remote.replica, lastSeq: 0, status: 'active' as const,
                     checkpointClock: { s00: 1 } },
@@ -90,7 +90,7 @@ describe('D1 claim: causal clock recovery and AEAD verification', () => {
                 baseSeq: 0, replica: remote.replica,
             }),
         );
-        const control = { revision: 2, fenceEpoch: 5, consentRevision: 1,
+        const control = { uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
             replicas: { s01: { ...remote.replica, lastSeq: 0, status: 'active' as const,
                 checkpointClock: { s00: 1 } } },
         };
@@ -123,7 +123,7 @@ describe('D1 claim: causal clock recovery and AEAD verification', () => {
                 baseSeq: 0, replica: remote.replica,
             }),
         );
-        const control = { revision: 2, fenceEpoch: 5, consentRevision: 1,
+        const control = { uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
             replicas: { s01: { ...remote.replica, lastSeq: 0, status: 'active' as const,
                 checkpointClock: { s00: 1 } } },
         };
@@ -161,7 +161,7 @@ describe('D1 claim: causal clock recovery and AEAD verification', () => {
             }),
         );
         remote.control.mockResolvedValueOnce({
-            revision: 2, fenceEpoch: 5, consentRevision: 1,
+            uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
             replicas: { s01: { ...remote.replica, lastSeq: 0, status: 'active' as const,
                 checkpointClock: { s00: 1 } } },
         });
@@ -194,7 +194,7 @@ describe('D1 claim: causal clock recovery and AEAD verification', () => {
             }),
         );
         remote.control.mockResolvedValueOnce({
-            revision: 2, fenceEpoch: 5, consentRevision: 1,
+            uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
             replicas: { s01: { ...remote.replica, lastSeq: 0,
                 status: 'active' as const, checkpointClock: { s00: 2 } } },
         });

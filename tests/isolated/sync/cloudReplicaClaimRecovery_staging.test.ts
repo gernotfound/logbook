@@ -9,6 +9,19 @@ import { CloudReplicaCapacityError, CloudReplicaCloudKeyRequiredError } from '..
 import { readLocal, commitLocal, adoptReplicaCheckpoint } from '../../../src/lib/sync/localRepository';
 
 describe('D1 claim: durable staging and first replay', () => {
+    it('keeps the encrypted archive intact when the first control names another owner', async () => {
+        const verified = await readAuthenticatedCloudflareCheckpoint(
+            async () => ({ revision: 0, fenceEpoch: 5, consentRevision: 1, documents: [] }),
+            uid, key, 1, () => true,
+        );
+        const sealed = await get(storage);
+        await expect(stageCloudflareReplicaClaim(owner, verified,
+            { uid: 'other-owner', revision: 0, fenceEpoch: 5, consentRevision: 1, replicas: {} },
+            'first-device', () => true,
+        )).rejects.toThrow('Snapshot claim');
+        expect(await get(storage)).toBe(sealed);
+    });
+
     it('still stages the first replica with edits already committed to the local journal', async () => {
         await commitLocal(owner, data(171), data(170));
         const before = (await readLocal(owner))!;
@@ -20,7 +33,7 @@ describe('D1 claim: durable staging and first replay', () => {
             uid, key, 1, () => true,
         );
         const staged = await stageCloudflareReplicaClaim(owner, verified,
-            { revision: 0, fenceEpoch: 5, consentRevision: 1, replicas: {} },
+            { uid, revision: 0, fenceEpoch: 5, consentRevision: 1, replicas: {} },
             'first-device-with-offline-work', () => true,
         );
 
@@ -64,7 +77,7 @@ describe('D1 claim: durable staging and first replay', () => {
         const sealed = await get(storage);
         await expect(stageCloudflareReplicaClaim(
             owner, verified,
-            { revision: 0, fenceEpoch: 5, consentRevision: 1, replicas: {} },
+            { uid, revision: 0, fenceEpoch: 5, consentRevision: 1, replicas: {} },
             'new-synthetic-device', () => true, before!.revision,
         )).rejects.toThrow('Claim D1 non installabile');
         expect(await get(storage)).toBe(sealed);

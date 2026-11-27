@@ -17,7 +17,7 @@ const snapshot: CloudReplicaSnapshot = {
     documents: [{ path: '', revision: 4, document: base }],
 };
 const control: CloudReplicaControlSnapshot = {
-    revision: 4, fenceEpoch: 7, consentRevision: 1,
+    uid, revision: 4, fenceEpoch: 7, consentRevision: 1,
     replicas: { s00: {
         ...replica, leaseUntilMs: Date.now() + 86400000, checkpointAtMs: Date.now(),
         lastSeq: 0, checkpointClock: {}, status: 'active',
@@ -110,6 +110,7 @@ describe('D1 encrypted commit candidate from the shared Protocol 3 engine', () =
             expect(() => stage({ checkpoint })).toThrow(CloudReplicaStaleSnapshotError);
         }
         expect(() => stage({ current: () => false })).toThrow(CloudReplicaStaleSnapshotError);
+        expect(() => stage({ control: { ...control, uid: 'another-owner' } })).toThrow(CloudReplicaStaleSnapshotError);
         expect(() => stage({ control: { ...control, revision: 5 } })).toThrow(CloudReplicaStaleSnapshotError);
         expect(() => stage({ control: { ...control, fenceEpoch: 8 } })).toThrow(CloudReplicaStaleSnapshotError);
         expect(() => stage({ control: { ...control, consentRevision: 2 } }))
