@@ -2,6 +2,21 @@
 
 **Stato di riferimento:** per l'ultimo readback Cloudflare consultare [quadro operativo](cloudflare-current-state.md). I valori sotto sono checkpoint datati, non una fotografia aggiornata automaticamente del provider.
 
+## CF-03 · Pubblicazione diagnostica e inventario D1 · 27 novembre 2026
+
+[PR #1485](https://github.com/gernotfound/logbook/pull/1485) integrata in
+`main` `6cd970fd`, con [CI PR](https://github.com/gernotfound/logbook/actions/runs/45993468165),
+[gate main](https://github.com/gernotfound/logbook/actions/runs/45994010524)
+e [frontend Static Assets](https://github.com/gernotfound/logbook/actions/runs/45994351305)
+`success`. Il readback Cloudflare dello stesso giorno conferma il nuovo
+deployment frontend al 100%, senza binding `D1_API`; D1 applicativa e
+recovery EU hanno rispettivamente ledger `0020` e `0005`. Il browser ha
+mostrato il nuovo copy diagnostico dopo l'aggiornamento PWA in attesa,
+con sessione Kinde verificata. Per identificativi e limiti della prova
+consultare il [quadro operativo](cloudflare-current-state.md) e
+[CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057).
+Non è un GO fitness né un collaudo di sync, revoca o restore.
+
 ## CF-04 · Controllo del proprietario della replica · 27 novembre 2026
 
 Al preflight della [PR #1482](https://github.com/gernotfound/logbook/pull/1482),

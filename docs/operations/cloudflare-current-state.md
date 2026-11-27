@@ -1,5 +1,30 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
+**Readback CF-03 più recente, 27/11/2026:** la diagnostica Kinde della
+[PR #1485](https://github.com/gernotfound/logbook/pull/1485) è integrata in
+[`main` `6cd970fd`](https://github.com/gernotfound/logbook/commit/6cd970fd91491779d55016faaafe57fb15caf9b6),
+v2.748.0. [CI PR exact-SHA](https://github.com/gernotfound/logbook/actions/runs/45993468165)
+con Canonical Verification/CodeQL, [Main Release Gate/CodeQL](https://github.com/gernotfound/logbook/actions/runs/45994010524)
+e [Static Assets + smoke](https://github.com/gernotfound/logbook/actions/runs/45994351305)
+sono `success` sui rispettivi SHA. Readback diretto Cloudflare: deployment
+`6ac59255-7a4a-42e3-b511-7c316ab235b0`, versione
+`b3c089ae-a48e-4ad8-b34a-de69d9ddc549` al 100%; i soli binding del
+frontend sono `APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`, senza `D1_API`.
+La D1 applicativa isolata risulta `jurisdiction=eu` con ultimo ledger
+`0020_account_erasure_retry_backoff.sql`; la D1 recovery indipendente
+risulta `jurisdiction=eu` con ultimo ledger
+`0005_account_erasure_denials.sql`. Sono letture della configurazione e del
+ledger, **non** un test di consenso, sync, erasure, restore o localizzazione
+degli altri trattamenti.
+
+Smoke Chrome sul dominio pubblico: `/verifica-accesso` mostrava inizialmente
+la copia precedente mentre la PWA segnalava un update in attesa; dopo
+`Aggiorna applicazione` il documento pubblicato conteneva i testi corretti,
+la sessione Kinde era ancora verificata e la console `error/warn` del tab
+era vuota. Non sono stati ripetuti login, logout, reset o prove multi-device
+sullo SHA post-merge. **AUTH P0 PARZIALE, fitness Cloudflare NO-GO.**
+Il checkpoint non autorizza API D1 pubbliche né nuovi deploy provider.
+
 **Checkpoint UI guest e frontend, 27/11/2026:** [PR #1474](https://github.com/gernotfound/logbook/pull/1474)
 integrata con squash in [`main` `8c9523c1`](https://github.com/gernotfound/logbook/commit/8c9523c16aa7b26222d51ac239acad510c799044),
 v2.737.0, tree `7c091036` identico al candidato `bdd1c8cb`.
