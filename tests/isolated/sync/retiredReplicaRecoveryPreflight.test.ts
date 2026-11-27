@@ -244,4 +244,81 @@ describe('retired replica recovery preflight, no mutation or new causal identity
         expect(preflightRetiredReplicaRecovery(uid, changed, await checkpoint(), control(), catalog))
             .toEqual({ kind: 'reconciliation-required', reason: 'local-replay-diverged' });
     });
+
+    it('does not let a disjoint causal stamp conceal an unstamped edit of the pending field', async () => {
+        const local = (await readLocal(owner))!;
+        const remote = UserDataSchema.parse({ profile: { height: '173', gender: 'other' },
+            legalConsent: legal }) as unknown as UserData;
+        const meta: SyncMeta = { ...emptyMeta, clock: { s01: 1 }, fields: {
+            [fieldKey(['profile', 'gender'])]: { actorId: 's01', seq: 1, clock: { s01: 1 } },
+        } };
+        expect(preflightRetiredReplicaRecovery(uid, local,
+            await checkpoint(projectDocuments(remote, catalog).get('')!, meta), control(), catalog))
+            .toEqual({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
+                changedCloudFieldStamps: 1, pendingWithOverlappingCloudStamps: 0,
+                unclassifiedDocuments: 1,
+            } });
+    });
+
+    it('counts unstamped changes alongside a stamped conflict, not just the stamped field', async () => {
+        const local = (await readLocal(owner))!;
+        const remote = UserDataSchema.parse({ profile: { height: '173', gender: 'other' },
+            legalConsent: legal }) as unknown as UserData;
+        const meta: SyncMeta = { ...emptyMeta, clock: { s01: 1 }, fields: {
+            [fieldKey(['profile', 'height'])]: { actorId: 's01', seq: 1, clock: { s01: 1 } },
+        } };
+        expect(preflightRetiredReplicaRecovery(uid, local,
+            await checkpoint(projectDocuments(remote, catalog).get('')!, meta), control(), catalog))
+            .toEqual({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
+                changedCloudFieldStamps: 1, pendingWithOverlappingCloudStamps: 1,
+                unclassifiedDocuments: 1,
+            } });
+    });
+
+    it('treats an extra causal frontier without a field witness as unclassified', async () => {
+        const local = (await readLocal(owner))!;
+        const remote = UserDataSchema.parse({ profile: { height: '170', gender: 'other' },
+            legalConsent: legal }) as unknown as UserData;
+        const meta: SyncMeta = { ...emptyMeta, clock: { s01: 1, s02: 3 }, fields: {
+            [fieldKey(['profile', 'gender'])]: { actorId: 's01', seq: 1, clock: { s01: 1 } },
+        } };
+        expect(preflightRetiredReplicaRecovery(uid, local,
+            await checkpoint(projectDocuments(remote, catalog).get('')!, meta), control(), catalog))
+            .toEqual({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
+                changedCloudFieldStamps: 1, pendingWithOverlappingCloudStamps: 0,
+                unclassifiedDocuments: 1,
+            } });
+    });
+
+    it('does not hide an ignored nutrition total behind another valid monthly field stamp', async () => {
+        const original = (await readLocal(owner))!;
+        const baseline = UserDataSchema.parse({ ...data(170), nutrition: {
+            '2026-11-13': { date: '2026-11-13', weight: 70, kcal: 100 },
+        } }) as unknown as UserData;
+        const desired = UserDataSchema.parse({ ...baseline, profile: { height: '171' } }) as unknown as UserData;
+        const local = { ...original, baseline, data: desired, syncMetaByDocument: {
+            ...original.syncMetaByDocument, 'nutrition_months/2026-11': emptyMeta,
+        } };
+        const remote = UserDataSchema.parse({ ...baseline, nutrition: {
+            '2026-11-13': { date: '2026-11-13', weight: 71, kcal: 101 },
+        } }) as unknown as UserData;
+        const documents = projectDocuments(remote, catalog);
+        const monthMeta: SyncMeta = { ...emptyMeta, clock: { s01: 1 }, fields: {
+            [fieldKey(['2026-11-13', 'weight'])]: { actorId: 's01', seq: 1, clock: { s01: 1 } },
+        } };
+        const cloud = await readAuthenticatedCloudflareCheckpoint(async () => ({
+            revision: 8, fenceEpoch: 5, consentRevision: 1, documents: [
+                { path: '', revision: 8,
+                    document: sealCloudDocument(accountKey, uid, '', documents.get('')!, emptyMeta) },
+                { path: 'nutrition_months/2026-11', revision: 8,
+                    document: sealCloudDocument(accountKey, uid, 'nutrition_months/2026-11',
+                        documents.get('nutrition_months/2026-11')!, monthMeta) },
+            ],
+        }), uid, accountKey, 1, () => true);
+        expect(preflightRetiredReplicaRecovery(uid, local, cloud, control(), catalog))
+            .toEqual({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
+                changedCloudFieldStamps: 1, pendingWithOverlappingCloudStamps: 0,
+                unclassifiedDocuments: 1,
+            } });
+    });
 });

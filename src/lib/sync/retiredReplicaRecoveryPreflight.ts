@@ -2,11 +2,13 @@ import equal from 'fast-deep-equal';
 import type { CachedGlobalCatalog } from '../../types';
 import type { AuthenticatedCloudflareCheckpoint } from './cloudReplicaCheckpoint';
 import type { CloudReplicaControlSnapshot } from './cloudReplicaTransport';
-import { projectDocuments } from './documentProjection';
+import { projectDocuments, type DocumentData } from './documentProjection';
 import type { LocalEnvelope } from './localEnvelopeValidation';
 import { userOwner } from './owner';
 import { isReplicaMembershipEligible, parseReplicaControl } from './replicaProtocol';
-import { applySemanticOperations, parseSyncMeta } from './semanticProjection';
+import {
+    applySemanticOperations, coversVectorClock, diffDocuments, getMergePolicy, mergeVectors, parseSyncMeta,
+} from './semanticProjection';
 import { pathFromFieldKey } from './semanticProjection/metadata';
 
 type RetiredReplicaDivergenceEvidence = Readonly<{
@@ -25,6 +27,45 @@ export type RetiredReplicaRecoveryPreflight =
 function pathsOverlap(left: readonly string[], right: readonly string[]): boolean {
     const prefixLength = Math.min(left.length, right.length);
     return left.slice(0, prefixLength).every((segment, index) => segment === right[index]);
+}
+
+function hasIgnoredBusinessChange(path: string, baseline: DocumentData, remote: DocumentData): boolean {
+    if (!path.startsWith('nutrition_months/')) return false;
+    // The current semantic diff intentionally ignores calculated daily totals.
+    // Their independent mutation is not proof of a safe causal reconciliation.
+    for (const day of new Set([...Object.keys(baseline), ...Object.keys(remote)])) {
+        const before = baseline[day];
+        const after = remote[day];
+        if (!before || !after || typeof before !== 'object' || typeof after !== 'object'
+            || Array.isArray(before) || Array.isArray(after)) continue;
+        const left = before as Record<string, unknown>;
+        const right = after as Record<string, unknown>;
+        for (const key of new Set([...Object.keys(left), ...Object.keys(right)])) {
+            if (getMergePolicy(path, [day, key]) === 'ignore' && !equal(left[key], right[key])) return true;
+        }
+    }
+    return false;
+}
+
+function hasUnexplainedBusinessChange(
+    path: string,
+    baseline: DocumentData,
+    remote: DocumentData,
+    witnessedPaths: readonly string[][],
+): boolean {
+    if (equal(baseline, remote)) return false;
+    try {
+        const changes = diffDocuments(new Map([[path, baseline]]), new Map([[path, remote]]),
+            'diagnostic', 1, { diagnostic: 1 });
+        // A changed child stamp cannot explain a wholesale parent replacement.
+        // Nor can a semantic diff explain fields intentionally ignored by its policy.
+        return changes.length === 0 || hasIgnoredBusinessChange(path, baseline, remote)
+            || changes.some(change => !witnessedPaths.some(witness =>
+                witness.length <= change.path.length && pathsOverlap(witness, change.path)));
+    } catch {
+        // A diagnostic must not interpret an un-diffable document as independent.
+        return true;
+    }
 }
 
 /**
@@ -53,11 +94,20 @@ function describeCloudDivergence(
         const currentMeta = parseSyncMeta(remote.sync);
         const fieldKeys = new Set([...Object.keys(previousMeta.fields), ...Object.keys(currentMeta.fields)]);
         let changedFields = 0;
+        let explainedClock = previousMeta.clock;
+        const witnessedPaths: string[][] = [];
         for (const key of fieldKeys) {
             if (equal(previousMeta.fields[key], currentMeta.fields[key])) continue;
             changedFields++;
             changedCloudFieldStamps++;
             const changedPath = pathFromFieldKey(key);
+            const currentStamp = currentMeta.fields[key];
+            if (currentStamp) {
+                witnessedPaths.push(changedPath);
+                explainedClock = mergeVectors(explainedClock, currentStamp.clock,
+                    ...(currentStamp.deleteClock ? [currentStamp.deleteClock] : []),
+                    ...(currentStamp.candidates?.map(candidate => candidate.clock) ?? []));
+            }
             local.pending.forEach((operation, index) => {
                 if (operation.docPath === path && (pathsOverlap(operation.path, changedPath)
                     || (operation.guard && pathsOverlap(operation.guard.path, changedPath)))) {
@@ -65,10 +115,14 @@ function describeCloudDivergence(
                 }
             });
         }
-        // A changed document or frontier without field witnesses (e.g. ABA,
-        // compaction or an out-of-band writer) cannot be classified by paths.
-        if (changedFields === 0 && (!equal(baseline, remote.business)
-            || !equal(previousMeta, currentMeta))) unclassifiedDocuments++;
+        // A legitimate stamped edit can coexist with an untracked business edit
+        // or an advanced frontier. Never let the presence of one stamp mask it.
+        if (hasUnexplainedBusinessChange(path, baseline, remote.business, witnessedPaths)
+            || !coversVectorClock(currentMeta.clock, previousMeta.clock)
+            || !coversVectorClock(explainedClock, currentMeta.clock)
+            || (changedFields === 0 && !equal(previousMeta, currentMeta))) {
+            unclassifiedDocuments++;
+        }
     }
     return { changedCloudFieldStamps,
         pendingWithOverlappingCloudStamps: overlappingPending.size, unclassifiedDocuments };
