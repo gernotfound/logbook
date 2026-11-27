@@ -2,6 +2,17 @@
 
 **Stato di riferimento:** per l'ultimo readback Cloudflare consultare [quadro operativo](cloudflare-current-state.md). I valori sotto sono checkpoint datati, non una fotografia aggiornata automaticamente del provider.
 
+## CF-04 · Controllo del proprietario della replica · 27 novembre 2026
+
+Al preflight della [PR #1482](https://github.com/gernotfound/logbook/pull/1482),
+`main` era [`2847e98a`](https://github.com/gernotfound/logbook/commit/2847e98a510768ec444d6862a1e79c5d12375dc5).
+Cloudflare riportava il deployment frontend `31b13763-2256-4b9b-b958-d417f7b16b37`,
+versione `ad25526e-00c8-4b87-bcd1-90293c0c09a6` al 100%, con i soli binding
+`APP_ORIGIN`, `ASSETS` e `KINDE_HTTP`. Il cambiamento riguarda il client
+candidato. Il collaudo fitness autenticato da due dispositivi resta aperto.
+Le prove post-merge e il readback del nuovo deploy sono tracciati in
+[CF-04 #1058](https://github.com/gernotfound/logbook/issues/1058).
+
 ## UI guest separata e rilascio Static Assets · 27 novembre 2026
 
 [PR #1474](https://github.com/gernotfound/logbook/pull/1474) su
