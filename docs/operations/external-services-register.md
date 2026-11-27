@@ -2,6 +2,23 @@
 
 **Stato di riferimento:** per l'ultimo readback Cloudflare consultare [quadro operativo](cloudflare-current-state.md). I valori sotto sono checkpoint datati, non una fotografia aggiornata automaticamente del provider.
 
+## CF-04 · Chiave esistente per ispezione causale · 27 novembre 2026
+
+Il più recente `main` verificato prima del candidato è
+[PR #1493](https://github.com/gernotfound/logbook/pull/1493),
+[`a8b89fbb`](https://github.com/gernotfound/logbook/commit/a8b89fbbf0d0e36e2ea8409139a92ae5da5f2310),
+v2.756.0. CI PR, CodeQL, gate post-merge e smoke Static Assets HTTPS
+risultavano verdi; readback Cloudflare frontend: deployment
+`bebbb8d1-fa65-44e3-8953-992efd4be47c`, versione
+`a5506beb-3cb8-4ca7-b4df-3c253955f2cb` al 100%, binding `APP_ORIGIN`,
+`ASSETS`, `KINDE_HTTP` e **nessun `D1_API`**. Il candidato successivo
+introduce soltanto codice e test per il rilascio di una ADK **già emessa**
+al preflight read-only di una replica ritirata; non imposta binding,
+credenziali, migration, nuova emissione di chiavi, deploy manuale o
+accesso fitness pubblico. CI, distribuzione privata e prova runtime di
+questo candidato sono evidenze separate ancora da verificare. SYNC-7D/7E
+rimangono aperti in [#1058](https://github.com/gernotfound/logbook/issues/1058).
+
 ## CF-04 · Diagnostica journal e readback frontend · 27 novembre 2026
 
 **Readback successivo:** [PR #1490](https://github.com/gernotfound/logbook/pull/1490),

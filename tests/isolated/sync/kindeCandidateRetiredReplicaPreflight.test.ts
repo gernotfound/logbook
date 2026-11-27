@@ -7,6 +7,7 @@ import { UserDataSchema } from '../../../src/lib/schema';
 import { sealCloudDocument } from '../../../src/lib/sync/cloudDocumentCipher';
 import { projectDocuments } from '../../../src/lib/sync/documentProjection';
 import { inspectKindeCandidateRetiredReplicaPreflight } from '../../../src/lib/sync/kindeCandidateRetiredReplicaPreflight';
+import { inspectKindeCandidateRetiredReplicaWithExistingKey } from '../../../src/lib/sync/kindeCandidateRetiredReplicaReadOnly';
 import { adoptReplicaCheckpoint, commitLocal, initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults, unlockVaultForOwner, vaultControlKey } from '../../../src/lib/sync/secureArchiveSession';
@@ -16,9 +17,10 @@ import type { CachedGlobalCatalog, UserData } from '../../../src/types';
 const catalogSource = vi.hoisted(() => ({ read: vi.fn() }));
 vi.mock('../../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: catalogSource.read }));
 vi.mock('../../../src/lib/firebase', () => { throw Error('Retired replica preflight must not load Firebase'); });
-vi.mock('../../../src/lib/sync/cloudflareAccountKeyCandidate', () => {
-    throw Error('Read-only preflight must not acquire or provision an ADK');
-});
+const accountKeySource = vi.hoisted(() => ({ acquire: vi.fn() }));
+vi.mock('../../../src/lib/sync/cloudflareAccountKeyCandidate', () => ({
+    acquireCloudflareAccountKeyCandidate: accountKeySource.acquire,
+}));
 
 const uid = 'k_' + 'A'.repeat(43);
 const owner = `user:${uid}`;
@@ -96,6 +98,9 @@ beforeEach(async () => {
     vi.stubGlobal('navigator', { locks: { request: async (_name: string, _options: unknown,
         callback: () => Promise<unknown>) => callback() } });
     catalogSource.read.mockReset().mockResolvedValue(catalog);
+    accountKeySource.acquire.mockReset().mockImplementation(() => {
+        throw Error('Raw preflight must not acquire or provision an ADK');
+    });
     await createAndMigrateVault(owner);
     await initializeLocal(owner, data(170));
     // The trusted consent receipt belongs to this owner before replica claim.
@@ -127,6 +132,7 @@ describe('Kinde candidate: authenticated retired replica preflight', () => {
         expect(paths.filter(path => path === '/v1/sync/control')).toHaveLength(2);
         expect(paths.filter(path => path === '/v1/sync/scan')).toHaveLength(1);
         expect(paths.every(path => !/cloud-key|commit|claim|retire|receipt/.test(path))).toBe(true);
+        expect(accountKeySource.acquire).not.toHaveBeenCalled();
     });
 
     it('distinguishes cloud conflict and possible lost ACK, but never acknowledges pending', async () => {
@@ -184,6 +190,59 @@ describe('Kinde candidate: authenticated retired replica preflight', () => {
         const sealed = await get(storage);
         const send = network();
         await expect(inspect(send)).rejects.toThrow();
+        expect(await get(storage)).toBe(sealed);
+        expect(vi.mocked(send).mock.calls.some(([input]) => String(input).startsWith('/v1/sync/'))).toBe(false);
+    });
+
+    it('acquires the existing ADK only for inspection, then wipes it after an unchanged preflight', async () => {
+        const transient = key.slice();
+        accountKeySource.acquire.mockImplementation(async (args: { purpose: string; csrfToken: () => string }) => {
+            expect(args.purpose).toBe('recovery-inspect');
+            expect(args.csrfToken()).toBe(csrf);
+            return transient;
+        });
+        const sealed = await get(storage);
+        const send = network();
+        const result = await inspectKindeCandidateRetiredReplicaWithExistingKey({
+            expected, stillCurrent: () => true, send,
+            browserCookies: () => '__Host-logbook_csrf=' + csrf,
+        });
+        expect(result.kind).toBe('baseline-unchanged');
+        expect(accountKeySource.acquire).toHaveBeenCalledTimes(1);
+        expect(Array.from(transient)).toEqual(Array(32).fill(0));
+        expect(await get(storage)).toBe(sealed);
+        expect(vi.mocked(send).mock.calls.every(([input]) =>
+            !/cloud-key|commit|claim|retire|receipt/.test(String(input)))).toBe(true);
+    });
+
+    it('wipes the inspection key when the session changes during scan or immediately after acquisition', async () => {
+        for (const changeDuringScan of [false, true]) {
+            let current = true;
+            const transient = key.slice();
+            accountKeySource.acquire.mockImplementation(async () => {
+                if (!changeDuringScan) current = false;
+                return transient;
+            });
+            const send = network({ onScan: async () => { if (changeDuringScan) current = false; } });
+            await expect(inspectKindeCandidateRetiredReplicaWithExistingKey({
+                expected, stillCurrent: () => current, send,
+                browserCookies: () => '__Host-logbook_csrf=' + csrf,
+            })).rejects.toThrow();
+            expect(Array.from(transient)).toEqual(Array(32).fill(0));
+        }
+        const grant = await unlockVaultForOwner(owner);
+        expect((await readLocal(owner))!.pending.length).toBeGreaterThan(0);
+        grant.release();
+    });
+
+    it('preserves the vault if no previously issued ADK exists', async () => {
+        const sealed = await get(storage);
+        accountKeySource.acquire.mockRejectedValueOnce(new Error('no-existing-key'));
+        const send = network();
+        await expect(inspectKindeCandidateRetiredReplicaWithExistingKey({
+            expected, stillCurrent: () => true, send,
+            browserCookies: () => '__Host-logbook_csrf=' + csrf,
+        })).rejects.toThrow();
         expect(await get(storage)).toBe(sealed);
         expect(vi.mocked(send).mock.calls.some(([input]) => String(input).startsWith('/v1/sync/'))).toBe(false);
     });

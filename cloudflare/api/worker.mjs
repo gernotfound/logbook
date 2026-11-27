@@ -435,7 +435,8 @@ export default {
       return consentWorker.fetch(request, env);
     }
     if (route === '/v1/auth/logout') return logoutWorker.fetch(request, env);
-    if (route === '/v1/cloud-key/sync' || route === '/v1/cloud-key/rights-export') {
+    if (route === '/v1/cloud-key/sync' || route === '/v1/cloud-key/recovery-inspect'
+      || route === '/v1/cloud-key/rights-export') {
       return cloudKeyWorker.fetch(request, env);
     }
     try { return await handler(request, env); }

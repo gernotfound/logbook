@@ -113,6 +113,15 @@ le definizioni SQL effettive vanno verificati sul D1 isolato dopo la migration.
 
 **MUST (fence indipendente per ADK fitness):** l'endpoint Worker /v1/cloud-key/sync richiede la stessa prova primaria e lo stesso registro CF-08 usati dalle route replica. Verificarli prima del provisioning e dopo la decifratura, prima di costruire la risposta con la chiave. Se la seconda verifica fallisce, non rilasciare la chiave e azzerare il buffer. Un'ADK già emessa rimane cifrata nella D1 per la riconciliazione. La prova HTTP del percorso rights-only resta distinta.
 
+**MUST (ADK di sola ispezione CF-04):** `POST /v1/cloud-key/recovery-inspect`
+usa gli stessi gate attivi, incluso il registro indipendente prima e dopo
+la decifratura, ma accetta esclusivamente un envelope ADK già emesso e
+autenticato nella D1 primaria. Non genera chiavi, non esegue INSERT né
+rilascia una risposta `sync`: il purpose distinto viene validato dal client.
+Sessione o consenso revocati, mismatch di issuance, KEK errata o record assente
+sono errori fail-closed; il chiamante azzera la chiave dopo un solo preflight.
+Questa capacità privata non è una concessione di replay o di accesso pubblico.
+
 **MUST (rights-only e revoca):** la lettura `rights-export` dopo `withdrawn` usa esclusivamente ADK esistente e sessione ancora valida, con job di erasure per la generazione corrente. Non crea chiavi; nessun recupero ADK per principal disabilitato, sessione revocata o identità cancellata. La chiave è immutabile nella baseline e la sua cancellazione SQL è consentita soltanto con lease valido di erasure nello stato `awaiting-keys`; il registro issuance non viene cancellato. Rewrap/versione successiva, finalizzazione di CF-06, backup/restore anti-resurrection, nuova accettazione del consenso e integrazione UI richiedono gate separati: non trattare `awaiting-keys` come `complete`.
 
 Il Worker candidato verifica anche il registro D1 indipendente aperto prima e dopo l'apertura della chiave. Il registro deve provare la revoca della stessa generazione sanitaria, anche quando l'epoch della sessione Auth è avanzata. Un blocco provvisorio o un floor più recente sospende il rilascio. In caso di revoca committata solo sul D1 applicativo, il retry autorizzato della revoca riconcilia il registro prima dell'export.

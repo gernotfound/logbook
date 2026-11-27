@@ -5,6 +5,7 @@ import { strictlyEmptyPost } from '../http/strict-empty-post.mjs';
 import { requireCurrentIndependentSyncFence } from '../recovery/runtime-sync-fence.mjs';
 
 const SYNC = '/v1/cloud-key/sync';
+const RECOVERY_INSPECT = '/v1/cloud-key/recovery-inspect';
 const RIGHTS = '/v1/cloud-key/rights-export';
 const INTERNAL = 'https://auth-gate.internal/__internal/authorize';
 
@@ -70,7 +71,9 @@ export default {
   async fetch(request, env) {
     let pathname;
     try { pathname = new URL(request.url).pathname; } catch { return reply({ error: 'not-found' }, 404); }
-    if (pathname !== SYNC && pathname !== RIGHTS) return reply({ error: 'not-found' }, 404);
+    if (pathname !== SYNC && pathname !== RECOVERY_INSPECT && pathname !== RIGHTS) {
+      return reply({ error: 'not-found' }, 404);
+    }
     if (request.method !== 'POST') return reply({ error: 'method-not-allowed' }, 405);
     if (!validOrigin(env?.API_ORIGIN) || !await validRequest(request, env, pathname)) {
       return reply({ error: 'origin-or-input-rejected' }, 403);
@@ -85,7 +88,9 @@ export default {
     const granted = await authorize(request, env, pathname);
     if (granted.status) return reply({ error: 'unauthorized-or-unavailable' }, granted.status);
 
-    const fitness = pathname === SYNC;
+    const fitness = pathname !== RIGHTS;
+    const purpose = pathname === SYNC ? 'sync'
+      : pathname === RECOVERY_INSPECT ? 'recovery-inspect' : 'rights-export';
     let adk;
     try {
       // An application D1 restore can resurrect an old consent. Require the
@@ -93,8 +98,7 @@ export default {
       if (fitness) await requireCurrentIndependentSyncFence(env, granted.claims);
       // The store checks current SQL on either side of crypto and checks
       // the independent withdrawal before unwrapping a rights-only key.
-      adk = await releaseCloudAccountDataKey(env.DB, env, granted.claims,
-        fitness ? 'sync' : 'rights-export');
+      adk = await releaseCloudAccountDataKey(env.DB, env, granted.claims, purpose);
       if (!(adk instanceof Uint8Array) || adk.length !== 32) {
         return reply({ error: 'unavailable' }, 503);
       }
@@ -105,7 +109,7 @@ export default {
         uid: granted.claims.uid,
         fenceEpoch: granted.claims.fenceEpoch,
         consentRevision: granted.claims.healthConsentRevision,
-        purpose: fitness ? 'sync' : 'rights-export',
+        purpose,
       }, 200);
     } catch {
       return reply({ error: 'unavailable' }, 503);

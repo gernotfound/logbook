@@ -418,7 +418,7 @@ service binding; they do not prove D1 runtime behavior.
 
 ## CF-05 candidate HTTP key boundary (not publicly deployed)
 
-The *same* candidate `cloudflare/api/worker.mjs` now dispatches two
+The *same* candidate `cloudflare/api/worker.mjs` dispatches three
 exact HTTPS same-origin POST routes with **empty request bodies**:
 
 - `/v1/cloud-key/sync`: requires a valid active session, current verified
@@ -426,6 +426,11 @@ exact HTTPS same-origin POST routes with **empty request bodies**:
   `AUTH_GATE`. The first key issuance is conditional on fresh empty D1
   sync state and a single durable issuance marker. A readback of the stored
   winner is required; an ambiguous SQL write is never an ACK.
+- `/v1/cloud-key/recovery-inspect`: requires the same verified, active,
+  CSRF-bound fitness session and independent recovery fence as `sync`, but
+  reads only the existing primary-issued ADK. Missing or inconsistent key
+  records fail closed without an INSERT or issuance; the distinct response
+  purpose restricts the client to retired-replica preflight, not sync.
 - `/v1/cloud-key/rights-export`: requires the same authenticated
   CSRF-bound session but may read the existing ADK after an authorized
   health-consent withdrawal with a pending/processing erasure job. It must

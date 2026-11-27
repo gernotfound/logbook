@@ -9,6 +9,7 @@ import { issueVerifiedSession } from '../../cloudflare/auth/session-issuer.mjs';
 export const ORIGIN = 'https://cf05-key-http.example.invalid';
 const KEK = Buffer.alloc(32, 91).toString('base64');
 export const SYNC = '/v1/cloud-key/sync';
+export const INSPECT = '/v1/cloud-key/recovery-inspect';
 export const RIGHTS = '/v1/cloud-key/rights-export';
 export const ACCEPT = {
   action: 'accept-initial', expectedRevision: 0,

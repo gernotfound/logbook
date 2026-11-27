@@ -16,6 +16,18 @@ avere le stesse revisioni, lo stesso epoch e registri di replica equivalenti.
 
 ### CF-04 — Bridge preflight autenticato, senza provisioning ADK (27/11/2026)
 
+Il wrapper candidato `inspectKindeCandidateRetiredReplicaWithExistingKey()`
+ottiene ora una ADK effimera esclusivamente da
+`POST /v1/cloud-key/recovery-inspect`. L'endpoint consulta la D1 primaria
+con i medesimi gate di sessione, email verificata, consenso corrente,
+CSRF e registro indipendente del fitness, ma **non esegue provisioning**:
+una chiave mancante fallisce senza creare un record o issuance. Il client
+mantiene il purpose separato da `sync` e `rights-export`, conserva l'ADK
+solo per il preflight e azzera il buffer anche in errore. Sessione,
+ricevuta legale e owner locale sono ricontrollati intorno alla lettura.
+Il wrapper non è montato in UI né nel frontend pubblico; non autorizza
+claim, nuovo actor, delivery, hydration o ACK e non completa SYNC-7D/7E.
+
 `inspectKindeCandidateRetiredReplicaPreflight()` collega l'osservazione
 causale a una sessione Kinde e a consenso trusted correnti, un vault device
 già esistente, due letture owner-bound identiche di `/v1/sync/control` e una
@@ -27,8 +39,8 @@ ADK autorizzata, e azzerarla dopo l'operazione**: il bridge non usa
 Nessuna mutazione business, nuovo actor, claim, ack, hydration o cambio
 membership passa da questo boundary. Anche un `baseline-unchanged` non
 autorizza recovery automatico e scade al primo cambio concorrente. Il
-bridge è candidato non montato in UI; restano SYNC-7D/7E e l'eventuale
-fornitura rigorosamente read-only di ADK nel flusso diagnostico.
+bridge è candidato non montato in UI; il wrapper sopra ne fornisce la chiave
+solo per il flusso diagnostico, mentre SYNC-7D/7E restano incompleti.
 
 Le due diagnosi read-only del rientro e del journal classificano una
 membership `active` come ancora eleggibile fino a cinque minuti dopo la
