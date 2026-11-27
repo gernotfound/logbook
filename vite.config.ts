@@ -77,7 +77,10 @@ export default defineConfig({
         swSrc: 'src/sw.ts',
         // The web manifest is added separately by the PWA plugin.
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        globIgnores: ['social-share.png'],
+        // The public guest/Kinde shell does not import these legacy SDK
+        // chunks. Keep them available online without installing them in
+        // every offline guest PWA cache.
+        globIgnores: ['social-share.png', '**/assets/firebase-*.js'],
       },
       manifest: {
         id: basePath,

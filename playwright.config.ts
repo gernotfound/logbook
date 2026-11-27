@@ -25,7 +25,7 @@ export default defineConfig({
     },
     {
       name: 'mobile-safari',
-      testMatch: /(accessibility|data-history-mobile|health-consent-suspended|secure-archive-device-key|refactoring-surfaces|domain-commit-multitab|guest-revocation|brand-loading-layout|public-legal|kinde-replica-recovery|kinde-training-cycles|kinde-workout-session|kinde-history-edit|kinde-foreground-activity|kinde-activity-(?:steps|cardio))\.spec\.ts/,
+      testMatch: /(accessibility|data-history-mobile|health-consent-suspended|secure-archive-device-key|refactoring-surfaces|domain-commit-multitab|guest-revocation|guest-network-isolation|brand-loading-layout|public-legal|kinde-replica-recovery|kinde-training-cycles|kinde-workout-session|kinde-history-edit|kinde-foreground-activity|kinde-activity-(?:steps|cardio))\.spec\.ts/,
       use: { ...devices['iPhone 13'] },
     },
   ],

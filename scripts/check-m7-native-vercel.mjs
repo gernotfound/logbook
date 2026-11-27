@@ -278,6 +278,9 @@ if (existsSync('dist/sw.js')) {
   if (!sw.includes('icon-maskable-512.png')) failures.push('generated service worker does not precache the dedicated maskable icon');
   if (!sw.includes('icon.svg')) failures.push('generated service worker does not precache the scalable icon');
   if (sw.includes('social-share.png')) failures.push('social share card should not be precached by the offline app shell');
+  if (/assets\/firebase-[^"`]+\.js/.test(sw)) {
+    failures.push('guest PWA precache must not download legacy Firebase SDK chunks');
+  }
   // Preserve the former Workbox orphan-asset assertions in the build-dependent
   // checker. They were previously conditional on dist/ existing in a stress job.
   for (const obsoleteAsset of ['icon-cropped.png', 'test_manichino.html', 'foods.ts']) {

@@ -4,7 +4,8 @@ import { expect, test } from '../fixtures';
 // are allowed; neither same-origin APIs nor external hosts are dependencies.
 function forbiddenGuestRequest(rawUrl: string, appOrigin: string): boolean {
   const url = new URL(rawUrl);
-  return url.origin !== appOrigin || /^\/(?:api|v1|__\/auth)(?:\/|$)/.test(url.pathname);
+  return url.origin !== appOrigin || /^\/(?:api|v1|__\/auth)(?:\/|$)/.test(url.pathname)
+    || /^\/assets\/firebase-[^/]+\.js$/.test(url.pathname);
 }
 
 // Keep query strings out of CI diagnostics: OAuth parameters may be sensitive.
@@ -22,6 +23,9 @@ test('guest network observer detects private routes and unlisted external hosts'
   expect(forbiddenGuestRequest('https://unlisted.example.test/pixel', origin)).toBe(true);
   expect(forbiddenGuestRequest('https://login.kinde.com/', origin)).toBe(true);
   expect(forbiddenGuestRequest(origin + '/assets/index.js', origin)).toBe(false);
+  expect(forbiddenGuestRequest(origin + '/assets/firebase-auth-hash.js', origin)).toBe(true);
+  expect(forbiddenGuestRequest(origin + '/assets/firebase-firestore-hash.js', origin)).toBe(true);
+  expect(forbiddenGuestRequest(origin + '/assets/firebase-hash.js', origin)).toBe(true);
   expect(forbiddenGuestRequest(origin + '/', origin)).toBe(false);
 });
 
