@@ -45,6 +45,13 @@ function environment(overrides = {}) {
   };
   return { calls, env: { APP_ORIGIN: ORIGIN, KINDE_HTTP, D1_API, ...overrides } };
 }
+function privateApiRequest(body, headers = {}) {
+  return new Request(privateOrigin + CONTROL, {
+    method: 'POST',
+    headers: { origin: privateOrigin, 'content-type': 'application/json', ...headers },
+    body, duplex: 'half',
+  });
+}
 
 void test('candidate gateway is not a generic proxy or an SPA fallback', async () => {
   const { env, calls } = environment();
@@ -192,6 +199,120 @@ void test('private handlers reject actual excess bytes with absent or forged Con
     assert.deepEqual(await response.json(), { error: 'payload-too-large' });
   }
   assert.equal(reachedApi, 2);
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts').get().n, 0);
+}));
+
+void test('private JSON body reader times out a stalled stream and does not await cancellation', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  await withFixture(async db => {
+    let beginPull;
+    let observeCancel;
+    const pulling = new Promise(resolve => { beginPull = resolve; });
+    const cancelled = new Promise(resolve => { observeCancel = resolve; });
+    const body = new ReadableStream({
+      pull() {
+        beginPull();
+        return new Promise(() => {});
+      },
+      cancel() {
+        observeCancel();
+        return new Promise(() => {});
+      },
+    }, { highWaterMark: 0 });
+    const responsePromise = apiWorker.fetch(privateApiRequest(body), makeEnv(db));
+    await pulling;
+    t.mock.timers.tick(2_000);
+    const response = await responsePromise;
+    assert.equal(response.status, 408);
+    assert.deepEqual(await response.json(), { error: 'request-body-timeout' });
+    await cancelled;
+    assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
+    assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts').get().n, 0);
+  });
+});
+
+void test('private JSON body reader applies its total deadline to a progressing stream', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  await withFixture(async db => {
+    let beginPull;
+    let observeCancel;
+    let streamController;
+    let chunks = 0;
+    let settled = false;
+    const pulling = new Promise(resolve => { beginPull = resolve; });
+    const cancelled = new Promise(resolve => { observeCancel = resolve; });
+    const body = new ReadableStream({
+      start(controller) { streamController = controller; },
+      pull(controller) {
+        beginPull();
+        return new Promise(resolve => setTimeout(() => {
+          chunks += 1;
+          controller.enqueue(new Uint8Array([0x20]));
+          resolve();
+        }, 1_000));
+      },
+      cancel() {
+        observeCancel();
+        return new Promise(() => {});
+      },
+    }, { highWaterMark: 0 });
+    const responsePromise = apiWorker.fetch(privateApiRequest(body), makeEnv(db)).then(response => {
+      settled = true;
+      return response;
+    });
+    await pulling;
+    for (let second = 0; second < 15; second += 1) {
+      t.mock.timers.tick(1_000);
+      await new Promise(resolve => setImmediate(resolve));
+    }
+    if (!settled) streamController.error(new Error('test cleanup'));
+    const response = await responsePromise;
+    assert.equal(settled, true, 'the total deadline must fire before the next idle deadline');
+    assert.ok(chunks >= 5, 'the stream must continue making progress before timing out');
+    assert.equal(response.status, 408);
+    assert.deepEqual(await response.json(), { error: 'request-body-timeout' });
+    await cancelled;
+    assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
+    assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts').get().n, 0);
+  });
+});
+
+void test('private JSON body reader cancels oversized streams without awaiting cancellation', () => withFixture(async db => {
+  let observeCancel;
+  const cancelled = new Promise(resolve => { observeCancel = resolve; });
+  const body = new ReadableStream({
+    start(controller) { controller.enqueue(new Uint8Array(129)); },
+    cancel() {
+      observeCancel();
+      return new Promise(() => {});
+    },
+  });
+  const response = await apiWorker.fetch(privateApiRequest(body), makeEnv(db));
+  assert.equal(response.status, 413);
+  assert.deepEqual(await response.json(), { error: 'payload-too-large' });
+  await cancelled;
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts').get().n, 0);
+}));
+
+void test('private JSON body reader maps stream errors and accepts a valid streamed request', () => withFixture(async db => {
+  const validBody = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('{}'));
+      controller.close();
+    },
+  });
+  const valid = await apiWorker.fetch(privateApiRequest(validBody), makeEnv(db));
+  assert.equal(valid.status, 200);
+  assert.equal((await valid.json()).revision, 0);
+
+  const failedBody = new ReadableStream({
+    start(controller) { controller.error(new Error('synthetic body read failure')); },
+  });
+  const failed = await apiWorker.fetch(privateApiRequest(failedBody), makeEnv(db));
+  assert.equal(failed.status, 503);
+  assert.deepEqual(await failed.json(), { error: 'cloud-unavailable' });
   assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts').get().n, 0);
 }));

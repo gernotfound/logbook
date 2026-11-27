@@ -18,6 +18,11 @@ import {
   readReplicaMutationReceipt, readReplicaMutationOutcome, fenceUncommittedReplicaMutation, writeReplicaMutation,
 } from './replica-maintenance.mjs';
 
+const BODY_READ_IDLE_TIMEOUT_MS = 2_000; // Matches the existing bounded body-reader budget.
+// This matches the browser cloud API request budget; Cloudflare has no hard
+// duration limit for an HTTP Worker while its client remains connected.
+const BODY_READ_TIMEOUT_MS = 15_000;
+
 function reply(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status, headers: {
@@ -45,16 +50,38 @@ async function jsonBounded(request, maxBytes) {
   if (!request.body) throw new BadInput('invalid-json', 400);
   const reader = request.body.getReader();
   const parts = [];
+  let totalTimer;
+  let complete = false;
   let size = 0;
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > maxBytes) {
-      await reader.cancel().catch(() => {});
-      throw new BadInput('payload-too-large', 413);
+  const timedOut = Symbol('request-body-timeout');
+  const totalDeadline = new Promise(resolve => {
+    totalTimer = setTimeout(() => resolve(timedOut), BODY_READ_TIMEOUT_MS);
+  });
+  try {
+    while (true) {
+      let idleTimer;
+      const idleDeadline = new Promise(resolve => {
+        idleTimer = setTimeout(() => resolve(timedOut), BODY_READ_IDLE_TIMEOUT_MS);
+      });
+      let next;
+      try {
+        next = await Promise.race([reader.read(), totalDeadline, idleDeadline]);
+      } finally {
+        clearTimeout(idleTimer);
+      }
+      if (next === timedOut) throw new BadInput('request-body-timeout', 408);
+      if (next.done) {
+        complete = true;
+        break;
+      }
+      size += next.value.byteLength;
+      if (size > maxBytes) throw new BadInput('payload-too-large', 413);
+      parts.push(next.value);
     }
-    parts.push(value);
+  } finally {
+    clearTimeout(totalTimer);
+    if (complete) reader.releaseLock();
+    else void reader.cancel().catch(() => {});
   }
   const bytes = new Uint8Array(size);
   let offset = 0;
