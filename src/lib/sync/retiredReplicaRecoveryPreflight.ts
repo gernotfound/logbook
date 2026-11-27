@@ -20,7 +20,8 @@ type RetiredReplicaDivergenceEvidence = Readonly<{
 export type RetiredReplicaRecoveryPreflight =
     | { kind: 'baseline-unchanged'; pendingOperations: number; cloudRevision: number }
     | { kind: 'reconciliation-required'; reason:
-        'no-pending' | 'transition' | 'no-old-replica' | 'replica-active' | 'possible-lost-ack'
+        'no-pending' | 'transition' | 'no-old-replica' | 'unverifiable-lineage'
+        | 'replica-active' | 'possible-lost-ack'
         | 'local-replay-diverged' }
     | { kind: 'reconciliation-required'; reason: 'cloud-diverged'; evidence: RetiredReplicaDivergenceEvidence };
 
@@ -165,16 +166,23 @@ export function preflightRetiredReplicaRecovery(
         mutation: { slot: previous.slot, action: 'checkpoint' },
     });
     const entry = parsed.replicas[previous.slot];
-    const sameIncarnation = entry?.replicaId === previous.replicaId
+    // A recorded incarnation must have a monotone successor in the same
+    // slot. Missing or contradictory lineage cannot rule out an old commit,
+    // even if the remote business baseline is still identical.
+    if (!entry || entry.generation < previous.generation
+        || (entry.generation === previous.generation && entry.replicaId !== previous.replicaId)) {
+        return { kind: 'reconciliation-required', reason: 'unverifiable-lineage' };
+    }
+    const sameIncarnation = entry.replicaId === previous.replicaId
         && entry.generation === previous.generation;
-    if (sameIncarnation && entry && isReplicaMembershipEligible(entry, nowMs)) {
+    if (sameIncarnation && isReplicaMembershipEligible(entry, nowMs)) {
         return { kind: 'reconciliation-required', reason: 'replica-active' };
     }
     // D1 inherits lastSeq when a slot is reused. Even a NEW generation with
     // an overlapping sequence cannot disprove a lost ACK from its predecessor:
     // the counter alone identifies neither the committed incarnation nor its
     // immutable body. Only a content-bound receipt can close that journal.
-    if (entry && local.pending.some(op => op.seq <= entry.lastSeq)) {
+    if (local.pending.some(op => op.seq <= entry.lastSeq)) {
         return { kind: 'reconciliation-required', reason: 'possible-lost-ack' };
     }
 

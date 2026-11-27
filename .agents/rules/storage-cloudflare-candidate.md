@@ -94,8 +94,13 @@ reinterpretarlo. Una sequenza pendente già coperta dal `lastSeq` dello **slot**
 segnala possibile ACK perso anche se lo slot ora contiene una generazione
 successiva: D1 conserva il contatore monotono al riuso, che da solo non
 attesta quale incarnazione abbia consegnato l'operazione. Senza ricevuta
-hash-bound non si può eliminare o riattribuire il journal. Baseline
-divergente, documento extra/mancante, metadato avanzato anche con stesso
+hash-bound non si può eliminare o riattribuire il journal. Una baseline
+cloud invariata senza una voce di slot, con generazione regredita o
+stessa generazione ma replicaId differente non prova neppure la continuità
+del contatore: il preflight restituisce `unverifiable-lineage`, conserva
+le pending e non presenta la situazione come candidata al trasferimento.
+Il percorso rimane di sola lettura. Una baseline divergente, un documento
+extra/mancante o metadato avanzato anche con stesso
 valore business (ABA), transizione pendente o replay locale incongruente
 richiedono riconciliazione separata. `baseline-unchanged` è soltanto
 un'osservazione di preflight: non autorizza una nuova identità causale, un

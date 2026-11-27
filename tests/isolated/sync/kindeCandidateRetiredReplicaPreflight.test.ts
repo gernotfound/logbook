@@ -155,6 +155,19 @@ describe('Kinde candidate: authenticated retired replica preflight', () => {
         expect(await get(storage)).toBe(sealed);
     });
 
+    it('preserves the encrypted journal when authenticated D1 control contradicts replica lineage', async () => {
+        const sealed = await get(storage);
+        const contradictory = control();
+        contradictory.replicas.s03.replicaId = 'another-id-with-same-generation';
+        const send = network({ before: contradictory });
+        await expect(inspect(send)).resolves.toEqual({
+            kind: 'reconciliation-required', reason: 'unverifiable-lineage',
+        });
+        expect(await get(storage)).toBe(sealed);
+        expect(vi.mocked(send).mock.calls.map(([input]) => String(input)))
+            .toEqual(expect.not.arrayContaining(['/v1/sync/commit', '/v1/replica/claim']));
+    });
+
     it('fails closed for cloud control drift, corrupt AEAD or a local edit during scan', async () => {
         const sealed = await get(storage);
         await expect(inspect(network({ before: { ...control(), uid: 'another-owner' } })))

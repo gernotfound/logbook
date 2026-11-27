@@ -195,6 +195,22 @@ describe('candidate-only replica registry presentation', () => {
         expect(inspectKindeCandidateRetiredReplicaWithExistingKey).toHaveBeenCalledTimes(2);
     });
 
+    it('shows unverifiable lineage as a blocker without proposing a causal transfer', async () => {
+        authenticated();
+        vi.mocked(inspectKindeCandidateOfflineReplicaJournal).mockResolvedValue({
+            kind: 'retired-pending', slot: 's04', generation: 2, reason: 'missing', pendingOperations: 1,
+        });
+        vi.mocked(inspectKindeCandidateRetiredReplicaWithExistingKey).mockResolvedValue({
+            kind: 'reconciliation-required', reason: 'unverifiable-lineage',
+        });
+        render(<KindeAccountEntry candidateMode="preparation" />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Controlla modifiche offline su questo dispositivo' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Analizza la copia cloud e i possibili conflitti' }));
+        await screen.findByText(/il registro non conserva una storia coerente della replica originale/);
+        expect(screen.queryByText(/la copia remota corrispondeva alla base/)).toBeNull();
+        expect(screen.getByText(/nessun ACK, claim, scelta di conflitto o riattribuzione/)).toBeTruthy();
+    });
+
     it('does not publish a causal diagnosis after a session cookie rotation', async () => {
         authenticated();
         vi.mocked(inspectKindeCandidateOfflineReplicaJournal).mockResolvedValue({

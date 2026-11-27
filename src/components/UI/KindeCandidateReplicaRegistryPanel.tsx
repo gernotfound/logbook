@@ -226,6 +226,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
                         ? <p role="alert">La copia cloud è cambiata rispetto alla base locale. Sono stati osservati {recoveryState.result.evidence.changedCloudFieldStamps} stamp causali differenti, {recoveryState.result.evidence.pendingWithOverlappingCloudStamps} operazioni con possibili sovrapposizioni e {recoveryState.result.evidence.unclassifiedDocuments} documenti con divergenza non classificabile. Anche zero sovrapposizioni non dimostra che un recupero automatico sia sicuro.</p>
                         : <p role="alert">Il confronto non permette il recupero: {recoveryState.result.reason === 'possible-lost-ack' ? 'potrebbe esistere un invio già applicato senza conferma locale.'
                             : recoveryState.result.reason === 'replica-active' ? 'la replica originale è ancora eleggibile nel registro.'
+                                : recoveryState.result.reason === 'unverifiable-lineage' ? 'il registro non conserva una storia coerente della replica originale: non è possibile escludere invii precedenti.'
                                 : recoveryState.result.reason === 'transition' ? 'esiste una richiesta o consegna cifrata da riconciliare.'
                                     : recoveryState.result.reason === 'local-replay-diverged' ? 'il journal non riproduce esattamente lo stato locale.'
                                         : recoveryState.result.reason === 'no-old-replica' ? 'manca un’identità causale originale verificabile.'
