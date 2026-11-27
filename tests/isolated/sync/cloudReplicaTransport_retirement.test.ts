@@ -3,7 +3,7 @@ import { CloudReplicaMutationReconciliationRequiredError, CloudReplicaTransportE
 
 describe('Cloudflare transport: durable retirement and stale receipt', () => {
     it('validates a retirement receipt before allowing a future local checkpoint', async () => {
-        const control = { revision: 8, fenceEpoch: 3, consentRevision: 1, replicas: {} };
+        const control = { uid: 'owner-fixture', revision: 8, fenceEpoch: 3, consentRevision: 1, replicas: {} };
         const id = 'mutation0000000100';
         const target = { slot: 's00', replicaId: 'retiring-device', generation: 2 };
         const retirement = { mutationId: id, action: 'retire', revision: 9,
@@ -88,7 +88,7 @@ describe('Cloudflare transport: durable retirement and stale receipt', () => {
         const transport = createCloudflareReplicaTransport(vi.fn(async () =>
             new Response(JSON.stringify(old))) as typeof fetch);
         await expect(transport.retireExpiredReplica({
-            revision: 2, fenceEpoch: 3, consentRevision: 1, replicas: {},
+            uid: 'owner-fixture', revision: 2, fenceEpoch: 3, consentRevision: 1, replicas: {},
         }, target, old.mutationId, 'csrf'))
             .rejects.toBeInstanceOf(CloudReplicaMutationReconciliationRequiredError);
     });

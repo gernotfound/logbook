@@ -51,9 +51,9 @@ export async function stageCloudflareReplicaClaim(
     guard: Guard,
     expectedLocalRevision?: number,
 ): Promise<CloudflareReplicaClaimIntent> {
-    const { owner } = account(ownerInput);
+    const { owner, uid } = account(ownerInput);
     current(guard);
-    if (verified.revision !== control.revision || verified.fenceEpoch !== control.fenceEpoch
+    if (control.uid !== uid || verified.revision !== control.revision || verified.fenceEpoch !== control.fenceEpoch
         || verified.consentRevision !== control.consentRevision) {
         throw new Error('Snapshot claim D1 obsoleto: journal preservato.');
     }
@@ -141,7 +141,7 @@ async function rebaseUncommittedClaim(
 
     const control = await transport.control();
     current(guard);
-    if (control.revision !== outcome.currentRevision
+    if (control.uid !== uid || control.revision !== outcome.currentRevision
         || control.revision <= intent.expectedRevision
         || control.fenceEpoch !== intent.expectedFenceEpoch
         || control.consentRevision !== intent.consentRevision) return 'reconciliation-required';
@@ -220,7 +220,7 @@ export async function resumeCloudflareReplicaClaim(
     // A receipt proves the original request but NOT what is currently in D1.
     const control = await transport.control();
     current(guard);
-    if (control.revision < receipt.currentRevision
+    if (control.uid !== uid || control.revision < receipt.currentRevision
         || control.fenceEpoch !== intent.expectedFenceEpoch
         || control.consentRevision !== intent.consentRevision) {
         return 'reconciliation-required';

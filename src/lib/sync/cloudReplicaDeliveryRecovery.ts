@@ -54,7 +54,7 @@ export async function restageUncommittedCloudflareDelivery(
     const member = control.replicas[original.replica.slot];
     const firstSeq = original.operations.reduce((minimum, operation) =>
         Math.min(minimum, operation.seq), Number.POSITIVE_INFINITY);
-    if (control.revision !== proof.currentRevision
+    if (control.uid !== uid || control.revision !== proof.currentRevision
         || control.revision <= original.batch.expectedRevision
         || control.fenceEpoch !== original.batch.expectedFenceEpoch
         || control.consentRevision !== original.batch.consentRevision

@@ -46,6 +46,20 @@ export function registerCandidateJournalRebaseCases({
         expect((await readLocal(owner))!.pending).toEqual([]);
     });
 
+    it('keeps the sealed delivery if a non-commit proof is followed by a foreign control', async () => {
+        const setup = await savedDelivery();
+        const { control } = changedRemote(setup);
+        const remote = transport(setup.control, setup.snapshot);
+        remote.commit.mockRejectedValueOnce(new CloudReplicaTransportError(409));
+        remote.commitOutcome.mockResolvedValueOnce({ outcome: 'not-committed', currentRevision: control.revision });
+        remote.control.mockResolvedValue({ ...control, uid: 'other-owner' });
+        const bytes = await get(storeKey);
+        await expect(deliverCloudflareJournalCandidate(owner, adk, remote, 'csrf-session', () => true))
+            .resolves.toBe('reconciliation-required');
+        expect(remote.scanAll).not.toHaveBeenCalled();
+        expect(await get(storeKey)).toBe(bytes);
+    });
+
     it('preserves new edits made by another tab during recovery', async () => {
         const setup = await savedDelivery();
         const oldIntent = (await readLocal(owner))!.cloudflareDelivery;

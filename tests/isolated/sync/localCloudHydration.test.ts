@@ -113,7 +113,7 @@ describe('diagnostic cloud hydration through the encrypted local archive', () =>
             'a', accountKey, 1, () => true,
         );
         await stageCloudflareReplicaClaim(owner, verified,
-            { revision: 0, fenceEpoch: 5, consentRevision: 1, replicas: {} },
+            { uid: 'a', revision: 0, fenceEpoch: 5, consentRevision: 1, replicas: {} },
             'hydration-candidate-device', () => true, original.revision);
         const staged = await snapshot();
         expect(staged.cloudflareReplicaClaim).toBeDefined();

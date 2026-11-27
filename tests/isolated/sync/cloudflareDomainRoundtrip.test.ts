@@ -90,7 +90,7 @@ function syntheticHttpReplica(identity: ReplicaIdentity) {
         if (route === 'control') {
             const committed = state.committed;
             return json({
-                revision: state.revision, fenceEpoch: state.fenceEpoch,
+                uid, revision: state.revision, fenceEpoch: state.fenceEpoch,
                 consentRevision: state.consentRevision,
                 replicas: {
                     [identity.slot]: {

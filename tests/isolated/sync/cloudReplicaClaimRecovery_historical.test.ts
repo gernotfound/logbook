@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { owner, storage, key, data, prepare, transport } from './cloudReplicaClaimRecoveryFixture';
+import { owner, uid, storage, key, data, prepare, transport } from './cloudReplicaClaimRecoveryFixture';
 import { get } from 'idb-keyval';
 import { resumeCloudflareReplicaClaim } from '../../../src/lib/sync/cloudReplicaClaimRecovery';
 import { CloudReplicaMutationReconciliationRequiredError, CloudReplicaTransportError } from '../../../src/lib/sync/cloudReplicaTransport';
@@ -14,7 +14,7 @@ describe('D1 claim: historical receipt and concurrent intent safety', () => {
         remote.claimMutationOutcome.mockResolvedValueOnce({
             outcome: 'not-committed', currentRevision: 2,
         });
-        const control = { revision: 2, fenceEpoch: 5, consentRevision: 1, replicas: {} };
+        const control = { uid, revision: 2, fenceEpoch: 5, consentRevision: 1, replicas: {} };
         remote.control.mockResolvedValueOnce(control).mockImplementationOnce(async () => {
             await updateArchiveRecord<unknown>(owner, raw => ({
                 ...(raw as Record<string, unknown>),
@@ -79,7 +79,7 @@ describe('D1 claim: historical receipt and concurrent intent safety', () => {
             }),
         );
         remote.control.mockImplementation(async () => ({
-            revision: 2, fenceEpoch: 5, consentRevision: 1,
+            uid, revision: 2, fenceEpoch: 5, consentRevision: 1,
             replicas: {
                 s01: { ...remote.replica, lastSeq: 0, status: 'active' as const,
                     checkpointClock: { s00: 1 } },

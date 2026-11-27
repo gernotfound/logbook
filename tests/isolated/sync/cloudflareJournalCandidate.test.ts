@@ -66,7 +66,7 @@ async function seed() {
     const local = await readLocal(owner);
     if (!local || local.pending.length === 0) throw new Error('Test journal missing');
     const control: CloudReplicaControlSnapshot = {
-        revision: 0, fenceEpoch: 5, consentRevision: 1,
+        uid: owner.slice(5), revision: 0, fenceEpoch: 5, consentRevision: 1,
         replicas: { s00: { ...replica, lastSeq: 0, status: 'active', checkpointClock: {} } },
     };
     const snapshot: CloudReplicaSnapshot = {
