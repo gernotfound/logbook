@@ -34,7 +34,13 @@ void test('first-party diagnostic is an inert, noindex, password-free OAuth laun
   assert.match(script, /logout.addEventListener/);
   assert.match(script, /document.cookie/);
   assert.match(page, /id="session-result" role="status" aria-live="polite"/);
-  assert.match(page, /la sessione viene verificata senza usare Firebase/);
+  assert.match(page, /reindirizzato alla pagina iniziale della PWA/);
+  assert.match(page, /verificare la sessione senza usare Firebase/);
+  assert.match(page, /ospite con dati salvati sul dispositivo/);
+  assert.match(page, /le funzioni fitness dell'account Cloudflare\/Kinde restano disabilitate/);
+  assert.doesNotMatch(page, /La normale PWA utilizza ancora Firebase/);
+  assert.doesNotMatch(script, /La PWA e i dati salute rimangono disabilitati/);
+  assert.match(script, /Nessuna sessione applicativa TheLogBook attiva/);
   assert.match(script, /check\.addEventListener\('click', \(\) => \{ void verify\(\); \}\);/);
   assert.match(script, /void verify\(\);/);
   assert.doesNotMatch(script, /identitytoolkit|firebase\/auth|window\.location\s*=/);
