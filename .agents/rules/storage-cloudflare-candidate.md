@@ -30,6 +30,12 @@ autorizza recovery automatico e scade al primo cambio concorrente. Il
 bridge è candidato non montato in UI; restano SYNC-7D/7E e l'eventuale
 fornitura rigorosamente read-only di ADK nel flusso diagnostico.
 
+Le due diagnosi read-only del rientro e del journal classificano una
+membership `active` come ancora eleggibile fino a cinque minuti dopo la
+scadenza nominale del lease, come il selettore D1 e i trigger di capienza.
+Questo margine **non** estende il permesso del writer client di inviare
+operazioni dopo la scadenza nominale, né costituisce prova di ACK.
+
 ### CF-04 — Preflight causale del rientro, nessuna scrittura (27/11/2026)
 
 `preflightRetiredReplicaRecovery()` è un controllo puro **successivo** alla
