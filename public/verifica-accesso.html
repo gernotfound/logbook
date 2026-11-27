@@ -26,14 +26,14 @@
 </section>
 <section aria-labelledby="controlla">
 <h2 id="controlla">2. Controlla la sessione</h2>
-<p>Dopo il ritorno automatico da Kinde a questa pagina, la sessione viene verificata senza usare Firebase. Puoi ripetere il controllo in qualsiasi momento. Non inserire credenziali in questa pagina.</p>
+<p>Dopo l'accesso Kinde verrai reindirizzato alla pagina iniziale della PWA. Puoi tornare qui per verificare la sessione senza usare Firebase. Non inserire credenziali in questa pagina.</p>
 <div class="actions"><button type="button" id="check-session">Verifica sessione Kinde</button><button type="button" id="end-session" hidden>Termina sessione TheLogBook</button></div>
 <p id="session-result" role="status" aria-live="polite">Verifica della sessione in corso…</p>
 <p>La disconnessione termina soltanto la sessione applicativa D1. Non chiude la sessione SSO Kinde né cancella i dati locali.</p>
 </section>
 <section aria-labelledby="limiti">
 <h2 id="limiti">Limiti del collaudo</h2>
-<p>Una sessione riconosciuta prova soltanto l'accesso applicativo. Registrazione, verifica email, Google e reset password richiedono collaudi separati. La normale PWA utilizza ancora Firebase: non aprire i suoi moduli di registrazione durante questo collaudo. Il passaggio completo del frontend a Cloudflare/Kinde non è ancora terminato.</p>
+<p>Una sessione verificata prova soltanto l'identità. La PWA pubblica permette di proseguire come ospite con dati salvati sul dispositivo oppure di accedere con Kinde; le funzioni fitness dell'account Cloudflare/Kinde restano disabilitate. Registrazione, verifica email, Google e reset password richiedono collaudi separati.</p>
 </section>
 </main><footer class="foot"><span>TheLogBook · Diagnostica temporanea</span><a href="/privacy">Informativa sulla privacy</a></footer>
 </div>

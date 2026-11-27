@@ -127,8 +127,8 @@ if (typeof document !== 'undefined') {
       try {
         const state = await probeKindeSession();
         const messages = {
-          verified: 'Sessione Kinde verificata. La PWA e i dati salute rimangono disabilitati per questo account.',
-          'signed-out': 'Nessuna sessione Kinde attiva in questo browser.',
+          verified: 'Sessione Kinde verificata. Le funzioni fitness dell’account restano disabilitate fino al collaudo completo.',
+          'signed-out': 'Nessuna sessione applicativa TheLogBook attiva in questo browser.',
           unavailable: 'Impossibile confermare la sessione. Nessun accesso ai dati è stato autorizzato.',
         };
         result.textContent = messages[state];
