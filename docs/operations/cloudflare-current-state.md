@@ -1,5 +1,20 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
+**Ultimo readback frontend, 27/11/2026:** [PR #1489](https://github.com/gernotfound/logbook/pull/1489)
+integrata in [`main` `929b5145`](https://github.com/gernotfound/logbook/commit/929b5145c09d90f4a34b4446a9e2e68b6bdeb055),
+v2.752.0. [CI PR](https://github.com/gernotfound/logbook/actions/runs/46011831581),
+[gate main](https://github.com/gernotfound/logbook/actions/runs/46012414991) e
+[Static Assets/smoke](https://github.com/gernotfound/logbook/actions/runs/46012820226)
+`success`. Readback provider: deployment `d6fda4be-ccca-45ec-b38a-9b571ad96376`,
+versione `a673718a-ba53-4f3c-9960-8bf6b50876b3` al 100%; soli binding
+`APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`, **nessun `D1_API`**. Worker API e Kinde
+privati senza nuovo deploy; Firestore senza deploy Rules/indici. La PR ha
+aggiunto il controllo read-only del journal offline delle repliche ritirate,
+ma non un replay né un recovery. Il preflight causale successivo, descritto
+in [contratto candidato](../../.agents/rules/storage-cloudflare-candidate.md),
+non abilita sincronizzazione, fitness pubblico o GO multi-device. Evidenze
+e residui in [CF-04 #1058](https://github.com/gernotfound/logbook/issues/1058).
+
 **Readback CF-03 più recente, 27/11/2026:** la diagnostica Kinde della
 [PR #1485](https://github.com/gernotfound/logbook/pull/1485) è integrata in
 [`main` `6cd970fd`](https://github.com/gernotfound/logbook/commit/6cd970fd91491779d55016faaafe57fb15caf9b6),
