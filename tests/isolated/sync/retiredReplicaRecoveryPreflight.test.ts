@@ -185,6 +185,19 @@ describe('retired replica recovery preflight, no mutation or new causal identity
             .toEqual({ kind: 'reconciliation-required', reason: 'possible-lost-ack' });
     });
 
+    it('keeps lost-ACK uncertainty after a slot is reused with an inherited sequence', async () => {
+        const local = (await readLocal(owner))!;
+        const sealed = await get(storageKey);
+        const cloud = await checkpoint();
+        for (const status of ['active', 'retired'] as const) {
+            expect(preflightRetiredReplicaRecovery(uid, local, cloud, control({
+                replicaId: 'new-device', generation: replica.generation + 1,
+                status, lastSeq: local.pending[0].seq,
+            }), catalog)).toEqual({ kind: 'reconciliation-required', reason: 'possible-lost-ack' });
+        }
+        expect(await get(storageKey)).toBe(sealed);
+    });
+
     it('respects the D1 membership grace at the nominal lease boundary without permitting replay', async () => {
         const local = (await readLocal(owner))!;
         const cloud = await checkpoint();
