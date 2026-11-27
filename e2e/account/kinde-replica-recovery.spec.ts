@@ -2,6 +2,55 @@ import { expect, test } from '../fixtures';
 import { loadKindeReplica, mountKindePlanning, withKindeReplicaDevices } from './kindeReplicaFixture';
 import type { DomainOperation } from '../../src/lib/sync/domainOperations';
 
+test('enforces four, five and six independent Kinde browser replicas, including a refused retry after reload', async ({ browser }) => {
+    test.setTimeout(90_000);
+    await withKindeReplicaDevices(browser, async ({
+        first, second, additionalDevice, replicaCount, mutationCount, receipts, allowFirstCommit,
+    }) => {
+        allowFirstCommit();
+        expect(replicaCount()).toBe(2);
+        expect(mutationCount()).toBe(2);
+
+        const third = await additionalDevice();
+        await loadKindeReplica(third);
+        expect(replicaCount()).toBe(3);
+        const fourth = await additionalDevice();
+        await loadKindeReplica(fourth);
+        expect(replicaCount()).toBe(4);
+        const fifth = await additionalDevice();
+        await loadKindeReplica(fifth);
+        expect(replicaCount()).toBe(5);
+
+        const registrations = mutationCount();
+        expect(registrations).toBe(5);
+        const sixth = await additionalDevice();
+        await expect(loadKindeReplica(sixth)).rejects.toThrow('Limite di cinque repliche attive');
+        expect(replicaCount()).toBe(5);
+        expect(mutationCount()).toBe(registrations);
+        expect(await sixth.evaluate(() => window.kindeReplicaFixture)).toBeUndefined();
+
+        // A failed registration is not a membership grant. Reload and retry
+        // must not quietly consume another slot or commit a new mutation.
+        await sixth.reload();
+        await expect(loadKindeReplica(sixth)).rejects.toThrow('Limite di cinque repliche attive');
+        expect(replicaCount()).toBe(5);
+        expect(mutationCount()).toBe(registrations);
+
+        // Existing profiles retain their lease and can still exchange an
+        // actual ciphertext-bound business receipt after the refusal.
+        expect(await second.evaluate(() => window.kindeReplicaFixture!.submit({
+            type: 'profile.patch', patch: { height: '181' },
+        }))).toEqual({ kind: 'cloud-acknowledged', operations: 1 });
+        expect(await fifth.evaluate(async () => (await window.kindeReplicaFixture!.refresh()).data.profile?.height))
+            .toBe('181');
+        expect(await first.evaluate(async () => (await window.kindeReplicaFixture!.refresh()).data.profile?.height))
+            .toBe('181');
+        expect(receipts()).toBe(1);
+        expect(replicaCount()).toBe(5);
+        expect(mutationCount()).toBe(registrations);
+    });
+});
+
 test('reads and deletes only the confirmed Kinde measurement, keeping meals and sleep on the other device', async ({ browser }) => {
     await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
         const date = '2026-10-17';
