@@ -87,12 +87,12 @@ describe('guest login overlay presentation only (useAuth mocked; not a Firebase 
         useAppStore.getState().setSyncing(false);
     });
 
-    it('shows the email-verification barrier before account views or navigation', () => {
+    it('shows the email-verification barrier before account views or navigation', async () => {
         authState.currentUser = { uid: 'pending-email' };
         authState.isGuest = false;
         authState.emailVerificationRequired = true;
         render(<App />);
-        expect(screen.getByRole('heading', { name: 'Verifica la tua email' })).toBeTruthy();
+        expect(await screen.findByRole('heading', { name: 'Verifica la tua email' })).toBeTruthy();
         expect(screen.queryByText('Home view')).toBeNull();
         expect(screen.queryByTestId('bottom-nav')).toBeNull();
         expect(screen.getByTestId('global-dialog')).toBeTruthy();
