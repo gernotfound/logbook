@@ -1,6 +1,29 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
-**Ultimo readback frontend verificato, 27/11/2026, dopo CF-04 #1502:**
+**Ultimo readback frontend verificato, 27/11/2026, dopo CF-04 #1504:**
+la [PR #1504](https://github.com/gernotfound/logbook/pull/1504),
+v2.766.0, è integrata con squash in
+[`main` `af5f309c`](https://github.com/gernotfound/logbook/commit/af5f309c92a3610c87c066d3d91d6b355d208d4a),
+tree `37f842f815062b328e45cf7dd29cc2f32efbdce0` identico al candidato.
+[CI PR exact-SHA, Canonical e CodeQL](https://github.com/gernotfound/logbook/actions/runs/46055626658),
+[Main Release Gate e CodeQL](https://github.com/gernotfound/logbook/actions/runs/46056072866)
+e [Static Assets con smoke HTTPS](https://github.com/gernotfound/logbook/actions/runs/46056391188)
+sono `success`. Cloudflare riporta `thelogbook-frontend` deployment
+`45848b27-1b9d-4a19-a88f-f9558d499c00`, versione
+`e27cfa4c-01bf-49f3-81cf-994aea033bca` al 100%; binding
+`APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`, **senza `D1_API`**.
+[API D1 privata](https://github.com/gernotfound/logbook/actions/runs/46056391048)
+e [Kinde privato](https://github.com/gernotfound/logbook/actions/runs/46056391051)
+non hanno eseguito deploy;
+[Firestore](https://github.com/gernotfound/logbook/actions/runs/46056391288)
+non ha distribuito Rules/indici. Il test SQLite/D1 API copre una sequenza
+già confermata (2), ritiro, riuso con generazione 2, ricevuta storica,
+vecchio writer respinto e nuovo commit a sequenza 3. Non prova recovery
+effettivo di operazioni offline ancora pendenti, comportamento D1 live
+o conflitti tra dispositivi: SYNC-7D/7E e fitness Cloudflare **NO-GO**.
+Dettagli e residui in [CF-04 #1058](https://github.com/gernotfound/logbook/issues/1058).
+
+**Checkpoint frontend precedente, 27/11/2026, dopo CF-04 #1502:**
 la [PR #1502](https://github.com/gernotfound/logbook/pull/1502)
 (v2.764.0) è integrata in [`main` `a2d286cb`](https://github.com/gernotfound/logbook/commit/a2d286cba166eb84f11cdfdaffc2e3b46ff73719)
 con tree identico a quello del candidato. [CI PR exact-SHA, Canonical e
