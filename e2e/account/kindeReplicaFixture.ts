@@ -108,6 +108,8 @@ export async function withKindeReplicaDevices<T>(
         first: Page; second: Page; receipts: () => number;
         firstCommitStatuses: number[]; allowFirstCommit: () => void;
         beforeFirstDocumentRead: (action: () => Promise<void>) => void;
+        additionalDevice: () => Promise<Page>;
+        replicaCount: () => number; mutationCount: () => number;
     }) => Promise<T>,
     { planningUi = false, foregroundActivity = false }: { planningUi?: boolean; foregroundActivity?: boolean } = {},
 ): Promise<T> {
@@ -124,12 +126,20 @@ export async function withKindeReplicaDevices<T>(
         if (typeof count !== 'number') throw new Error('Receipt count unavailable');
         return count;
     };
+    const countRows = (table: 'sync_replicas' | 'sync_replica_mutations'): number => {
+        const count = fixture.count(table, uid);
+        if (typeof count !== 'number' || !Number.isSafeInteger(count)) {
+            throw new Error('Replica register count unavailable');
+        }
+        return count;
+    };
 
     try {
         await fixture.consent(uid);
         const firstCookies: string[] = (await issueVerifiedSession(fixture.db, uid)).setCookies;
         const secondCookies: string[] = (await issueVerifiedSession(fixture.db, uid)).setCookies;
         const firstSession = firstCookies[0].split(';')[0];
+        const sessions = new Map([['first', firstCookies], ['second', secondCookies]]);
         // Use Set-Cookie over actual loopback TLS so WebKit and Chromium apply
         // their own host-only Secure/HttpOnly rules. The synthetic sign-in is
         // invoked once per profile and never runs during archive recovery.
@@ -141,9 +151,11 @@ export async function withKindeReplicaDevices<T>(
             const url = new URL(incoming.url ?? '/', origin);
             if (url.origin !== origin) { outgoing.writeHead(400).end(); return; }
             if (incoming.method === 'GET') {
-                if (url.pathname === '/session/first' || url.pathname === '/session/second') {
+                const browserSession = url.pathname.startsWith('/session/')
+                    ? sessions.get(url.pathname.slice('/session/'.length)) : undefined;
+                if (browserSession) {
                     outgoing.writeHead(303, {
-                        'Set-Cookie': url.pathname === '/session/first' ? firstCookies : secondCookies,
+                        'Set-Cookie': browserSession,
                         Location: '/', 'Cache-Control': 'no-store',
                     }).end();
                 } else if (url.pathname === '/') {
@@ -191,7 +203,7 @@ export async function withKindeReplicaDevices<T>(
             const bytes = Buffer.from(await response.arrayBuffer());
             outgoing.writeHead(response.status, Object.fromEntries(response.headers)).end(bytes);
         });
-        async function createDevice(device: 'first' | 'second') {
+        async function createDevice(device: string) {
             const context = await browser.newContext({ serviceWorkers: 'block', ignoreHTTPSErrors: true });
             contexts.push(context);
             await context.route('**/*', route => new URL(route.request().url()).origin === listening.origin
@@ -211,6 +223,14 @@ export async function withKindeReplicaDevices<T>(
             first, second, receipts, firstCommitStatuses,
             allowFirstCommit: () => { refuseFirstCommit = false; },
             beforeFirstDocumentRead: action => { beforeFirstReads.push(action); },
+            additionalDevice: async () => {
+                const label = `additional-${sessions.size}`;
+                const cookies = (await issueVerifiedSession(fixture.db, uid)).setCookies;
+                sessions.set(label, cookies);
+                return createDevice(label);
+            },
+            replicaCount: () => countRows('sync_replicas'),
+            mutationCount: () => countRows('sync_replica_mutations'),
         });
     } finally {
         try { await Promise.all(contexts.map(context => context.close())); }
