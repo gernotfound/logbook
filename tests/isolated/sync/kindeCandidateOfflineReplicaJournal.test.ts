@@ -6,6 +6,7 @@ import { KindeCandidateBoundaryError } from '../../../src/lib/auth/kindeCandidat
 import { UserDataSchema } from '../../../src/lib/schema';
 import type { UserData } from '../../../src/types';
 import { inspectKindeCandidateOfflineReplicaJournal } from '../../../src/lib/sync/kindeCandidateOfflineReplicaJournal';
+import { REPLICA_CLOCK_SKEW_MARGIN_MS } from '../../../src/lib/sync/replicaProtocol';
 import { adoptReplicaCheckpoint, commitLocal, initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
 import { LocalVaultLockedError, lockAllVaults, unlockVaultForOwner, vaultControlKey } from '../../../src/lib/sync/secureArchiveSession';
@@ -105,7 +106,7 @@ describe('Kinde candidate: read-only retired replica journal inspection', () => 
     it.each([
         ['retired', control({ s04: membership('retired') }), 'retired'],
         ['replaced', control({ s04: { ...membership(), replicaId: 'new-device', generation: 3 } }), 'replaced'],
-        ['expired', control({ s04: { ...membership(), leaseUntilMs: Date.now() - 60000 } }), 'expired'],
+        ['expired', control({ s04: { ...membership(), leaseUntilMs: Date.now() - REPLICA_CLOCK_SKEW_MARGIN_MS - 60_000 } }), 'expired'],
         ['missing', control({}), 'missing'],
     ] as const)('recognizes %s without ACK, claim, ADK or modifying encrypted pending', async (_name, snapshot, reason) => {
         const original = await withOldPending();
@@ -128,6 +129,18 @@ describe('Kinde candidate: read-only retired replica journal inspection', () => 
         await expect(inspect(send)).resolves.toEqual({ kind: 'active-pending',
             slot: replica.slot, generation: replica.generation, pendingOperations: old.pending.length });
         expect(vi.mocked(send).mock.calls.filter(([path]) => String(path) === '/v1/sync/control')).toHaveLength(2);
+    });
+
+    it('preserves an active membership observation during the D1 skew grace', async () => {
+        const old = await withOldPending();
+        const sealed = await get(storage);
+        const nearExpiry = control({ s04: {
+            ...membership(), leaseUntilMs: Date.now() - 60_000,
+        } });
+        await expect(inspect(network({ snapshots: [nearExpiry, nearExpiry] })))
+            .resolves.toEqual({ kind: 'active-pending', slot: replica.slot,
+                generation: replica.generation, pendingOperations: old.pending.length });
+        expect(await get(storage)).toBe(sealed);
     });
 
     it('does not mistake a first claim or an empty journal for a retired replica', async () => {

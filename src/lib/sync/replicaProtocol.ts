@@ -30,6 +30,15 @@ export interface ReplicaControlEntry extends Omit<ReplicaIdentity, 'slot'> {
     checkpointClock: VectorClock;
 }
 
+// Membership/claim grace matches D1; it is not permission for a client
+// writer to send operations after its nominal lease has expired.
+export function isReplicaMembershipEligible(
+    entry: Pick<ReplicaControlEntry, 'status' | 'leaseUntilMs'>,
+    nowMs = Date.now(),
+): boolean {
+    return entry.status === 'active' && entry.leaseUntilMs + REPLICA_CLOCK_SKEW_MARGIN_MS >= nowMs;
+}
+
 export interface ReplicaControl {
     protocolVersion: 3;
     consentRevision?: number;

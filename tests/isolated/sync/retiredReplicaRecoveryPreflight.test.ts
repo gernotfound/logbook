@@ -10,6 +10,7 @@ import type { CloudReplicaControlSnapshot } from '../../../src/lib/sync/cloudRep
 import { projectDocuments } from '../../../src/lib/sync/documentProjection';
 import { adoptReplicaCheckpoint, commitLocal, initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
 import { preflightRetiredReplicaRecovery } from '../../../src/lib/sync/retiredReplicaRecoveryPreflight';
+import { REPLICA_CLOCK_SKEW_MARGIN_MS } from '../../../src/lib/sync/replicaProtocol';
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
 import { updateArchiveRecord } from '../../../src/lib/sync/secureArchiveRepository';
@@ -130,6 +131,26 @@ describe('retired replica recovery preflight, no mutation or new causal identity
         expect(preflightRetiredReplicaRecovery(uid, local, await checkpoint(),
             control({ lastSeq: local.pending[0].seq }), catalog))
             .toEqual({ kind: 'reconciliation-required', reason: 'possible-lost-ack' });
+    });
+
+    it('respects the D1 membership grace at the nominal lease boundary without permitting replay', async () => {
+        const local = (await readLocal(owner))!;
+        const cloud = await checkpoint();
+        const nowMs = Date.now();
+        for (const leaseUntilMs of [nowMs, nowMs - 60_000,
+            nowMs - REPLICA_CLOCK_SKEW_MARGIN_MS]) {
+            expect(preflightRetiredReplicaRecovery(uid, local, cloud,
+                control({ status: 'active', leaseUntilMs }), catalog, nowMs))
+                .toEqual({ kind: 'reconciliation-required', reason: 'replica-active' });
+        }
+        expect(preflightRetiredReplicaRecovery(uid, local, cloud, control({
+            status: 'active', leaseUntilMs: nowMs - REPLICA_CLOCK_SKEW_MARGIN_MS - 1,
+        }), catalog, nowMs)).toEqual({ kind: 'baseline-unchanged',
+            pendingOperations: local.pending.length, cloudRevision: 8 });
+        // An explicitly retired incarnation never inherits the active grace.
+        expect(preflightRetiredReplicaRecovery(uid, local, cloud, control({
+            status: 'retired', leaseUntilMs: nowMs + 60_000,
+        }), catalog, nowMs).kind).toBe('baseline-unchanged');
     });
 
     it('observes a replaced or missing incarnation only as a provisional unchanged baseline', async () => {

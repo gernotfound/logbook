@@ -5,7 +5,7 @@ import type { CloudReplicaControlSnapshot } from './cloudReplicaTransport';
 import { projectDocuments } from './documentProjection';
 import type { LocalEnvelope } from './localEnvelopeValidation';
 import { userOwner } from './owner';
-import { parseReplicaControl } from './replicaProtocol';
+import { isReplicaMembershipEligible, parseReplicaControl } from './replicaProtocol';
 import { applySemanticOperations, parseSyncMeta } from './semanticProjection';
 
 export type RetiredReplicaRecoveryPreflight =
@@ -51,7 +51,7 @@ export function preflightRetiredReplicaRecovery(
     const entry = parsed.replicas[previous.slot];
     const sameIncarnation = entry?.replicaId === previous.replicaId
         && entry.generation === previous.generation;
-    if (sameIncarnation && entry.status === 'active' && entry.leaseUntilMs > nowMs) {
+    if (sameIncarnation && entry && isReplicaMembershipEligible(entry, nowMs)) {
         return { kind: 'reconciliation-required', reason: 'replica-active' };
     }
     // A remote lastSeq from the original incarnation may cover a delivered

@@ -8,6 +8,7 @@ import { createCloudflareReplicaTransport, type CloudReplicaControlSnapshot } fr
 import { isKindeAccountLocalFitnessClear } from './kindeOwnerLocalFitnessFence';
 import { readLocal } from './localArchiveBootstrap';
 import { userOwner } from './owner';
+import { isReplicaMembershipEligible, type ReplicaControlEntry } from './replicaProtocol';
 import { unlockVaultForOwner } from './secureArchiveSession';
 
 type Confirmed = Extract<KindeCandidateAccess, { kind: 'consent-confirmed' }>;
@@ -78,7 +79,7 @@ export async function inspectKindeCandidateOfflineReplicaJournal({
             (sum, archive) => sum + archive.pending.length, 0,
         );
         let result: CandidateOfflineReplicaJournalObservation;
-        let activeLeaseUntilMs: number | null = null;
+        let observedActiveMembership: ReplicaControlEntry | null = null;
         if (local.cloudflareDelivery || local.cloudflareReplicaClaim || local.cloudflareReplicaRetirement
             || local.cloudflareReplicaCancellation) {
             result = { kind: 'transition-pending', pendingOperations: count };
@@ -108,8 +109,8 @@ export async function inspectKindeCandidateOfflineReplicaJournal({
             const reason = !entry ? 'missing' as const
                 : entry.replicaId !== replica.replicaId || entry.generation !== generation ? 'replaced' as const
                     : entry.status === 'retired' ? 'retired' as const
-                        : entry.leaseUntilMs <= Date.now() ? 'expired' as const : null;
-            if (!reason && entry) activeLeaseUntilMs = entry.leaseUntilMs;
+                        : !isReplicaMembershipEligible(entry) ? 'expired' as const : null;
+            if (!reason && entry) observedActiveMembership = entry;
             result = reason ? { kind: 'retired-pending', pendingOperations: count, slot, generation, reason }
                 : { kind: 'active-pending', pendingOperations: count, slot, generation };
         }
@@ -119,8 +120,8 @@ export async function inspectKindeCandidateOfflineReplicaJournal({
         const last = await readKindeCandidateAccess({ ...request, stillCurrent: scoped });
         if (!scoped()) throw new KindeCandidateBoundaryError();
         checkAccess(last, first.legalConsent);
-        if (result.kind === 'active-pending' && activeLeaseUntilMs !== null
-            && activeLeaseUntilMs <= Date.now()) {
+        if (result.kind === 'active-pending' && observedActiveMembership
+            && !isReplicaMembershipEligible(observedActiveMembership)) {
             return { ...result, kind: 'retired-pending', reason: 'expired' };
         }
         return result;
