@@ -30,6 +30,7 @@ const ROUTES = Object.freeze({
   '/v1/sync/replica/status': withBodyCap(FITNESS_WRITE, 4_096),
   '/v1/sync/replica/cancel': withBodyCap(FITNESS_WRITE, 4_096),
   '/v1/cloud-key/sync': withBodyCap(FITNESS_WRITE, 0),
+  '/v1/cloud-key/recovery-inspect': withBodyCap(FITNESS_WRITE, 0),
   '/v1/consent/status': withBodyCap(IDENTITY_READ, 0),
   '/v1/consent/initial': withBodyCap(INITIAL_CONSENT, 2_048),
   '/v1/consent/withdraw': withBodyCap(IDENTITY_WRITE, 2_048),

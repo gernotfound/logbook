@@ -6,7 +6,43 @@ import { backup, DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import api from '../../cloudflare/api/worker.mjs';
 import gate from '../../cloudflare/auth/session-gate.mjs';
-import { ORIGIN, SYNC, RIGHTS, createCloudKeyHttpFixture as fixture } from './cloud-key-http-fixture.mjs';
+import { ORIGIN, SYNC, INSPECT, RIGHTS, createCloudKeyHttpFixture as fixture } from './cloud-key-http-fixture.mjs';
+
+void test('recovery inspection releases only an existing ADK, with no issuance or D1 writes', async () => {
+  const f = await fixture();
+  try {
+    await f.consent('owner-a');
+    await f.consent('owner-b');
+    const before = f.sqlite.prepare('SELECT * FROM cloud_account_keys').all();
+    const noKey = await f.call('owner-a', INSPECT);
+    assert.equal(noKey.response.status, 503);
+    assert.deepEqual(noKey.body, { error: 'unavailable' });
+    assert.deepEqual(f.sqlite.prepare('SELECT * FROM cloud_account_keys').all(), before);
+    assert.equal(f.count('cloud_key_issuance', 'owner-a'), 0);
+    assert.equal(f.count('cloud_key_issuance', 'owner-b'), 0);
+
+    const issued = await f.call('owner-a', SYNC);
+    assert.equal(issued.response.status, 200);
+    const originalKey = f.sqlite.prepare('SELECT * FROM cloud_account_keys WHERE uid=?')
+      .get('owner-a');
+    const originalIssuance = f.sqlite.prepare('SELECT * FROM cloud_key_issuance').all();
+    const observed = await f.call('owner-a', INSPECT);
+    assert.equal(observed.response.status, 200);
+    assert.equal(observed.body.purpose, 'recovery-inspect');
+    assert.equal(observed.body.uid, 'owner-a');
+    assert.equal(observed.body.key, issued.body.key);
+    assert.equal(observed.response.headers.get('Cache-Control'), 'no-store');
+    assert.deepEqual(f.sqlite.prepare('SELECT * FROM cloud_account_keys WHERE uid=?')
+      .get('owner-a'), originalKey);
+    assert.deepEqual(f.sqlite.prepare('SELECT * FROM cloud_key_issuance').all(), originalIssuance);
+    assert.equal((await f.call('owner-b', INSPECT)).response.status, 503);
+    assert.equal(f.count('cloud_key_issuance', 'owner-b'), 0);
+
+    await f.withdraw('owner-a');
+    assert.equal((await f.call('owner-a', INSPECT)).response.status, 401);
+    assert.equal((await f.call('owner-a', RIGHTS)).response.status, 200);
+  } finally { f.close(); }
+});
 
 void test('top-level API: initial consent, authenticated key provision, repeat and isolated owner', async () => {
   const f = await fixture();

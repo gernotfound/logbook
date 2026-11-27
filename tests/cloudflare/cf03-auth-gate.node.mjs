@@ -93,6 +93,7 @@ void test('route policy covers the exact trusted D1 surface with independent aut
     ['/v1/sync/replica/status', true, true, true, 4096],
     ['/v1/sync/replica/cancel', true, true, true, 4096],
     ['/v1/cloud-key/sync', true, true, true, 0],
+    ['/v1/cloud-key/recovery-inspect', true, true, true, 0],
     ['/v1/consent/status', true, false, false, 0],
     ['/v1/consent/initial', true, true, true, 2048],
     ['/v1/consent/withdraw', true, true, false, 2048],
@@ -107,7 +108,8 @@ void test('route policy covers the exact trusted D1 surface with independent aut
     for (const [route, publicRoute, csrfRequired, emailVerifiedRequired, maxBodyBytes] of routes) {
       const policy = candidateApiRoutePolicy(route);
       assert.deepEqual(policy, { public: publicRoute,
-        identityOnly: !route.startsWith('/v1/sync/') && route !== '/v1/cloud-key/sync',
+        identityOnly: !route.startsWith('/v1/sync/')
+          && route !== '/v1/cloud-key/sync' && route !== '/v1/cloud-key/recovery-inspect',
         csrfRequired, emailVerifiedRequired, maxBodyBytes }, route);
       if (route.startsWith('/v1/sync/') || route === '/v1/account/activity'
         || route === '/v1/rights/scan') {
@@ -248,7 +250,8 @@ void test('rights-only AuthGate accepts a renewed unverified session, never sync
       cookie: newToken, csrfValue: csrf })).status, 403);
     assert.equal((await status(env, { route: '/v1/cloud-key/rights-export',
       csrfValue: csrf })).status, 401);
-    for (const route of ['/v1/cloud-key/sync', '/v1/consent/initial', '/v1/sync/read']) {
+    for (const route of ['/v1/cloud-key/sync', '/v1/cloud-key/recovery-inspect',
+      '/v1/consent/initial', '/v1/sync/read']) {
       assert.equal((await status(env, { route, cookie: newToken,
         csrfValue: newCsrf })).status, 401, route);
     }

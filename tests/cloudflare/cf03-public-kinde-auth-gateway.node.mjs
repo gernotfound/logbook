@@ -97,6 +97,7 @@ void test('all session/health/API boundaries fail closed when not explicitly mou
   }));
   for (const bad of [
     '/v1/sync/commit', '/v1/consent/status', '/v1/cloud-key/sync',
+    '/v1/cloud-key/recovery-inspect',
     '/api/auth/kinde/unapproved', '/api/auth/kinde/start/extra',
     '/api/auth/provider', '/api/session',
   ]) {

@@ -58,6 +58,16 @@ describe('candidate Workers account-key transport', () => {
         await failure(acquireCloudflareAccountKeyCandidate(options(send)));
     });
 
+    it('binds an existing-key recovery inspection to a separate purpose without accepting sync key responses', async () => {
+        const send = vi.fn<typeof fetch>().mockImplementation(async () => json({ ...payload(), purpose: 'recovery-inspect' }));
+        const inspection = { ...options(send), purpose: 'recovery-inspect' as const };
+        const keyBytes = await acquireCloudflareAccountKeyCandidate(inspection);
+        expect(keyBytes).toEqual(key);
+        expect(send.mock.calls[0][0]).toBe('/v1/cloud-key/recovery-inspect');
+        await failure(acquireCloudflareAccountKeyCandidate(options(send)));
+        keyBytes.fill(0);
+    });
+
     it.each([
         { uid: OTHER }, { fenceEpoch: 3 }, { consentRevision: 2 }, { purpose: 'rights-export' },
         { version: 2 }, { format: 'unknown' }, { extra: true }, { key: 'not-base64' },

@@ -8,6 +8,7 @@ import { requireIndependentOwnerFence } from '../recovery/independent-owner-fenc
 const HASH = /^[a-f0-9]{64}$/;
 const LEGAL = /^[A-Za-z0-9._-]{1,32}$/;
 const NOW = D1_NOW_MS;
+const activePurpose = purpose => purpose === 'sync' || purpose === 'recovery-inspect';
 
 // Read the live session and consent at the same D1 primary that stores the
 // wrapped ADK. The private AuthGate is necessary but not sufficient: a logout
@@ -51,7 +52,7 @@ const RIGHTS_SQL = `
 function trustedClaims(claims, env, purpose) {
   if (!claims || typeof claims !== 'object' || Array.isArray(claims)
     || claims.authenticated !== true || typeof claims.emailVerified !== 'boolean'
-    || (purpose === 'sync' && !claims.emailVerified)
+    || (activePurpose(purpose) && !claims.emailVerified)
     || claims.rateGatePassed !== true || claims.csrfVerified !== true
     || typeof claims.uid !== 'string' || !claims.uid
     || claims.uid.length > 128 || claims.uid.trim() !== claims.uid
@@ -59,14 +60,14 @@ function trustedClaims(claims, env, purpose) {
     || !Number.isSafeInteger(claims.healthConsentRevision)
     || claims.healthConsentRevision < 1
     || !Number.isSafeInteger(claims.fenceEpoch) || claims.fenceEpoch < 1
-    || (purpose !== 'sync' && purpose !== 'rights-export')
+    || (!activePurpose(purpose) && purpose !== 'rights-export')
     || !env || typeof env.CLOUD_ACCOUNT_KEK_V1 !== 'string'
-    || (purpose === 'sync' && (
+    || (activePurpose(purpose) && (
       !LEGAL.test(env.CONSENT_PRIVACY_VERSION ?? '')
       || !LEGAL.test(env.CONSENT_TERMS_VERSION ?? '')
     ))) throw new CloudKeyUnavailableError();
   return [claims.uid, claims.fenceEpoch, claims.sessionHash, claims.healthConsentRevision,
-    ...(purpose === 'sync' ? [env.CONSENT_PRIVACY_VERSION, env.CONSENT_TERMS_VERSION] : [])];
+    ...(activePurpose(purpose) ? [env.CONSENT_PRIVACY_VERSION, env.CONSENT_TERMS_VERSION] : [])];
 }
 const KEY_COLUMNS = `SELECT k.uid AS key_uid, k.consent_revision AS key_consent_revision,
   k.format, k.version, k.key_version, k.iv, k.ciphertext, k.tag, k.issued_at_ms,
@@ -88,7 +89,7 @@ function sameKey(left, right) {
 }
 async function readAuthorized(primary, args, purpose, recoveryDb) {
   if (!primary || typeof primary.prepare !== 'function') throw new CloudKeyUnavailableError();
-  const sql = purpose === 'sync' ? KEY_COLUMNS + IDENTITY_SQL + ACTIVE_SQL
+  const sql = activePurpose(purpose) ? KEY_COLUMNS + IDENTITY_SQL + ACTIVE_SQL
     : KEY_COLUMNS + ', s.uid, s.status, s.consent_revision, s.fence_epoch, s.erased_before_revision'
       + IDENTITY_SQL + RIGHTS_SQL;
   const row = await primary.prepare(sql).bind(...args).first();
@@ -147,7 +148,9 @@ const PROVISION_SQL = `
 
 /**
  * Candidate trusted-server boundary, NOT a public HTTP endpoint.
- * "rights-export" never provisions a missing ADK; a revoked consent can
+ * "recovery-inspect" reads only an existing ADK under active fitness fences;
+ * unlike "sync", it must never write the issuance ledger. "rights-export"
+ * never provisions a missing ADK; a revoked consent can
  * authorize an existing key only with primary erasure-job proof and a
  * matching independent withdrawal. Recheck after asynchronous AES-GCM open.
  */

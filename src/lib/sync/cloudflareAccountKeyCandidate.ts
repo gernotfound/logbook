@@ -1,7 +1,7 @@
 import { CloudKeyAccessUnavailableError, decodeCloudAccountKey, isRetryableCloudKeyTransportFailure } from './cloudAccountKeyMaterial';
 
 type KeyContext = { uid: string; fenceEpoch: number; consentRevision: number };
-type Purpose = 'sync' | 'rights-export';
+type Purpose = 'sync' | 'recovery-inspect' | 'rights-export';
 const MAX_RESPONSE_BYTES = 1024;
 
 function snapshot(expected: KeyContext): KeyContext {
@@ -79,7 +79,9 @@ export async function acquireCloudflareAccountKeyCandidate({
         if (!current) throw new CloudKeyAccessUnavailableError();
     };
     check();
-    if (purpose !== 'sync' && purpose !== 'rights-export') throw new CloudKeyAccessUnavailableError();
+    if (purpose !== 'sync' && purpose !== 'recovery-inspect' && purpose !== 'rights-export') {
+        throw new CloudKeyAccessUnavailableError();
+    }
     let csrf: string | null;
     try { csrf = csrfToken(); } catch { throw new CloudKeyAccessUnavailableError(); }
     check();

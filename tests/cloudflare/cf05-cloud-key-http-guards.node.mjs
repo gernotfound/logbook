@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { ORIGIN, SYNC, RIGHTS, createCloudKeyHttpFixture as fixture,
+import { ORIGIN, SYNC, INSPECT, RIGHTS, createCloudKeyHttpFixture as fixture,
   renewSessionWithoutEmail } from './cloud-key-http-fixture.mjs';
 
 void test('origin, CSRF, method, query and request body are denied before any key write', async () => {
@@ -29,6 +29,14 @@ void test('origin, CSRF, method, query and request body are denied before any ke
     assert.deepEqual(missing.body, { error: 'not-found' });
     assert.equal(f.count('cloud_account_keys', 'owner-a'), 0);
     assert.equal(f.count('cloud_key_issuance', 'owner-a'), 0);
+    for (const options of [
+      { csrf: 'forged' }, { origin: 'https://attacker.invalid' },
+      { fetchSite: 'cross-site' }, { body: '{}' }, { url: ORIGIN + INSPECT + '?x=1' },
+    ]) {
+      assert.notEqual((await f.call('owner-a', INSPECT, options)).response.status, 200);
+      assert.equal(f.count('cloud_account_keys', 'owner-a'), 0);
+      assert.equal(f.count('cloud_key_issuance', 'owner-a'), 0);
+    }
   } finally { f.close(); }
 });
 
@@ -144,6 +152,62 @@ void test('fitness key is withheld when independent withdrawal is armed during i
     assert.equal((await f.call('owner-a', SYNC)).response.status, 503);
     await f.consent('owner-b');
     assert.equal((await f.call('owner-b', SYNC)).response.status, 200);
+  } finally { f.close(); }
+});
+
+void test('recovery inspection withholds an existing key if the session is revoked during unwrap', async () => {
+  const f = await fixture(['owner-a']);
+  try {
+    await f.consent('owner-a');
+    assert.equal((await f.call('owner-a', SYNC)).response.status, 200);
+    const envelope = f.sqlite.prepare("SELECT * FROM cloud_account_keys WHERE uid='owner-a'").get();
+    let reads = 0;
+    const racingDb = {
+      withSession(mode) {
+        const primary = f.db.withSession(mode);
+        return {
+          prepare(sql) {
+            if (sql.includes('SELECT k.uid AS key_uid') && ++reads === 2) {
+              f.sqlite.exec(`UPDATE auth_sessions SET revoked_at_ms=issued_at_ms
+                WHERE uid='owner-a'`);
+            }
+            return primary.prepare(sql);
+          },
+        };
+      },
+    };
+    const refused = await f.call('owner-a', INSPECT, { env: { ...f.env, DB: racingDb } });
+    assert.equal(reads, 2);
+    assert.equal(refused.response.status, 503);
+    assert.deepEqual(refused.body, { error: 'unavailable' });
+    assert.deepEqual(f.sqlite.prepare("SELECT * FROM cloud_account_keys WHERE uid='owner-a'").get(), envelope);
+    assert.equal(f.count('cloud_key_issuance', 'owner-a'), 1);
+  } finally { f.close(); }
+});
+
+void test('recovery inspection withholds an existing key when the independent owner fence closes', async () => {
+  const f = await fixture(['owner-a']);
+  try {
+    await f.consent('owner-a');
+    assert.equal((await f.call('owner-a', SYNC)).response.status, 200);
+    let reads = 0;
+    const racingRegistry = {
+      withSession(mode) {
+        if (++reads === 2) {
+          f.registry.exec(`UPDATE recovery_owner_fences SET status='blocked',
+            change_seq=change_seq+1 WHERE uid='owner-a'`);
+        }
+        return f.recoveryDb.withSession(mode);
+      },
+    };
+    const refused = await f.call('owner-a', INSPECT, {
+      env: { ...f.env, RECOVERY_DB: racingRegistry },
+    });
+    assert.equal(reads, 2);
+    assert.equal(refused.response.status, 503);
+    assert.deepEqual(refused.body, { error: 'unavailable' });
+    assert.equal(f.count('cloud_account_keys', 'owner-a'), 1);
+    assert.equal(f.count('cloud_key_issuance', 'owner-a'), 1);
   } finally { f.close(); }
 });
 

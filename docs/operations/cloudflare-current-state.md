@@ -1,22 +1,22 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
 **Ultimo readback frontend verificato prima del candidato corrente, 27/11/2026:**
-[PR #1490](https://github.com/gernotfound/logbook/pull/1490)
-integrata in [`main` `f93dcb05`](https://github.com/gernotfound/logbook/commit/f93dcb05b010a00330c55eef2406332997de9cde),
-v2.753.0. [CI PR](https://github.com/gernotfound/logbook/actions/runs/46016484053),
-[gate main/CodeQL](https://github.com/gernotfound/logbook/actions/runs/46017164909) e
-[Static Assets/smoke](https://github.com/gernotfound/logbook/actions/runs/46017555939)
-`success` sugli SHA pertinenti. Readback provider: deployment
-`332257d6-bff9-422e-b1d2-66fa83ef821b`, versione
-`be7767e1-4745-452e-8561-a71c42c2b81b` al 100%; soli binding
+[PR #1493](https://github.com/gernotfound/logbook/pull/1493)
+integrata in [`main` `a8b89fbb`](https://github.com/gernotfound/logbook/commit/a8b89fbbf0d0e36e2ea8409139a92ae5da5f2310),
+v2.756.0, con CI PR/CodeQL, gate main e Static Assets/HTTPS smoke verdi
+sugli SHA rispettivi. Readback provider: deployment
+`bebbb8d1-fa65-44e3-8953-992efd4be47c`, versione
+`a5506beb-3cb8-4ca7-b4df-3c253955f2cb` al 100%; soli binding
 `APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`, **nessun `D1_API`**. Worker API e Kinde
-privati senza nuovo deploy; Firestore senza deploy Rules/indici. La PR ha
-aggiunto il preflight causale puro del journal ritirato, dopo la diagnostica
+privati senza nuovo deploy; Firestore senza deploy Rules/indici. Il preflight
+causale puro del journal è nato nella
+[PR #1490](https://github.com/gernotfound/logbook/pull/1490), dopo la diagnostica
 read-only della [PR #1489](https://github.com/gernotfound/logbook/pull/1489).
-Il candidato corrente collega il preflight a una scansione AEAD e a guard
-Kinde/vault/registro, **richiedendo un'ADK già autorizzata dal chiamante**:
-non monta un'azione UI, non richiede una nuova ADK, non muta il journal e
-non abilita sincronizzazione, fitness pubblico o GO multi-device. Evidenze
+La #1493 ha aggiunto evidenze causali aggregate di divergenza; il candidato
+successivo aggiunge un endpoint ADK **già emessa, senza provisioning** e un
+wrapper per il preflight authenticated Kinde/vault/registro/AEAD. Non monta
+un'azione UI, non muta il journal e non abilita sincronizzazione, fitness
+pubblico o GO multi-device. Evidenze
 e residui in [CF-04 #1058](https://github.com/gernotfound/logbook/issues/1058).
 
 **Readback CF-03 più recente, 27/11/2026:** la diagnostica Kinde della
