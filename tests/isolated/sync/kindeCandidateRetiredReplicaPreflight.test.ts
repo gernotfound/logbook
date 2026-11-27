@@ -134,6 +134,8 @@ describe('Kinde candidate: authenticated retired replica preflight', () => {
         const seq = (await readLocal(owner))!.pending[0].seq;
         await expect(inspect(network({ remote: data(172) }))).resolves.toEqual({
             kind: 'reconciliation-required', reason: 'cloud-diverged',
+            evidence: { changedCloudFieldStamps: 0,
+                pendingWithOverlappingCloudStamps: 0, unclassifiedDocuments: 1 },
         });
         await expect(inspect(network({ before: control(8, seq) }))).resolves.toEqual({
             kind: 'reconciliation-required', reason: 'possible-lost-ack',
