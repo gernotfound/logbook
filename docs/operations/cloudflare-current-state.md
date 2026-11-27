@@ -1,6 +1,32 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
-**Ultimo readback frontend verificato, 27/11/2026, dopo CF-04 #1504:**
+**Ultimo readback frontend verificato, 27/11/2026, dopo CF-04 #1506:**
+la [PR #1506](https://github.com/gernotfound/logbook/pull/1506),
+v2.768.0, è integrata con squash in
+[`main` `f9c96aa`](https://github.com/gernotfound/logbook/commit/f9c96aa583755a0bdf0ae6deecdd978a3880f1df),
+tree `744f822e0143c3e302e23029d1dfb0b29b920d58` identico al candidato.
+[CI PR exact-SHA, Canonical e CodeQL](https://github.com/gernotfound/logbook/actions/runs/46059625882),
+[Main Release Gate e CodeQL](https://github.com/gernotfound/logbook/actions/runs/46060060472)
+e [Static Assets con smoke HTTPS](https://github.com/gernotfound/logbook/actions/runs/46060337195)
+sono `success`. Readback diretto Cloudflare: `thelogbook-frontend` deployment
+`f40ea73a-ddb0-4c8d-b52b-9110a0e83887`, versione
+`5059d98c-d3d9-4a65-9844-9eb042dd13f0` al 100%; binding
+`APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`, **senza `D1_API`**.
+[API D1 privata](https://github.com/gernotfound/logbook/actions/runs/46060337172)
+e [Kinde privato](https://github.com/gernotfound/logbook/actions/runs/46060337177):
+job riusciti, deploy saltati;
+[Firestore](https://github.com/gernotfound/logbook/actions/runs/46060337114):
+Rules/indici non distribuiti. Il candidato aggiunge il recupero **receipt-only**
+di un batch cifrato già sigillato, con ACK locale soltanto dopo receipt
+contenuto-bound, senza ripubblicare il writer della replica ritirata. Test
+isolati e SQLite Worker verificano preservation su receipt assente, fencing
+di consenso/sessione, edit locali concorrenti e ricevuta storica dopo riuso
+dello slot. Il percorso non è collegato alla UX fitness e non trasferisce
+le operazioni mai inviate a una nuova replica; SYNC-7D/7E e fitness
+Cloudflare restano **NO-GO**. Nessuna prova D1 live multi-device o GO
+Production. Dettagli in [CF-04 #1058](https://github.com/gernotfound/logbook/issues/1058).
+
+**Checkpoint frontend precedente, 27/11/2026, dopo CF-04 #1504:**
 la [PR #1504](https://github.com/gernotfound/logbook/pull/1504),
 v2.766.0, è integrata con squash in
 [`main` `af5f309c`](https://github.com/gernotfound/logbook/commit/af5f309c92a3610c87c066d3d91d6b355d208d4a),
