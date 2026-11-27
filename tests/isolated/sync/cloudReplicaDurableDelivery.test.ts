@@ -53,7 +53,7 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
-async function seed(legalConsent?: LegalConsent) {
+async function seed(legalConsent?: LegalConsent, withPending = true) {
     const initial = profile(170, legalConsent);
     await initializeLocal(owner, initial);
     const now = Date.now();
@@ -63,9 +63,9 @@ async function seed(legalConsent?: LegalConsent) {
     };
     await adoptReplicaCheckpoint(owner, { identity: replica, baseSeq: 0 },
         { clock: {}, syncMetaByDocument: {} });
-    await commitLocal(owner, profile(171, legalConsent), initial);
+    if (withPending) await commitLocal(owner, profile(171, legalConsent), initial);
     const envelope = await readLocal(owner);
-    if (!envelope || !envelope.pending.length) throw new Error('Local test journal absent');
+    if (!envelope || (withPending && !envelope.pending.length)) throw new Error('Local test journal absent');
     const snapshot: CloudReplicaSnapshot = {
         revision: 0, fenceEpoch: 5, consentRevision: 1,
         documents: [{ path: '', revision: null, document: null }],
@@ -344,7 +344,7 @@ describe('candidate D1 delivery: encrypted IndexedDB intent and exact ACK', () =
     });
 
     it('rejects a D1 delivery while a durable replica claim is pending without altering the vault', async () => {
-        const initial = await seed();
+        const initial = await seed(undefined, false);
         const verified = await readAuthenticatedCloudflareCheckpoint(
             async () => ({
                 revision: initial.control.revision, fenceEpoch: initial.control.fenceEpoch,
@@ -353,17 +353,22 @@ describe('candidate D1 delivery: encrypted IndexedDB intent and exact ACK', () =
         );
         await stageCloudflareReplicaClaim(owner, verified, initial.control,
             'another-claim-device', () => true);
+        // A second tab may durably edit AFTER the claim was staged. That
+        // journal must still be blocked from delivery until claim recovery.
+        await commitLocal(owner, profile(171), initial.initial);
+        const pending = (await readLocal(owner))!.pending;
+        expect(pending.length).toBeGreaterThan(0);
         const before = await get(storeKey);
         expect((await readLocal(owner))?.cloudflareReplicaClaim).toBeDefined();
 
-        await expect(stageCloudflareDelivery(owner, initial.envelope.pending, initial.snapshot,
+        await expect(stageCloudflareDelivery(owner, pending, initial.snapshot,
             initial.control, initial.replica, 'batch000000000197', adk, () => true))
             .rejects.toThrow('Intento D1 non installabile');
         expect(await get(storeKey)).toBe(before);
         const after = (await readLocal(owner))!;
         expect(after.cloudflareDelivery).toBeUndefined();
         expect(after.cloudflareReplicaClaim).toBeDefined();
-        expect(after.pending).toEqual(initial.envelope.pending);
+        expect(after.pending).toEqual(pending);
     });
 
     it('never stages a delivery while an expired-replica retirement is pending', async () => {

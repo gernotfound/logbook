@@ -62,6 +62,14 @@ export async function adoptReplicaCheckpoint(
             && current.replica.replicaId === claim.identity.replicaId
             && current.replica.generation === claim.identity.generation;
 
+        // A staged Cloudflare claim can outlive its original local snapshot:
+        // another tab may commit edits after staging but before the receipt.
+        // Never re-diff those edits under a different incarnation implicitly.
+        if (expectedCloudflareClaimId !== undefined && current.replica && !sameReplica
+            && current.pending.length > 0) {
+            throw new Error('Replica D1 sostitutiva con journal offline: checkpoint sospeso senza reinterpretare gli intenti.');
+        }
+
         if (sameReplica) {
             if ((checkpoint.clock[current.actorId] ?? 0) > current.actorSeq
                 || claim.baseSeq > current.actorSeq) {

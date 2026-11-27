@@ -68,6 +68,12 @@ export async function stageCloudflareReplicaClaim(
             || (expectedLocalRevision !== undefined && local.revision !== expectedLocalRevision)) {
             throw new Error('Claim D1 non installabile: archivio, consenso o sync non coerenti.');
         }
+        // A retired incarnation's offline operations cannot be assigned a new
+        // causal identity until their original frontier has been reconciled.
+        // The first claim (replica === null) must still carry new local edits.
+        if (local.replica && local.pending.length > 0) {
+            throw new Error('Replica precedente con journal offline: rientro D1 sospeso per riconciliazione esplicita.');
+        }
         const input = parseCloudflareReplicaClaimIntent({
             mutationId, expectedRevision: control.revision, expectedFenceEpoch: control.fenceEpoch,
             consentRevision: control.consentRevision, candidateReplicaId,

@@ -122,6 +122,42 @@ async function stagedClaimWithExistingReplica() {
 }
 
 describe('durable local replica checkpoint adoption', () => {
+    it('does not stage a new Cloudflare incarnation over offline edits of the previous replica', async () => {
+        localStorage.setItem('logbook:v2:user:a:health-consent-generation', '1');
+        const before = await pendingReplica();
+        const accountKey = new Uint8Array(32).fill(27);
+        const verified = await readAuthenticatedCloudflareCheckpoint(
+            async () => ({ revision: 0, fenceEpoch: 5, consentRevision: 1, documents: [] }),
+            'a', accountKey, 1, () => true,
+        );
+        const ciphertext = await get(key('a'));
+
+        await expect(stageCloudflareReplicaClaim('a', verified,
+            { revision: 0, fenceEpoch: 5, consentRevision: 1, replicas: {} },
+            'replacement-after-retirement', () => true,
+        )).rejects.toThrow('journal offline');
+
+        expect(await get(key('a'))).toBe(ciphertext);
+        expect(await readLocal('a')).toEqual(before);
+    });
+
+    it('refuses a delayed replacement receipt if edits arrived after its Cloudflare claim was staged', async () => {
+        const { staged } = await stagedClaimWithExistingReplica();
+        await commitLocal('a', data(171), data(170));
+        const before = (await readLocal('a'))!;
+        expect(before.pending.length).toBeGreaterThan(0);
+        const ciphertext = await get(key('a'));
+
+        await expect(adoptReplicaCheckpoint('a', {
+            identity: identity('s01', staged.candidateReplicaId, 2), baseSeq: 7,
+        }, cloudCheckpoint({ s00: 1, s01: 7 }), () => true, staged.mutationId))
+            .rejects.toThrow('journal offline');
+
+        expect(await get(key('a'))).toBe(ciphertext);
+        expect(await readLocal('a')).toEqual(before);
+        expect((await readLocal('a'))!.cloudflareReplicaClaim?.mutationId).toBe(staged.mutationId);
+    });
+
     it('adopts a D1 claim staged against the existing replica and clears only the matching intent', async () => {
         const { staged } = await stagedClaimWithExistingReplica();
         const before = (await readLocal('a'))!;
@@ -149,6 +185,21 @@ describe('durable local replica checkpoint adoption', () => {
         expect(after.cloudflareReplicaClaim).toBeUndefined();
         expect(after.pending).toEqual(before.pending);
         expect(after.actorSeq).toBe(before.actorSeq);
+        expect(await readLocal('a')).toEqual(after);
+    });
+
+    it('allows a same-incarnation Cloudflare checkpoint with pending edits without resequencing them', async () => {
+        const { existing, staged } = await stagedClaimWithExistingReplica();
+        await commitLocal('a', data(171), data(170));
+        const before = (await readLocal('a'))!;
+
+        const after = await adoptReplicaCheckpoint('a', { identity: existing, baseSeq: 0 },
+            cloudCheckpoint({}), () => true, staged.mutationId);
+
+        expect(after.replica).toEqual(existing);
+        expect(after.pending).toEqual(before.pending);
+        expect(after.actorSeq).toBe(before.actorSeq);
+        expect(after.cloudflareReplicaClaim).toBeUndefined();
         expect(await readLocal('a')).toEqual(after);
     });
 
