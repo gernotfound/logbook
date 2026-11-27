@@ -144,10 +144,11 @@ function callbackParameters(url) {
   return { state, code, error };
 }
 
-async function boundedProviderJson(response) {
+export async function boundedProviderJson(response, signal) {
   if (!(response instanceof Response) || !response.ok
     || response.redirected
-    || !/^application\/json(?:\s*;|$)/i.test(response.headers.get('content-type') ?? '')) {
+    || !/^application\/json(?:\s*;|$)/i.test(response.headers.get('content-type') ?? '')
+    || !(signal instanceof AbortSignal) || signal.aborted) {
     throw new KindeOAuthError();
   }
   const declared = response.headers.get('content-length');
@@ -158,15 +159,27 @@ async function boundedProviderJson(response) {
   const reader = response.body.getReader();
   const chunks = [];
   let length = 0;
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    length += value.byteLength;
-    if (length > TOKEN_BODY_LIMIT) {
-      await reader.cancel().catch(() => {});
-      throw new KindeOAuthError();
+  let rejectAbort;
+  const aborted = new Promise((_, reject) => { rejectAbort = reject; });
+  const onAbort = () => rejectAbort(new KindeOAuthError());
+  signal.addEventListener('abort', onAbort, { once: true });
+  let completed = false;
+  try {
+    if (signal.aborted) throw new KindeOAuthError();
+    while (true) {
+      const { value, done } = await Promise.race([reader.read(), aborted]);
+      if (signal.aborted) throw new KindeOAuthError();
+      if (done) { completed = true; break; }
+      length += value.byteLength;
+      if (length > TOKEN_BODY_LIMIT) throw new KindeOAuthError();
+      chunks.push(value);
     }
-    chunks.push(value);
+  } catch {
+    throw new KindeOAuthError();
+  } finally {
+    signal.removeEventListener('abort', onAbort);
+    if (!completed) void reader.cancel().catch(() => {});
+    try { reader.releaseLock(); } catch { /* An aborted read may still be pending. */ }
   }
   const bytes = new Uint8Array(length);
   let position = 0;
@@ -175,8 +188,8 @@ async function boundedProviderJson(response) {
   catch { throw new KindeOAuthError(); }
 }
 
-async function tokenResponse(response) {
-  const tokens = await boundedProviderJson(response);
+async function tokenResponse(response, signal) {
+  const tokens = await boundedProviderJson(response, signal);
   if (!tokens || typeof tokens !== 'object' || Array.isArray(tokens)
     || typeof tokens.access_token !== 'string' || typeof tokens.id_token !== 'string'
     || tokens.access_token.length > 8192 || tokens.id_token.length > 8192) {
@@ -186,11 +199,12 @@ async function tokenResponse(response) {
 }
 
 async function requireProviderAuthenticationTime(config, fetchImpl) {
+  const signal = AbortSignal.timeout(5000);
   const response = await fetchImpl(config.issuer + '/.well-known/openid-configuration', {
-    method: 'GET', redirect: 'manual', cache: 'no-store', signal: AbortSignal.timeout(5000),
+    method: 'GET', redirect: 'manual', cache: 'no-store', signal,
     headers: { Accept: 'application/json' },
   });
-  const discovery = await boundedProviderJson(response);
+  const discovery = await boundedProviderJson(response, signal);
   // Kinde documents that tenants without this capability may ignore max_age
   // and put token issuance time into auth_time instead of authentication time.
   if (discovery?.issuer !== config.issuer
@@ -222,7 +236,7 @@ async function pkceChallenge(verifier) {
     .replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
 }
 
-function exchangeCode(fetchImpl, config, code, verifier) {
+function exchangeCode(fetchImpl, config, code, verifier, signal) {
   const body = new URLSearchParams({
     grant_type: 'authorization_code', code,
     redirect_uri: config.redirectUri, client_id: config.clientId,
@@ -232,7 +246,7 @@ function exchangeCode(fetchImpl, config, code, verifier) {
   // without forwarding the client secret to a redirect destination.
   return fetchImpl(config.issuer + '/oauth2/token', {
     method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body, redirect: 'manual', signal: AbortSignal.timeout(5000),
+    body, redirect: 'manual', signal,
   });
 }
 
@@ -328,9 +342,10 @@ export function createKindeOAuthFlow(configuration, { rateLimit, fetchImpl = fet
       // No automatic retry of an ambiguous code exchange: consumed state
       // requires a fresh login, not a second attempt with the same code.
       phase = 'token-transport';
-      const response = await exchangeCode(fetchImpl, config, input.code, saved.code_verifier);
+      const tokenSignal = AbortSignal.timeout(5000);
+      const response = await exchangeCode(fetchImpl, config, input.code, saved.code_verifier, tokenSignal);
       phase = 'token-response';
-      const tokens = await tokenResponse(response);
+      const tokens = await tokenResponse(response, tokenSignal);
       phase = 'identity-input';
       let principal;
       try {
@@ -430,8 +445,9 @@ export function createKindeDeletionOAuthFlow(configuration, { rateLimit, fetchIm
       });
       if (!saved || input.error !== null) return null;
       await requireProviderAuthenticationTime(config, fetchImpl);
-      const response = await exchangeCode(fetchImpl, config, input.code, saved.verifier);
-      const tokens = await tokenResponse(response);
+      const tokenSignal = AbortSignal.timeout(5000);
+      const response = await exchangeCode(fetchImpl, config, input.code, saved.verifier, tokenSignal);
+      const tokens = await tokenResponse(response, tokenSignal);
       const proof = await verify({ ...tokens, expectedNonce: saved.nonce }, saved);
       return { ...proof, authEpoch: saved.authEpoch, sessionHash };
     } catch { return null; }

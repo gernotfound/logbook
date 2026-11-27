@@ -1,6 +1,27 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { boundedProviderJson } from '../../cloudflare/auth/kinde-oauth-flow.mjs';
 import { createKindeOAuthFixture as fixture } from './kinde-oauth-flow-fixture.mjs';
+
+void test('OIDC body reading shares the transport deadline even if a provider stream stalls', async () => {
+  const controller = new AbortController();
+  let cancellations = 0;
+  const stream = new ReadableStream({
+    start(writer) { writer.enqueue(new TextEncoder().encode('{"incomplete":')); },
+    cancel() { cancellations += 1; },
+  });
+  const response = new Response(stream, { headers: { 'Content-Type': 'application/json' } });
+  const pending = boundedProviderJson(response, controller.signal);
+  await Promise.resolve();
+  controller.abort();
+  await assert.rejects(pending, /kinde-oauth-unavailable/);
+  assert.equal(cancellations, 1);
+  await assert.rejects(boundedProviderJson(Response.json({ ok: true }), controller.signal),
+    /kinde-oauth-unavailable/);
+
+  const valid = await boundedProviderJson(Response.json({ ok: true }), new AbortController().signal);
+  assert.deepEqual(valid, { ok: true });
+});
 
 void test('provider failure or malformed token response consumes state, never returns cookies', async () => {
   const f = await fixture();
