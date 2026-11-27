@@ -21,7 +21,8 @@ soltanto un vault già provisionato, con sessione Kinde e consenso trusted
 correnti, legge il journal cifrato e verifica due registri D1 owner-bound
 identici. Rilegge l'archivio prima della risposta per rifiutare cambi locali
 concorrenti e rilascia la capacità di vault su ogni esito. Distingue journal
-vuoto, primo claim con pending, mutazione già sigillata, membership originale
+vuoto, journal archiviato da un consenso precedente, primo claim con pending,
+mutazione già sigillata, membership originale
 attiva e replica ritirata/sostituita/scaduta o mancante. L'UI candidata
 segnala i pending non ACKati senza esporre contenuti salute. Non crea vault,
 non acquisisce ADK, non invia commit/claim, non modifica IndexedDB e non

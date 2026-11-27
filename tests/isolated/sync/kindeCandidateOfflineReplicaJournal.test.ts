@@ -140,6 +140,25 @@ describe('Kinde candidate: read-only retired replica journal inspection', () => 
         expect(vi.mocked(send).mock.calls.some(([path]) => String(path) === '/v1/sync/control')).toBe(false);
     });
 
+    it('does not report a clean device while older consent journals are still archived', async () => {
+        const original = await withOldPending();
+        await updateArchiveRecord<unknown>(owner, raw => ({
+            ...(raw as Record<string, unknown>),
+            data: original.baseline, pending: [],
+            archivedConsentJournals: [{
+                sourceConsentRevision: 1, capturedAt: '2026-11-16T00:00:00.000Z',
+                data: original.data, baseline: original.baseline, pending: original.pending,
+            }],
+        }));
+        const sealed = await get(storage);
+        const send = network();
+        await expect(inspect(send)).resolves.toEqual({
+            kind: 'archived-consent-pending', archivedOperations: original.pending.length,
+        });
+        expect(vi.mocked(send).mock.calls.some(([path]) => String(path) === '/v1/sync/control')).toBe(false);
+        expect(await get(storage)).toBe(sealed);
+    });
+
     it('reports an in-flight mutation separately without issuing another request', async () => {
         const before = await withOldPending();
         await updateArchiveRecord<unknown>(owner, raw => ({

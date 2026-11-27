@@ -15,6 +15,7 @@ type Principal = Confirmed['principal'];
 
 export type CandidateOfflineReplicaJournalObservation =
     | { kind: 'no-pending' }
+    | { kind: 'archived-consent-pending'; archivedOperations: number }
     | { kind: 'transition-pending'; pendingOperations: number }
     | { kind: 'first-claim-pending'; pendingOperations: number }
     | { kind: 'active-pending'; pendingOperations: number; slot: string; generation: number }
@@ -73,11 +74,16 @@ export async function inspectKindeCandidateOfflineReplicaJournal({
             throw new KindeCandidateBoundaryError();
         }
         const count = local.pending.length;
+        const archivedCount = (local.archivedConsentJournals ?? []).reduce(
+            (sum, archive) => sum + archive.pending.length, 0,
+        );
         let result: CandidateOfflineReplicaJournalObservation;
         let activeLeaseUntilMs: number | null = null;
         if (local.cloudflareDelivery || local.cloudflareReplicaClaim || local.cloudflareReplicaRetirement
             || local.cloudflareReplicaCancellation) {
             result = { kind: 'transition-pending', pendingOperations: count };
+        } else if (!count && archivedCount > 0) {
+            result = { kind: 'archived-consent-pending', archivedOperations: archivedCount };
         } else if (!count) {
             result = { kind: 'no-pending' };
         } else if (!local.replica) {

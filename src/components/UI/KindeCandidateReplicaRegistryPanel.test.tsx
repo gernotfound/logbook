@@ -93,7 +93,18 @@ describe('candidate-only replica registry presentation', () => {
         await screen.findByText(/Non è possibile verificare il journal locale/);
         expect(screen.queryByText(/Nessuna operazione nel journal/)).toBeNull();
         fireEvent.click(button);
-        await screen.findByText(/Nessuna operazione nel journal di sincronizzazione/);
+        await screen.findByText(/Nessuna operazione nel journal corrente/);
+    });
+
+    it('warns that historical consent journals survive even when the current queue is empty', async () => {
+        authenticated();
+        vi.mocked(inspectKindeCandidateOfflineReplicaJournal).mockResolvedValue({
+            kind: 'archived-consent-pending', archivedOperations: 2,
+        });
+        render(<KindeAccountEntry candidateMode="preparation" />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Controlla modifiche offline su questo dispositivo' }));
+        await screen.findByText(/conserva 2 operazioni storiche di un consenso precedente/);
+        expect(screen.queryByText(/Nessuna operazione nel journal corrente/)).toBeNull();
     });
 
     it('shows technical membership without inventing device names or online state', async () => {
