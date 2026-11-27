@@ -29,6 +29,11 @@ Gli edit arrivati dopo il batch restano pending, anche durante il controllo.
 Revoca, cambio owner/sessione/consenso, hash non valido o ciphertext corrotto
 bloccano l'ACK. Un errore dopo il salvataggio può rendere la risposta UI
 indeterminata: il journal va riesaminato, non si assume un secondo ACK.
+Anche se una ricevuta storica resta disponibile, l'epoch Auth salvata nel
+batch deve coincidere con quella della sessione trusted corrente: il
+confronto precede l'acquisizione ADK e viene ripetuto nel boundary
+receipt-only prima della lettura remota o dell'ACK. Un nuovo login dello
+stesso UID non adotta intenti sigillati sotto un epoch precedente.
 Questa capacità non trasferisce pending mai inviate né risolve conflitti
 SYNC-7D/7E e non è montata nel fitness pubblico `identityOnly`.
 

@@ -92,6 +92,7 @@ async function reconcileStoredCloudflareDelivery(
     guard: SessionGuard,
     trustedLegalConsent: LegalConsent | undefined,
     retryCommit?: (batch: CloudReplicaBatch) => Promise<unknown>,
+    expectedFenceEpoch?: number,
 ): Promise<'idle' | 'unconfirmed' | 'acknowledged'> {
     const { owner, uid } = checkedOwner(ownerInput);
     current(guard);
@@ -106,6 +107,11 @@ async function reconcileStoredCloudflareDelivery(
     }
     const intent = local.cloudflareDelivery;
     if (!intent) return 'idle';
+    // A historical receipt proves the old commit, but cannot carry its Auth
+    // epoch across logout/revocation into a new session's local ACK.
+    if (expectedFenceEpoch !== undefined && intent.batch.expectedFenceEpoch !== expectedFenceEpoch) {
+        throw new Error('Epoca Auth D1 del batch originale non corrente: journal e ciphertext preservati.');
+    }
 
     // AEAD-open every stored byte before any network or ACK action. The D1
     // server has never seen the business plaintext nor the field tombstones.
@@ -170,10 +176,12 @@ export async function reconcileCloudflareDeliveryReceiptOnly(
     accountKey: Uint8Array,
     transport: ReceiptTransport,
     guard: SessionGuard,
-    trustedLegalConsent: LegalConsent,
+    scope: Readonly<{ trustedLegalConsent: LegalConsent; expectedFenceEpoch: number }>,
 ): Promise<'idle' | 'unconfirmed' | 'acknowledged'> {
-    if (!trustedLegalConsent) throw new Error('Consenso D1 non verificato: journal preservato.');
-    return reconcileStoredCloudflareDelivery(ownerInput, accountKey, transport, guard, trustedLegalConsent);
+    if (!scope?.trustedLegalConsent || !Number.isSafeInteger(scope.expectedFenceEpoch)
+        || scope.expectedFenceEpoch < 1) throw new Error('Consenso o epoca D1 non verificati: journal preservato.');
+    return reconcileStoredCloudflareDelivery(ownerInput, accountKey, transport, guard,
+        scope.trustedLegalConsent, undefined, scope.expectedFenceEpoch);
 }
 
 /** Resume a still-eligible candidate batch, preserving its sealed bytes across an ambiguous response. */

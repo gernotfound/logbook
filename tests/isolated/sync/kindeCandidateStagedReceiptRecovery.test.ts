@@ -183,6 +183,24 @@ describe('Kinde candidate: old sealed delivery receipt only', () => {
         expect(await get(storage)).toBe(sealed);
     });
 
+    it('rejects a sealed delivery from a previous Auth epoch before acquiring ADK or reading its receipt', async () => {
+        await updateArchiveRecord<unknown>(owner, raw => {
+            const local = raw as Record<string, unknown>;
+            const delivery = local.cloudflareDelivery as Record<string, unknown>;
+            const batch = delivery.batch as Record<string, unknown>;
+            return { ...local, cloudflareDelivery: { ...delivery,
+                batch: { ...batch, expectedFenceEpoch: expected.fenceEpoch - 1 },
+            }, revision: Number(local.revision) + 1 };
+        });
+        expect((await readLocal(owner))?.cloudflareDelivery?.batch.expectedFenceEpoch).toBe(4);
+        const sealed = await get(storage);
+        const send = network();
+        await expect(recover(send)).rejects.toThrow();
+        expect(accountKeySource.acquire).not.toHaveBeenCalled();
+        expect(vi.mocked(send).mock.calls.some(([input]) => String(input).startsWith('/v1/sync/'))).toBe(false);
+        expect(await get(storage)).toBe(sealed);
+    });
+
     it('rejects a session invalidated during receipt and wipes the operation key', async () => {
         const sealed = await get(storage);
         const key = adk.slice();
