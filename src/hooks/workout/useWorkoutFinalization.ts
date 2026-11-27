@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
 import { Logic } from '../../lib/logic';
-import { auth } from '../../lib/firebase';
+import { authenticatedIdentitySource } from '../../lib/sync/authenticatedIdentitySource';
 import { draftRegistry } from '../../lib/utils/draftRegistry';
 import { resetGlobalWorkoutTimer } from '../../lib/utils/timer';
 import { readWorkoutRecoveryDraftImage, writeWorkoutRecoveryDraft } from '../../lib/sync/workoutRecoveryDraft';
@@ -32,9 +32,20 @@ export function useWorkoutFinalization({
     ): Promise<WorkoutSession | null> => {
         if (endingRef.current) return null;
         endingRef.current = true;
-        const expectedUid = auth.currentUser?.uid;
-        const expectedId = useAppStore.getState().localWorkout?.id;
         try {
+        // This reader is installed only by a mounted account provider. Guest
+        // workouts can still be finalized without initializing Firebase Auth.
+        let expectedUid: string | null;
+        try {
+            expectedUid = authenticatedIdentitySource.readUid();
+        } catch {
+            return null;
+        }
+        const identityIsCurrent = () => {
+            try { return authenticatedIdentitySource.readUid() === expectedUid; }
+            catch { return false; }
+        };
+        const expectedId = useAppStore.getState().localWorkout?.id;
         if (!expectedId) return null;
         let session: ReturnType<typeof captureSession>;
         try {
@@ -59,14 +70,14 @@ export function useWorkoutFinalization({
                 syncPresentation: 'normal',
                 saveError: 'Impossibile mettere al sicuro le ultime modifiche del workout. La sessione non verrà terminata.',
             });
-            if (isCurrentSession(session) && auth.currentUser?.uid === expectedUid) {
+            if (isCurrentSession(session) && identityIsCurrent()) {
                 await showAlert('Le ultime modifiche non sono ancora al sicuro sul dispositivo. Riprova dopo aver risolto il problema di storage.');
             }
             return null;
         }
         const currentWorkout = useAppStore.getState().localWorkout;
         if (!isCurrentSession(session) || !currentWorkout || currentWorkout.id !== expectedId
-            || auth.currentUser?.uid !== expectedUid) return null;
+            || !identityIsCurrent()) return null;
 
         const endTime = requestedEndTime ?? new Date().getTime();
         const workoutForCompletion = completionDraft
@@ -88,7 +99,7 @@ export function useWorkoutFinalization({
                 activePains: finalActivePains,
             });
             if (!result.ok && result.status !== 'local-pending') return null;
-            if (!isCurrentSession(session) || auth.currentUser?.uid !== expectedUid
+            if (!isCurrentSession(session) || !identityIsCurrent()
                 || useAppStore.getState().localWorkout?.id !== expectedId) return null;
             // IndexedDB already contains the completed workout. If device cleanup
             // fails, startup reconciles the stale snapshot against durable history.
@@ -109,7 +120,7 @@ export function useWorkoutFinalization({
             resetWorkoutClockGuard(expectedId);
             return useAppStore.getState().userData?.history?.find(item => item.id === expectedId) ?? finishedWorkout;
         } catch (error) {
-            if (isCurrentSession(session) && auth.currentUser?.uid === expectedUid) {
+            if (isCurrentSession(session) && identityIsCurrent()) {
                 await showAlert(
                     isWorkoutClockAnomalyError(error)
                         ? 'L’orologio del dispositivo è cambiato durante l’allenamento. Correggi data e ora, riapri TheLogBook e poi termina la sessione.'
