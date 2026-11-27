@@ -14,6 +14,24 @@ avere le stesse revisioni, lo stesso epoch e registri di replica equivalenti.
 
 ## Checkpoint candidati CF-03/04
 
+### CF-04 — Ricevuta storica di invio cifrato già sigillato (candidato)
+
+`recoverKindeCandidateStagedReceipt()` è disponibile soltanto nella
+schermata Kinde candidata dopo la diagnosi di una transizione locale.
+Con sessione, cookie CSRF, consenso trusted e vault owner-scoped correnti,
+controlla un `cloudflareDelivery` già durevole. Acquisisce esclusivamente
+una ADK già emessa (`recovery-inspect`), valida la ricevuta D1 SHA-bound
+del batch originale e invoca l'ACK IndexedDB con verifica transazionale del
+prefisso e dell'identità della replica originaria. Non usa `commit`, claim,
+nuovo writer, provisioning della chiave o reinterpretazione delle pending;
+un'assenza di ricevuta restituisce `unconfirmed` senza cambiare archivio.
+Gli edit arrivati dopo il batch restano pending, anche durante il controllo.
+Revoca, cambio owner/sessione/consenso, hash non valido o ciphertext corrotto
+bloccano l'ACK. Un errore dopo il salvataggio può rendere la risposta UI
+indeterminata: il journal va riesaminato, non si assume un secondo ACK.
+Questa capacità non trasferisce pending mai inviate né risolve conflitti
+SYNC-7D/7E e non è montata nel fitness pubblico `identityOnly`.
+
 ### CF-04 — Bridge preflight autenticato, senza provisioning ADK (27/11/2026)
 
 La schermata di registro **solo candidata** espone ora, soltanto dopo aver
