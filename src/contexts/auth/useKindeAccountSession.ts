@@ -25,6 +25,7 @@ type CandidatePreparationResult = Awaited<ReturnType<typeof prepareKindeCandidat
 type CandidateReplicaRegistryResult = Awaited<ReturnType<typeof import('../../lib/sync/kindeCandidateReplicaRegistry').inspectKindeCandidateReplicaRegistry>>;
 type CandidateOfflineReplicaJournalResult = Awaited<ReturnType<typeof import('../../lib/sync/kindeCandidateOfflineReplicaJournal').inspectKindeCandidateOfflineReplicaJournal>>;
 type CandidateRetiredReplicaPreflightResult = Awaited<ReturnType<typeof import('../../lib/sync/kindeCandidateRetiredReplicaReadOnly').inspectKindeCandidateRetiredReplicaWithExistingKey>>;
+type CandidateRetiredConflictPreservationResult = Awaited<ReturnType<typeof import('../../lib/sync/kindeCandidateRetiredReplicaConflictRecovery').preserveKindeCandidateRetiredReplicaConflicts>>;
 type CandidateStagedReceiptResult = Awaited<ReturnType<typeof import('../../lib/sync/kindeCandidateStagedReceiptRecovery').recoverKindeCandidateStagedReceipt>>;
 type CandidateRetirementWitness = import('../../lib/sync/kindeCandidateReplicaRetirementBridge').CandidateReplicaRetirementWitness;
 type CandidateRetirementOutcome = Awaited<ReturnType<typeof import('../../lib/sync/kindeCandidateReplicaRetirementBridge').retireKindeCandidateReplica>>;
@@ -366,6 +367,33 @@ export function useKindeAccountSession({
             const { inspectKindeCandidateRetiredReplicaWithExistingKey } = await import('../../lib/sync/kindeCandidateRetiredReplicaReadOnly');
             if (!current()) throw new KindeCandidateBoundaryError();
             const result = await inspectKindeCandidateRetiredReplicaWithExistingKey({ expected, stillCurrent: current });
+            if (!current()) throw new KindeCandidateBoundaryError();
+            return result;
+        } finally {
+            busyRef.current = false;
+            if (mounted.current) setBusy(false);
+        }
+    };
+
+    /** Save historical alternatives locally, never a new writer or a cloud ACK. */
+    const preserveCandidateRetiredReplicaConflicts = async (): Promise<CandidateRetiredConflictPreservationResult> => {
+        if (identityOnly || !candidatePreparationEnabled || !canAct()
+            || view.phase !== 'consent-confirmed' || !view.principal.emailVerified
+            || view.principal.healthConsentRevision < 1) throw new KindeCandidateBoundaryError();
+        const session = observed.current;
+        if (!session?.csrfToken || !session.stillCurrent()) throw new KindeCandidateBoundaryError();
+        const current = () => viewIsCurrent() && session.stillCurrent();
+        const expected = {
+            uid: view.principal.uid, fenceEpoch: view.principal.fenceEpoch,
+            healthConsentRevision: view.principal.healthConsentRevision,
+        };
+        busyRef.current = true;
+        setBusy(true);
+        try {
+            const { preserveKindeCandidateRetiredReplicaConflicts } =
+                await import('../../lib/sync/kindeCandidateRetiredReplicaConflictRecovery');
+            if (!current()) throw new KindeCandidateBoundaryError();
+            const result = await preserveKindeCandidateRetiredReplicaConflicts({ expected, stillCurrent: current });
             if (!current()) throw new KindeCandidateBoundaryError();
             return result;
         } finally {
@@ -717,6 +745,7 @@ export function useKindeAccountSession({
     return {
         view, busy, reportInteraction, signIn, enterGuest, acceptConsent, logout, prepareCandidateArchive,
         inspectCandidateReplicas, inspectCandidateOfflineReplicaJournal, inspectCandidateRetiredReplicaPreflight,
+        preserveCandidateRetiredReplicaConflicts,
         recoverCandidateStagedReceipt,
         manageCandidateReplicaRetirement, manageCandidateReplicaCancellation,
         prepareCandidateBackup, prepareCandidateRetiredReplicaEvidence,

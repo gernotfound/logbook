@@ -4,6 +4,21 @@
 
 ## CF-04 · Frontend identity-only verificato · 28 novembre 2026
 
+**Checkpoint più recente verificato prima del candidato v2.784.0:** [PR #1522](https://github.com/gernotfound/logbook/pull/1522),
+`main` [`dd108cc46197e807e3fa3331a34474abde488e6c`](https://github.com/gernotfound/logbook/commit/dd108cc46197e807e3fa3331a34474abde488e6c),
+v2.783.0. [CI PR](https://github.com/gernotfound/logbook/actions/runs/46141263688),
+[Main Release Gate/CodeQL](https://github.com/gernotfound/logbook/actions/runs/46141573639)
+e [deploy Static Assets/smoke HTTPS byte-esatto](https://github.com/gernotfound/logbook/actions/runs/46141775983)
+`success`. Readback di sola lettura Cloudflare: deployment frontend
+`12e27812-46d5-48c8-89f1-4604cc3eadf3`, versione
+`e70e1f8e-3d84-471d-8b77-861490190d0b` al 100%; binding `APP_ORIGIN`,
+`ASSETS`, `KINDE_HTTP`, nessun `D1_API`. L'incremento v2.784.0 conserva
+solo sul dispositivo alternative concorrenti in envelope cifrato candidato,
+senza nuovi servizi, credenziali, IAM, DNS, billing o scritture D1. Prove
+di merge/deploy del nuovo candidato da registrare separatamente.
+
+**Checkpoint precedente:**
+
 Dopo [PR #1521](https://github.com/gernotfound/logbook/pull/1521), `main`
 `ad59c77dbb255d27d5633ccfb2b336dbf4fe9e52`, v2.782.0:
 [Main Release Gate e CodeQL](https://github.com/gernotfound/logbook/actions/runs/46139946182)

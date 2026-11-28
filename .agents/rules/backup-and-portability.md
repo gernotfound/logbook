@@ -79,6 +79,19 @@ SQLite per giustificare un restore live. Specifica e limiti nel runbook
 
 Il percorso rapido `Exporter.exportEmergencyJSON()` richiamato dalla protezione del logout e dal dialogo dei conflitti nutrizionali è **distinto** dal recupero protetto della tabella: esporta il solo `userData` in memoria con copertura `device`, senza scansione cloud, envelope/journal o testimoni `recovery.device`. Non prova che tutte le modifiche e le copie device-only siano incluse e non costituisce conferma del salvataggio effettivo da parte del browser. L'azione «Esporta» nel dialogo di logout interrompe il logout; il file rapido non è una prova che un successivo logout forzato sia privo di rischio. Il download rapido MUST rifiutare un `userData` non più identico allo stato dell'owner/sessione corrente: un dialogo asincrono può conservare un riferimento del precedente account, che non deve essere etichettato come backup del nuovo proprietario. Non attribuire a questo percorso le garanzie del backup completo o del recupero protetto.
 
+**CF-04 candidato, versioni concorrenti di replica ritirata:** il campo
+`retiredReplicaConflictCapsule` dell'envelope owner-scoped è una copia
+cifrata **locale e storica** delle alternative business, delle rispettive
+prove causali, delle baseline dei documenti toccati e del journal originale,
+acquisita soltanto con preflight
+autenticato e commit IndexedDB fenced. Un export che comprende l'envelope
+grezzo deve preservare integralmente anche questa capsula; l'importer
+business non deve trasformarla in un winner, trapiantare la vecchia replica
+o dichiarare un ACK. Non equivale a una copia indipendente dalla perdita
+totale del dispositivo, né al JSON volontario delle evidenze cloud/device,
+che resta non ripristinabile. Senza trasferimento e risoluzione esplicita,
+SYNC-7D/7E rimangono aperti.
+
 La replica cloud automatica non costituisce un backup indipendente dalla custodia delle chiavi. Perdita del profilo con dati solo offline o della KEK cloud senza copia ripristinabile può rendere irrecuperabili i dati: vedere [Archivio e cifratura](secure-storage.md).
 
 ## Backup JSON e importazione

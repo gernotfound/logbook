@@ -12,6 +12,7 @@ import {
 import { prepareKindeCandidateOwner } from '../../lib/sync/kindeCandidateOwnerBootstrap';
 import { inspectKindeCandidateOfflineReplicaJournal } from '../../lib/sync/kindeCandidateOfflineReplicaJournal';
 import { inspectKindeCandidateRetiredReplicaWithExistingKey } from '../../lib/sync/kindeCandidateRetiredReplicaReadOnly';
+import { preserveKindeCandidateRetiredReplicaConflicts } from '../../lib/sync/kindeCandidateRetiredReplicaConflictRecovery';
 import { recoverKindeCandidateStagedReceipt } from '../../lib/sync/kindeCandidateStagedReceiptRecovery';
 
 vi.mock('../../lib/sync/kindeCandidateReplicaRegistry', () => ({
@@ -28,6 +29,9 @@ vi.mock('../../lib/sync/kindeCandidateOfflineReplicaJournal', () => ({
 }));
 vi.mock('../../lib/sync/kindeCandidateRetiredReplicaReadOnly', () => ({
     inspectKindeCandidateRetiredReplicaWithExistingKey: vi.fn(),
+}));
+vi.mock('../../lib/sync/kindeCandidateRetiredReplicaConflictRecovery', () => ({
+    preserveKindeCandidateRetiredReplicaConflicts: vi.fn(),
 }));
 vi.mock('../../lib/sync/kindeCandidateStagedReceiptRecovery', () => ({
     recoverKindeCandidateStagedReceipt: vi.fn(),
@@ -57,6 +61,9 @@ function authenticated() {
         kind: 'baseline-unchanged', pendingOperations: 3, cloudRevision: 5,
     });
     vi.mocked(recoverKindeCandidateStagedReceipt).mockResolvedValue('unconfirmed');
+    vi.mocked(preserveKindeCandidateRetiredReplicaConflicts).mockResolvedValue({
+        preservedEntities: 1, cloudRevision: 5,
+    });
 }
 
 describe('candidate-only replica registry presentation', () => {
@@ -68,6 +75,7 @@ describe('candidate-only replica registry presentation', () => {
         expect(screen.queryByRole('button', { name: 'Controlla modifiche offline su questo dispositivo' })).toBeNull();
         expect(screen.queryByRole('button', { name: 'Analizza la copia cloud e i possibili conflitti' })).toBeNull();
         expect(screen.queryByRole('button', { name: 'Verifica la ricevuta di un invio sigillato' })).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Conserva le versioni concorrenti nell’archivio cifrato' })).toBeNull();
         publicEntry.unmount();
 
         render(<KindeAccountEntry guestArchivePresent candidateMode="preparation" />);
@@ -191,6 +199,14 @@ describe('candidate-only replica registry presentation', () => {
         await screen.findByText(/2 stamp causali differenti, 0 operazioni con possibili sovrapposizioni/);
         expect(screen.getByText(/1 giornate o allenamenti con versioni business differenti/)).toBeTruthy();
         expect(screen.getByText(/nessuna versione viene scelta o sovrascritta/)).toBeTruthy();
+        const preserve = screen.getByRole('button', { name: 'Conserva le versioni concorrenti nell’archivio cifrato' });
+        fireEvent.click(preserve);
+        await screen.findByText(/Conservata 1 entità con versioni concorrenti/);
+        expect(preserveKindeCandidateRetiredReplicaConflicts).toHaveBeenCalledWith({
+            expected: { uid: principal.uid, fenceEpoch: 1, healthConsentRevision: 1 },
+            stillCurrent: expect.any(Function),
+        });
+        expect((preserve as HTMLButtonElement).disabled).toBe(true);
     });
 
     it('does not interpret a possible lost ACK or a failed key inspection as recovered data', async () => {
@@ -206,6 +222,7 @@ describe('candidate-only replica registry presentation', () => {
         const diagnose = await screen.findByRole('button', { name: 'Analizza la copia cloud e i possibili conflitti' });
         fireEvent.click(diagnose);
         await screen.findByText(/potrebbe esistere un invio già applicato senza conferma locale/);
+        expect(screen.queryByRole('button', { name: 'Conserva le versioni concorrenti nell’archivio cifrato' })).toBeNull();
         fireEvent.click(diagnose);
         await screen.findByText(/Non è stato possibile verificare la copia cloud con una chiave cloud già emessa/);
         expect(screen.queryByText(/potrebbe esistere un invio già applicato/)).toBeNull();
