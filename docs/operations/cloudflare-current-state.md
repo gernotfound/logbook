@@ -1,5 +1,25 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
+**Ultimo rilascio verificato 28/11/2026, CF-04 #1521:** [`main`
+`ad59c77dbb255d27d5633ccfb2b336dbf4fe9e52`](https://github.com/gernotfound/logbook/commit/ad59c77dbb255d27d5633ccfb2b336dbf4fe9e52),
+v2.782.0, con [CI PR](https://github.com/gernotfound/logbook/actions/runs/46139640867),
+[Main Release Gate e CodeQL](https://github.com/gernotfound/logbook/actions/runs/46139946182)
+e [Static Assets/smoke byte-esatto](https://github.com/gernotfound/logbook/actions/runs/46140117595)
+riusciti. Il readback Cloudflare ha riportato `thelogbook-frontend`
+deployment `35a4cc14-634f-4f76-bd8c-4837f2b33b44`, versione
+`3ac81715-3445-44f5-9af2-24e3fae93f1b` al 100%, soli binding
+`APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`, senza `D1_API`. Il cambiamento
+rafforza il preflight causale della replica ritirata; **non** completa
+SYNC-7D/7E. Il frontend resta identity-only e il fitness è **NO-GO**.
+
+**Incremento in lavorazione, v2.783.0:** un export candidato volontario
+di evidenze conserva versioni cloud e device separatamente, con journal e
+bozze locali, soltanto dopo verifica di replica ritirata. Non è un backup
+importabile, non crea chiavi e non equivale a recupero/sincronizzazione.
+I risultati di PR, CI e rilascio di questo incremento devono essere
+registrati separatamente dopo verifica exact-SHA; il presente paragrafo
+non ne attesta ancora la pubblicazione.
+
 **Checkpoint verificato 28/11/2026, CF-04 #1520:** [`main`
 `d211565e38e0422250e871ef4e0aa107f464de7e`](https://github.com/gernotfound/logbook/commit/d211565e38e0422250e871ef4e0aa107f464de7e),
 v2.781.0, tree `355695b6073a04d6a835333530c11d4e41cda685`

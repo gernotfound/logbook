@@ -19,6 +19,7 @@ type Options = {
     stillCurrent: () => boolean;
     send?: typeof fetch;
     browserCookies?: () => string;
+    keyPurpose?: 'sync' | 'recovery-inspect';
 };
 
 const MAX_JSON_BYTES = 64 * 1024 * 1024;
@@ -36,6 +37,7 @@ const MAX_JSON_BYTES = 64 * 1024 * 1024;
  */
 export async function captureKindeCandidatePreWithdrawalSources({
     expected, stillCurrent, send = fetch, browserCookies = () => document.cookie,
+    keyPurpose = 'sync',
 }: Options) {
     const owner = userOwner(expected.uid);
     const fence = captureKindeCandidateSessionFence({ stillCurrent, browserCookies });
@@ -56,7 +58,7 @@ export async function captureKindeCandidatePreWithdrawalSources({
     const witnesses = readStableDeviceRecovery(owner);
     check();
     const observed = await inspectKindeCandidateCloudCheckpoint({
-        expected, stillCurrent: current, send, browserCookies,
+        expected, stillCurrent: current, send, browserCookies, keyPurpose,
     });
     check();
     if (before && (before.consentRevision !== expected.healthConsentRevision
