@@ -4,19 +4,19 @@
 
 ## CF-04 · Frontend identity-only verificato · 28 novembre 2026
 
-**Checkpoint più recente verificato prima del candidato v2.785.0:** [PR #1523](https://github.com/gernotfound/logbook/pull/1523),
-`main` [`24fb8ed545e6a3972d337eaa51ef4fdc1262542c`](https://github.com/gernotfound/logbook/commit/24fb8ed545e6a3972d337eaa51ef4fdc1262542c),
-v2.784.0. [CI PR](https://github.com/gernotfound/logbook/actions/runs/46147009607),
-[Main Release Gate/CodeQL](https://github.com/gernotfound/logbook/actions/runs/46147327929)
-e [deploy Static Assets/smoke HTTPS byte-esatto](https://github.com/gernotfound/logbook/actions/runs/46147515297)
+**Checkpoint più recente verificato prima del candidato v2.786.0:** [PR #1524](https://github.com/gernotfound/logbook/pull/1524),
+`main` [`e6969fd14f821217b9b267f592198c6994850668`](https://github.com/gernotfound/logbook/commit/e6969fd14f821217b9b267f592198c6994850668),
+v2.785.0. [CI PR](https://github.com/gernotfound/logbook/actions/runs/46149706849),
+[Main Release Gate/CodeQL](https://github.com/gernotfound/logbook/actions/runs/46150166450)
+e [deploy Static Assets/smoke HTTPS byte-esatto](https://github.com/gernotfound/logbook/actions/runs/46150380685)
 `success`. Readback di sola lettura Cloudflare: deployment frontend
-`8abf7cf2-34bb-419a-b029-2e4f82edd7cd`, versione
-`7ce3e55e-e602-423b-8636-f48de0ee8426` al 100%; binding `APP_ORIGIN`,
-`ASSETS`, `KINDE_HTTP`, nessun `D1_API`. L'incremento v2.785.0 valuta
-localmente i campi componibili o da riconciliare manualmente nella capsula cifrata,
-e consente preferenze di risoluzione owner-local salvate nel vault cifrato,
-senza applicare i valori o trasferire il journal; nessun nuovo servizio,
-credenziale, IAM, DNS, billing o scrittura D1. Prove
+`5a785eb9-b219-4a79-9054-83b1238c22a5`, versione
+`59670f61-7637-4364-a8bc-78bfbba7d510` al 100%; binding `APP_ORIGIN`,
+`ASSETS`, `KINDE_HTTP`, nessun `D1_API`. L'incremento v2.786.0 prepara
+una proiezione in memoria delle scelte già cifrate, vincolata al controllo
+causale e alle versioni cloud nuovamente autenticate; non crea membership,
+write, ACK o un nuovo journal. Nessun nuovo servizio, credenziale, IAM,
+DNS, billing o scrittura D1. Prove
 di merge/deploy del nuovo candidato da registrare separatamente.
 
 **Checkpoint precedente:**

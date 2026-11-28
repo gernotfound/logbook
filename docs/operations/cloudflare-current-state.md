@@ -1,35 +1,30 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
-**Ultimo rilascio verificato prima di questo candidato, 28/11/2026, CF-04 #1523:** [`main`
-`24fb8ed545e6a3972d337eaa51ef4fdc1262542c`](https://github.com/gernotfound/logbook/commit/24fb8ed545e6a3972d337eaa51ef4fdc1262542c),
-v2.784.0, con [CI PR Canonical/CodeQL e otto E2E](https://github.com/gernotfound/logbook/actions/runs/46147009607),
-[Main Release Gate e CodeQL](https://github.com/gernotfound/logbook/actions/runs/46147327929)
-e [Static Assets/smoke HTTPS byte-esatto](https://github.com/gernotfound/logbook/actions/runs/46147515297)
+**Ultimo rilascio verificato prima di questo candidato, 28/11/2026, CF-04 #1524:** [`main`
+`e6969fd14f821217b9b267f592198c6994850668`](https://github.com/gernotfound/logbook/commit/e6969fd14f821217b9b267f592198c6994850668),
+v2.785.0, tree `11b13e438c426aabd3dc7eb113af253d5c19f194`, con
+[CI PR Canonical/CodeQL e otto E2E](https://github.com/gernotfound/logbook/actions/runs/46149706849),
+[Main Release Gate e CodeQL](https://github.com/gernotfound/logbook/actions/runs/46150166450)
+e [Static Assets/smoke HTTPS byte-esatto](https://github.com/gernotfound/logbook/actions/runs/46150380685)
 riusciti. Il readback Cloudflare ha riportato `thelogbook-frontend`
-deployment `8abf7cf2-34bb-419a-b029-2e4f82edd7cd`, versione
-`7ce3e55e-e602-423b-8636-f48de0ee8426` al 100%, soli binding
+deployment `5a785eb9-b219-4a79-9054-83b1238c22a5`, versione
+`59670f61-7637-4364-a8bc-78bfbba7d510` al 100%, soli binding
 `APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`, senza `D1_API`. Il cambiamento
-conserva in IndexedDB cifrato una capsula delle versioni concorrenti della
-stessa entità, con journal e provenienza originali; **non** completa
+aggiunge una proposta conservativa di composizione dei conflitti e scelte
+owner-local sigillate, conservando tutte le versioni e le pending; **non** completa
 SYNC-7D/7E. Il frontend resta identity-only e il fitness è **NO-GO**.
 
-**Incremento candidato v2.785.0 (non ancora integrato o pubblicato):**
-l'anteprima pura della capsula prova a comporre campi indipendenti di
-versioni della stessa giornata o seduta soltanto se lo schema finale rimane
-senza perdita. Cancellazioni, spostamenti, creazioni concorrenti,
-array e stessa proprietà divergente richiedono scelta manuale; i conteggi
-sono visibili nella sola UI candidata dopo il salvataggio cifrato.
-In aggiunta, dopo il controllo di un journal di replica ritirata, la UI
-candidata permette di rivedere le alternative originali e di salvare
-in IndexedDB cifrato una preferenza esplicita per la versione device,
-cloud o una combinazione provvisoria solo se sicura: le tre versioni e il
-journal restano inalterati. Le preferenze rispettano consenso, epoch,
-sessione e revisione locale, senza chiamate D1 di scrittura o richiesta
-ADK; non sono un merge né un recupero. Nessuna bozza proposta diventa
-autorevole, nessuna membership viene
-assegnata e nessun journal è trasferito o ACKato. CI exact-SHA e
-prove di rilascio di questo candidato sono da verificare separatamente.
-SYNC-7D/7E, Safari/multi-device reale e GO fitness restano aperti.
+**Incremento candidato v2.786.0 (non ancora integrato o pubblicato):**
+la materializzazione *in memoria* delle preferenze esplicite confronta nuovamente
+il journal, la replica e i documenti sorgente con la capsula cifrata; rifiuta
+un possibile lost ACK nel contatore remoto e richiede in ingresso uno snapshot
+AEAD autenticato con lo stesso owner, consenso, epoch, revisione e alternative
+cloud originali; l'eventuale writer deve acquisire una nuova prova di freschezza.
+Può produrre una proiezione di giornata o allenamento scelto (anche spostamento
+fra mesi) senza mutare l'archivio o il backend. L'output non è ancora un nuovo
+journal causale: manca il trasferimento a membership verificata, il nuovo
+writer con receipt e il commit durabile finale. SYNC-7D/7E e i collaudi reali
+rimangono aperti; nessun GO fitness o nuovo binding pubblico.
 
 **Checkpoint verificato 28/11/2026, CF-04 #1520:** [`main`
 `d211565e38e0422250e871ef4e0aa107f464de7e`](https://github.com/gernotfound/logbook/commit/d211565e38e0422250e871ef4e0aa107f464de7e),
