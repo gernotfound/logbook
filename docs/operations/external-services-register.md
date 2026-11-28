@@ -2,6 +2,17 @@
 
 **Stato di riferimento:** per l'ultimo readback Cloudflare consultare [quadro operativo](cloudflare-current-state.md). I valori sotto sono checkpoint datati, non una fotografia aggiornata automaticamente del provider.
 
+## CF-08 · Inventario D1 del 28 novembre 2026
+
+Readback di sola lettura su entrambe le D1 identificate nel manifesto isolato.
+I ledger ordinati corrispondono alle migrazioni applicative da 0001 a 0020 e
+alle migrazioni recovery da 0001 a 0005. Entrambe riportano giurisdizione
+`eu`, read replication `disabled` e hanno restituito un bookmark Time Travel.
+Il registro indipendente riporta `sealed`, generazione 1. Il readback riguarda
+metadati e ledger. Restano da collaudare ripristino selettivo, disponibilità
+della KEK dopo perdita dell'ambiente e tempi di recupero nella [#1062](https://github.com/gernotfound/logbook/issues/1062).
+La finestra pubblicata per Workers Free è di sette giorni ([Cloudflare D1](https://developers.cloudflare.com/d1/reference/time-travel/)).
+
 ## CF-04 · Recupero receipt-only di batch ritirato · 27 novembre 2026
 
 [PR #1506](https://github.com/gernotfound/logbook/pull/1506), v2.768.0,

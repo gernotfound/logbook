@@ -1,6 +1,21 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
-**Ultimo readback frontend verificato, 27/11/2026, dopo CF-04 #1506:**
+**28/11/2026 · D1 e frontend**. Il readback Cloudflare conferma i ledger
+applicativo 0020 e recovery 0005, un bookmark Time Travel per ciascun database
+e il registro indipendente sigillato alla generazione 1. Dettagli nel
+[registro servizi](external-services-register.md#cf-08--inventario-d1-del-28-novembre-2026).
+La verifica dei metadati lascia aperta la prova di restore della
+[#1062](https://github.com/gernotfound/logbook/issues/1062).
+
+Al checkpoint di [#1513](https://github.com/gernotfound/logbook/pull/1513)
+(`main` `0ae98626`), il provider riporta il deployment frontend
+`4f8d109c-a658-4be3-9adf-5c665263fe06`, versione
+`f3ae4860-f112-47f8-b3fc-f504f4878008` al 100%, con i soli binding
+`APP_ORIGIN`, `ASSETS` e `KINDE_HTTP`. Recupero delle modifiche offline,
+riconciliazione e collaudo reale multi-device/Safari restano aperti in
+[#1058](https://github.com/gernotfound/logbook/issues/1058).
+
+**Checkpoint frontend precedente, 27/11/2026, dopo CF-04 #1506:**
 la [PR #1506](https://github.com/gernotfound/logbook/pull/1506),
 v2.768.0, è integrata con squash in
 [`main` `f9c96aa`](https://github.com/gernotfound/logbook/commit/f9c96aa583755a0bdf0ae6deecdd978a3880f1df),

@@ -12,9 +12,11 @@ const COUNTS = Object.freeze({
   restored: `SELECT
     (SELECT COUNT(*) FROM (SELECT 1 FROM sync_subjects LIMIT ${MAX_OWNERS + 1})) AS owners,
     (SELECT COUNT(*) FROM (SELECT 1 FROM kinde_account_erasure_intents LIMIT ${MAX_OWNERS + 1})) AS accounts`,
-  independent: `SELECT
+  independent: `SELECT singleton, mode, generation,
+    EXISTS (SELECT 1 FROM recovery_erasure_cutoffs WHERE finalized = 0) AS pending_cutoff,
     (SELECT COUNT(*) FROM (SELECT 1 FROM recovery_owner_fences LIMIT ${MAX_OWNERS + 1})) AS owners,
-    (SELECT COUNT(*) FROM (SELECT 1 FROM recovery_account_erasure_denials LIMIT ${MAX_OWNERS + 1})) AS accounts`,
+    (SELECT COUNT(*) FROM (SELECT 1 FROM recovery_account_erasure_denials LIMIT ${MAX_OWNERS + 1})) AS accounts
+    FROM recovery_control WHERE singleton = 1`,
 });
 const RESTORED_SQL = `SELECT uid, status, consent_revision, fence_epoch,
   erased_before_revision FROM sync_subjects ORDER BY uid LIMIT ?`;
@@ -35,8 +37,6 @@ const ACCOUNT_SQL = `SELECT ${QUALIFIED_INTENT_COLUMNS}, p.status AS principal_s
   ORDER BY i.uid LIMIT ?`;
 const DENIAL_SQL = `SELECT d.uid, d.intent_digest FROM recovery_account_erasure_denials d
   ORDER BY d.uid LIMIT ?`;
-const CONTROL_SQL = `SELECT singleton, mode, generation
-  FROM recovery_control WHERE singleton = 1`;
 
 class CensusFailure extends Error {
   constructor(reason) { super(reason); this.reason = reason; }
@@ -57,23 +57,21 @@ function count(value) {
   requireEvidence(value <= MAX_OWNERS, 'coverage-limit-exceeded');
   return value;
 }
-async function metadata(restored, independent) {
-  const control = await independent.prepare(CONTROL_SQL).first();
-  requireEvidence(control && control.singleton === 1 && control.mode === 'sealed'
-    && Number.isSafeInteger(control.generation) && control.generation >= 1,
-  'independent-authority-not-sealed');
-  const cutoff = await independent.prepare(
-    'SELECT uid FROM recovery_erasure_cutoffs WHERE finalized = 0 LIMIT 1',
-  ).first();
-  requireEvidence(cutoff === null, 'terminal-erasure-cutoff-pending');
-  const app = await restored.prepare(COUNTS.restored).first();
+async function registryMetadata(independent) {
   const registry = await independent.prepare(COUNTS.independent).first();
+  requireEvidence(registry && registry.singleton === 1 && registry.mode === 'sealed'
+    && Number.isSafeInteger(registry.generation) && registry.generation >= 1,
+  'independent-authority-not-sealed');
+  requireEvidence(registry.pending_cutoff === 0, 'terminal-erasure-cutoff-pending');
+  return registry;
+}
+function metadata(app, registry) {
   const restoredCount = count(app?.owners);
   const independentCount = count(registry?.owners);
   requireEvidence(restoredCount > 0 && independentCount > 0,
     'independent-coverage-empty');
   requireEvidence(restoredCount === independentCount, 'owner-coverage-mismatch');
-  return { generation: control.generation, restoredCount, independentCount,
+  return { generation: registry.generation, restoredCount, independentCount,
     intentCount: count(app?.accounts), denialCount: count(registry?.accounts) };
 }
 function normalizedRows(rows, independent) {
@@ -161,7 +159,10 @@ export async function inspectRestoredD1Census(restoredDb, independentDb) {
       'independent-database-required');
     const restored = firstPrimary(restoredDb);
     const independent = firstPrimary(independentDb);
-    const before = await metadata(restored, independent);
+    // Bracket all application reads with independent statements that each
+    // observe the seal, pending cutoffs and bounded counts in one SQL snapshot.
+    const openingRegistry = await registryMetadata(independent);
+    const before = metadata(await restored.prepare(COUNTS.restored).first(), openingRegistry);
     const firstRestored = await readRows(restored, RESTORED_SQL, false);
     const firstIndependent = await readRows(independent, INDEPENDENT_SQL, true);
     const firstAccounts = await readAccountSnapshot(restored, independent);
@@ -180,7 +181,8 @@ export async function inspectRestoredD1Census(restoredDb, independentDb) {
     // Hash validation is asynchronous: the final seal/generation witness must
     // follow it, or a registry change during digesting can escape the check.
     await inspectAccountCoverage(secondAccounts);
-    const after = await metadata(restored, independent);
+    const closingApp = await restored.prepare(COUNTS.restored).first();
+    const after = metadata(closingApp, await registryMetadata(independent));
     requireEvidence(secondAccounts.intents.length === after.intentCount
       && secondAccounts.denials.length === after.denialCount, 'account-erasure-coverage-mismatch');
     requireEvidence(before.generation === after.generation
