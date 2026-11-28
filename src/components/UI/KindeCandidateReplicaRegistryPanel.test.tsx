@@ -182,14 +182,15 @@ describe('candidate-only replica registry presentation', () => {
         });
         vi.mocked(inspectKindeCandidateRetiredReplicaWithExistingKey).mockResolvedValue({
             kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
-                changedCloudFieldStamps: 2, pendingWithOverlappingCloudStamps: 0, unclassifiedDocuments: 1,
+                changedCloudFieldStamps: 2, pendingWithOverlappingCloudStamps: 0, unclassifiedDocuments: 1, entitiesWithCompetingVersions: 1,
             },
         });
         render(<KindeAccountEntry candidateMode="preparation" />);
         fireEvent.click(await screen.findByRole('button', { name: 'Controlla modifiche offline su questo dispositivo' }));
         fireEvent.click(await screen.findByRole('button', { name: 'Analizza la copia cloud e i possibili conflitti' }));
         await screen.findByText(/2 stamp causali differenti, 0 operazioni con possibili sovrapposizioni/);
-        expect(screen.getByText(/Anche zero sovrapposizioni non dimostra/)).toBeTruthy();
+        expect(screen.getByText(/1 giornate o allenamenti con versioni business differenti/)).toBeTruthy();
+        expect(screen.getByText(/nessuna versione viene scelta o sovrascritta/)).toBeTruthy();
     });
 
     it('does not interpret a possible lost ACK or a failed key inspection as recovered data', async () => {

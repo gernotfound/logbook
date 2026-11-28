@@ -15,6 +15,7 @@ import { REPLICA_CLOCK_SKEW_MARGIN_MS } from '../../../src/lib/sync/replicaProto
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
 import { updateArchiveRecord } from '../../../src/lib/sync/secureArchiveRepository';
+import { diffDocuments } from '../../../src/lib/sync/semanticProjection';
 import type { SyncMeta } from '../../../src/lib/sync/semanticProjection';
 import { fieldKey } from '../../../src/lib/sync/semanticProjection/metadata';
 
@@ -54,6 +55,41 @@ async function checkpoint(business = projectDocuments(data(170), catalog).get(''
         revision: 8, fenceEpoch: 5, consentRevision: 1,
         documents: [{ path: '', revision: 8, document: encrypted }],
     }), uid, accountKey, 1, () => true);
+}
+
+async function competingEntityPreflight({ baseline, desired, remote, changedPath, withoutStamp = false }: {
+    baseline: UserData;
+    desired: UserData;
+    remote: UserData;
+    changedPath: string[];
+    withoutStamp?: boolean;
+}) {
+    const saved = (await readLocal(owner))!;
+    const seq = saved.actorSeq + 1;
+    const before = projectDocuments(baseline, catalog);
+    const mine = projectDocuments(desired, catalog);
+    const pending = diffDocuments(before, mine, saved.actorId, seq, { ...saved.clock, [saved.actorId]: seq });
+    expect(pending.length).toBeGreaterThan(0);
+    const local = validateLocalEnvelope({ ...saved, baseline, data: desired,
+        actorSeq: seq, clock: { ...saved.clock, [saved.actorId]: seq }, pending,
+        syncMetaByDocument: Object.fromEntries([...before.keys()].map(path => [path, emptyMeta])),
+    }, owner)!;
+    const peer = projectDocuments(remote, catalog);
+    const changedDocument = changedPath[0];
+    const changedField = changedPath.slice(1);
+    const changedMeta: SyncMeta = { ...emptyMeta, clock: { s01: 1 }, fields: withoutStamp ? {} : {
+        [fieldKey(changedField)]: { actorId: 's01', seq: 1, clock: { s01: 1 } },
+    }, writer: { slot: 's01', replicaId: 'peer-device', generation: 1, seq: 1, consentRevision: 1 } };
+    const cloud = await readAuthenticatedCloudflareCheckpoint(async () => ({
+        revision: 8, fenceEpoch: 5, consentRevision: 1,
+        documents: [...peer].map(([path, business]) => ({ path, revision: 8,
+            document: sealCloudDocument(accountKey, uid, path, business,
+                path === changedDocument ? changedMeta : emptyMeta) })),
+    }), uid, accountKey, 1, () => true);
+    const sealed = await get(storageKey);
+    const outcome = preflightRetiredReplicaRecovery(uid, local, cloud, control(), catalog);
+    expect(await get(storageKey)).toBe(sealed);
+    return outcome;
 }
 
 beforeEach(async () => {
@@ -97,7 +133,7 @@ describe('retired replica recovery preflight, no mutation or new causal identity
             await checkpoint(undefined, meta), control(), catalog)).toEqual({
             kind: 'reconciliation-required', reason: 'cloud-diverged',
             evidence: { changedCloudFieldStamps: 0,
-                pendingWithOverlappingCloudStamps: 0, unclassifiedDocuments: 1 },
+                pendingWithOverlappingCloudStamps: 0, unclassifiedDocuments: 1, entitiesWithCompetingVersions: 0 },
         });
     });
 
@@ -107,7 +143,7 @@ describe('retired replica recovery preflight, no mutation or new causal identity
             await checkpoint(undefined, meta), control(), catalog)).toEqual({
             kind: 'reconciliation-required', reason: 'cloud-diverged',
             evidence: { changedCloudFieldStamps: 0,
-                pendingWithOverlappingCloudStamps: 0, unclassifiedDocuments: 1 },
+                pendingWithOverlappingCloudStamps: 0, unclassifiedDocuments: 1, entitiesWithCompetingVersions: 0 },
         });
     });
 
@@ -116,7 +152,7 @@ describe('retired replica recovery preflight, no mutation or new causal identity
             await checkpoint(projectDocuments(data(173), catalog).get('')!), control(), catalog))
             .toEqual({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
                 changedCloudFieldStamps: 0, pendingWithOverlappingCloudStamps: 0,
-                unclassifiedDocuments: 1,
+                unclassifiedDocuments: 1, entitiesWithCompetingVersions: 0,
             } });
     });
 
@@ -132,10 +168,106 @@ describe('retired replica recovery preflight, no mutation or new causal identity
                 await checkpoint(projectDocuments(data(173), catalog).get('')!, meta), control(), catalog);
             expect(result).toEqual({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
                 changedCloudFieldStamps: 1, pendingWithOverlappingCloudStamps: 1,
-                unclassifiedDocuments: 0,
+                unclassifiedDocuments: 0, entitiesWithCompetingVersions: 0,
             } });
             expect(await get(storageKey)).toBe(original);
         }
+    });
+
+    it('detects competing versions of the same nutrition day despite disjoint field stamps', async () => {
+        const baseline = UserDataSchema.parse({ ...data(170), nutrition: {
+            '2026-11-13': { date: '2026-11-13', weight: 70, sleepHours: '07:00' },
+        } }) as unknown as UserData;
+        const desired = UserDataSchema.parse({ ...baseline, nutrition: {
+            '2026-11-13': { ...baseline.nutrition!['2026-11-13'], weight: 71 },
+        } }) as unknown as UserData;
+        const remote = UserDataSchema.parse({ ...baseline, nutrition: {
+            '2026-11-13': { ...baseline.nutrition!['2026-11-13'], sleepHours: '08:00' },
+        } }) as unknown as UserData;
+        const outcome = await competingEntityPreflight({ baseline, desired, remote,
+            changedPath: ['nutrition_months/2026-11', '2026-11-13', 'sleepHours'] });
+        expect(outcome).toMatchObject({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
+            changedCloudFieldStamps: 1, pendingWithOverlappingCloudStamps: 0,
+            unclassifiedDocuments: 0, entitiesWithCompetingVersions: 1,
+        } });
+    });
+
+    it('detects a competing workout version despite independent edited fields', async () => {
+        const workout = { id: 'session-1', date: '2026-11-13', sessionNote: 'prima',
+            exercises: [{ id: 'row-1', exId: 'bench', sets: [{ id: 'set-1', kg: '40', reps: '8' }] }] };
+        const baseline = UserDataSchema.parse({ ...data(170), history: [workout] }) as unknown as UserData;
+        const desired = UserDataSchema.parse({ ...baseline, history: [{ ...workout, sessionNote: 'locale' }] }) as unknown as UserData;
+        const remote = UserDataSchema.parse({ ...baseline, history: [{ ...workout, exercises: [
+            { ...workout.exercises[0], sets: [{ id: 'set-1', kg: '45', reps: '8' }] },
+        ] }] }) as unknown as UserData;
+        const outcome = await competingEntityPreflight({ baseline, desired, remote,
+            changedPath: ['history_months/2026-11', 'session-1', 'exercises'] });
+        expect(outcome).toMatchObject({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
+            pendingWithOverlappingCloudStamps: 0, entitiesWithCompetingVersions: 1,
+        } });
+    });
+
+    it('follows a workout ID across months instead of hiding a date move as independent', async () => {
+        const workout = { id: 'session-move', date: '2026-11-13', sessionNote: 'base', exercises: [] };
+        const baseline = UserDataSchema.parse({ ...data(170), history: [workout] }) as unknown as UserData;
+        const desired = UserDataSchema.parse({ ...baseline, history: [
+            { ...workout, sessionNote: 'locale' },
+        ] }) as unknown as UserData;
+        const remote = UserDataSchema.parse({ ...baseline, history: [
+            { ...workout, date: '2026-12-01' },
+        ] }) as unknown as UserData;
+        const outcome = await competingEntityPreflight({ baseline, desired, remote,
+            changedPath: ['history_months/2026-12', 'session-move'] });
+        expect(outcome).toMatchObject({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
+            entitiesWithCompetingVersions: 1,
+        } });
+    });
+
+    it('does not invent two business versions when both devices reached the same value', async () => {
+        const baseline = UserDataSchema.parse({ ...data(170), nutrition: {
+            '2026-11-13': { date: '2026-11-13', weight: 70 },
+        } }) as unknown as UserData;
+        const same = UserDataSchema.parse({ ...baseline, nutrition: {
+            '2026-11-13': { date: '2026-11-13', weight: 71 },
+        } }) as unknown as UserData;
+        const outcome = await competingEntityPreflight({ baseline, desired: same, remote: same,
+            changedPath: ['nutrition_months/2026-11', '2026-11-13', 'weight'] });
+        expect(outcome).toMatchObject({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
+            entitiesWithCompetingVersions: 0,
+        } });
+    });
+
+    it('counts a remote deletion of the edited day even without a surviving stamp', async () => {
+        const baseline = UserDataSchema.parse({ ...data(170), nutrition: {
+            '2026-11-13': { date: '2026-11-13', weight: 70 },
+        } }) as unknown as UserData;
+        const desired = UserDataSchema.parse({ ...baseline, nutrition: {
+            '2026-11-13': { date: '2026-11-13', weight: 71 },
+        } }) as unknown as UserData;
+        const remote = UserDataSchema.parse({ ...baseline, nutrition: {} }) as unknown as UserData;
+        const outcome = await competingEntityPreflight({ baseline, desired, remote,
+            changedPath: ['nutrition_months/2026-11', '2026-11-13'], withoutStamp: true });
+        expect(outcome).toMatchObject({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
+            entitiesWithCompetingVersions: 1, unclassifiedDocuments: 1,
+        } });
+    });
+
+    it('does not report a collision when edits concern two different nutrition days', async () => {
+        const baseline = UserDataSchema.parse({ ...data(170), nutrition: {
+            '2026-11-13': { date: '2026-11-13', weight: 70 },
+            '2026-11-14': { date: '2026-11-14', weight: 80 },
+        } }) as unknown as UserData;
+        const desired = UserDataSchema.parse({ ...baseline, nutrition: {
+            ...baseline.nutrition, '2026-11-13': { date: '2026-11-13', weight: 71 },
+        } }) as unknown as UserData;
+        const remote = UserDataSchema.parse({ ...baseline, nutrition: {
+            ...baseline.nutrition, '2026-11-14': { date: '2026-11-14', weight: 81 },
+        } }) as unknown as UserData;
+        const outcome = await competingEntityPreflight({ baseline, desired, remote,
+            changedPath: ['nutrition_months/2026-11', '2026-11-14', 'weight'] });
+        expect(outcome).toMatchObject({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
+            entitiesWithCompetingVersions: 0, pendingWithOverlappingCloudStamps: 0,
+        } });
     });
 
     it('reports remote changes to a different field without claiming they are safe to replay', async () => {
@@ -149,7 +281,7 @@ describe('retired replica recovery preflight, no mutation or new causal identity
             await checkpoint(projectDocuments(withGender, catalog).get('')!, meta), control(), catalog))
             .toEqual({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
                 changedCloudFieldStamps: 1, pendingWithOverlappingCloudStamps: 0,
-                unclassifiedDocuments: 0,
+                unclassifiedDocuments: 0, entitiesWithCompetingVersions: 0,
             } });
     });
 
@@ -172,7 +304,7 @@ describe('retired replica recovery preflight, no mutation or new causal identity
         expect(preflightRetiredReplicaRecovery(uid, (await readLocal(owner))!, cloud, control(), catalog))
             .toEqual({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
                 changedCloudFieldStamps: 0, pendingWithOverlappingCloudStamps: 0,
-                unclassifiedDocuments: 1,
+                unclassifiedDocuments: 1, entitiesWithCompetingVersions: 0,
             } });
     });
 
@@ -320,7 +452,7 @@ describe('retired replica recovery preflight, no mutation or new causal identity
             await checkpoint(projectDocuments(remote, catalog).get('')!, meta), control(), catalog))
             .toEqual({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
                 changedCloudFieldStamps: 1, pendingWithOverlappingCloudStamps: 0,
-                unclassifiedDocuments: 1,
+                unclassifiedDocuments: 1, entitiesWithCompetingVersions: 0,
             } });
     });
 
@@ -335,7 +467,7 @@ describe('retired replica recovery preflight, no mutation or new causal identity
             await checkpoint(projectDocuments(remote, catalog).get('')!, meta), control(), catalog))
             .toEqual({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
                 changedCloudFieldStamps: 1, pendingWithOverlappingCloudStamps: 1,
-                unclassifiedDocuments: 1,
+                unclassifiedDocuments: 1, entitiesWithCompetingVersions: 0,
             } });
     });
 
@@ -350,7 +482,7 @@ describe('retired replica recovery preflight, no mutation or new causal identity
             await checkpoint(projectDocuments(remote, catalog).get('')!, meta), control(), catalog))
             .toEqual({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
                 changedCloudFieldStamps: 1, pendingWithOverlappingCloudStamps: 0,
-                unclassifiedDocuments: 1,
+                unclassifiedDocuments: 1, entitiesWithCompetingVersions: 0,
             } });
     });
 
@@ -367,7 +499,7 @@ describe('retired replica recovery preflight, no mutation or new causal identity
         expect(preflightRetiredReplicaRecovery(uid, local, cloud, control(), catalog))
             .toEqual({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
                 changedCloudFieldStamps: 1, pendingWithOverlappingCloudStamps: 1,
-                unclassifiedDocuments: 1,
+                unclassifiedDocuments: 1, entitiesWithCompetingVersions: 0,
             } });
         expect(await get(storageKey)).toBe(sealed);
     });
@@ -389,7 +521,7 @@ describe('retired replica recovery preflight, no mutation or new causal identity
             await checkpoint(projectDocuments(remote, catalog).get('')!, cloudMeta), control(), catalog))
             .toEqual({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
                 changedCloudFieldStamps: 2, pendingWithOverlappingCloudStamps: 1,
-                unclassifiedDocuments: 1,
+                unclassifiedDocuments: 1, entitiesWithCompetingVersions: 0,
             } });
     });
 
@@ -421,7 +553,7 @@ describe('retired replica recovery preflight, no mutation or new causal identity
         expect(preflightRetiredReplicaRecovery(uid, local, cloud, control(), catalog))
             .toEqual({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
                 changedCloudFieldStamps: 1, pendingWithOverlappingCloudStamps: 0,
-                unclassifiedDocuments: 1,
+                unclassifiedDocuments: 1, entitiesWithCompetingVersions: 0,
             } });
     });
 
@@ -455,7 +587,7 @@ describe('retired replica recovery preflight, no mutation or new causal identity
         expect(preflightRetiredReplicaRecovery(uid, local, cloud, control(), catalog))
             .toEqual({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
                 changedCloudFieldStamps: 1, pendingWithOverlappingCloudStamps: 0,
-                unclassifiedDocuments: 1,
+                unclassifiedDocuments: 1, entitiesWithCompetingVersions: 0,
             } });
     });
 });
