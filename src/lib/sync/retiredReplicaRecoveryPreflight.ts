@@ -262,6 +262,13 @@ export function preflightRetiredReplicaRecovery(
 
     const base = projectDocuments(local.baseline, catalog);
     const current = projectDocuments(local.data, catalog);
+    // A divergent cloud is not evidence of a remote conflict until the
+    // original journal itself accounts for the local business version.
+    // Keep this proof ahead of diagnostics that compare local and remote.
+    const replay = applySemanticOperations(base, local.pending, local.syncMetaByDocument).documents;
+    if (replay.size !== current.size || [...current].some(([path, desired]) => !equal(replay.get(path), desired))) {
+        return { kind: 'reconciliation-required', reason: 'local-replay-diverged' };
+    }
     let diverged = base.size !== cloud.documents.size
         || Object.keys(local.syncMetaByDocument).length !== cloud.documents.size;
     for (const [path, expected] of base) {
@@ -274,10 +281,6 @@ export function preflightRetiredReplicaRecovery(
     }
     if (diverged) return { kind: 'reconciliation-required', reason: 'cloud-diverged',
         evidence: describeCloudDivergence(local, cloud, base, current) };
-    const replay = applySemanticOperations(base, local.pending, local.syncMetaByDocument).documents;
-    if (replay.size !== current.size || [...current].some(([path, desired]) => !equal(replay.get(path), desired))) {
-        return { kind: 'reconciliation-required', reason: 'local-replay-diverged' };
-    }
     return { kind: 'baseline-unchanged', pendingOperations: local.pending.length,
         cloudRevision: cloud.revision };
 }
