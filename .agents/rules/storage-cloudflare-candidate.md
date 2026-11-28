@@ -14,6 +14,43 @@ avere le stesse revisioni, lo stesso epoch e registri di replica equivalenti.
 
 ## Checkpoint candidati CF-03/04
 
+### CF-04 — Anteprima conservativa dei conflitti (candidato 28/11/2026)
+
+`previewRetiredReplicaConflictResolution()` valuta localmente la capsula
+cifrata senza cambiarla: il confronto a tre vie baseline/device/cloud
+propone una composizione soltanto per campi indipendenti nella stessa
+giornata o seduta rimasta nello stesso mese, con output senza perdita
+secondo lo schema business. Stesso campo discordante, array modificati
+da entrambi, creazione concorrente, delete, spostamenti tra mesi e
+`activeWorkout` restano manuali. La UI **soltanto candidata** espone
+conteggi aggregati dopo il commit di conservazione, non i valori salute;
+nessuna scelta, nuovo actor, claim, invio, ACK o modifica del cloud deriva
+dall'anteprima. L'applicazione di una bozza richiederà prova nuovamente
+attuale su owner/sessione/consenso, snapshot D1 e journal originale,
+nuova membership e commit durevole indipendente. SYNC-7D/7E restano aperti.
+
+### CF-04 — Preferenze di riconciliazione, solo locali (candidato 28/11/2026)
+
+Solo dopo una nuova diagnosi `retired-pending` owner-bound, la schermata
+candidata consente di **ispezionare** nella vault cifrata le tre alternative
+per ogni entità già conservata. Un gesto esplicito può scegliere `device`,
+`cloud` o `combined`, quest'ultima soltanto se l'anteprima pura dimostra
+che i campi sono componibili senza perdita. Non si sceglie mai un vincitore
+implicitamente. La preferenza è validata contro la capsula immutabile,
+consenso, epoch, sessione e revisione IndexedDB, poi registrata mediante
+una singola transazione che conserva tutte le versioni originali e le pending.
+Scelte duplicate, alterate, fuori capsula o combinate su conflitti reali
+falliscono senza scrittura. Per limitare esposizione accidentale, i valori
+salute sono mostrati solo su azione esplicita e in dettagli richiudibili,
+mai inviati alla rete.
+
+Queste scelte **non** sono applicate ai dati business, non determinano la
+base causale, non creano nuovo slot/actor o writer, non richiedono ADK e non
+producono commit, ACK, eliminazioni o transfer di pending. La riapertura
+del vault deve restituirle identiche; ogni futura applicazione deve
+riconvalidare lo stato D1 corrente e il journal completo. SYNC-7D/7E
+restano aperti; il fitness pubblico rimane identity-only.
+
 ### CF-04 — Copia durevole delle versioni concorrenti (candidato 28/11/2026)
 
 Dopo la diagnosi `retired-pending`, la schermata **solo candidata** può

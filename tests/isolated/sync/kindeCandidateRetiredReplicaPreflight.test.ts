@@ -9,6 +9,7 @@ import { projectDocuments } from '../../../src/lib/sync/documentProjection';
 import { inspectKindeCandidateRetiredReplicaPreflight } from '../../../src/lib/sync/kindeCandidateRetiredReplicaPreflight';
 import { inspectKindeCandidateRetiredReplicaWithExistingKey } from '../../../src/lib/sync/kindeCandidateRetiredReplicaReadOnly';
 import { preserveKindeCandidateRetiredReplicaConflicts } from '../../../src/lib/sync/kindeCandidateRetiredReplicaConflictRecovery';
+import { inspectOrChooseKindeCandidateRetiredConflicts } from '../../../src/lib/sync/kindeCandidateRetiredConflictDecisionBridge';
 import { adoptReplicaCheckpoint, commitLocal, initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults, unlockVaultForOwner, vaultControlKey } from '../../../src/lib/sync/secureArchiveSession';
@@ -300,7 +301,8 @@ describe('Kinde candidate: authenticated retired replica preflight', () => {
             expected, stillCurrent: () => true, send,
             browserCookies: () => '__Host-logbook_csrf=' + csrf,
         });
-        expect(result).toEqual({ preservedEntities: 1, cloudRevision: 8 });
+        expect(result).toEqual({ preservedEntities: 1, cloudRevision: 8,
+            automaticCandidates: 1, manualRequired: 0 });
         const reopened = await unlockVaultForOwner(owner);
         const after = (await readLocal(owner))!;
         expect(after.pending).toEqual(local.pending);
@@ -332,5 +334,75 @@ describe('Kinde candidate: authenticated retired replica preflight', () => {
         expect(after.retiredReplicaConflictCapsule).toBeUndefined();
         reopened.release();
         expect(Array.from(transient)).toEqual(Array(32).fill(0));
+    });
+
+    it('saves a deliberate local choice after fresh retired-replica checks without provisioning ADK or sending health data', async () => {
+        const original = (await readLocal(owner))!;
+        const date = '2026-11-13';
+        const baseline = UserDataSchema.parse({ ...data(170), nutrition: {
+            [date]: { date, weight: 70, sleepHours: '07:00' },
+        } }) as unknown as UserData;
+        const desired = UserDataSchema.parse({ ...baseline, nutrition: {
+            [date]: { date, weight: 71, sleepHours: '07:00' },
+        } }) as unknown as UserData;
+        const remote = UserDataSchema.parse({ ...baseline, nutrition: {
+            [date]: { date, weight: 70, sleepHours: '08:00' },
+        } }) as unknown as UserData;
+        const seq = original.actorSeq + 1;
+        const local = validateLocalEnvelope({ ...original, baseline, data: desired,
+            actorSeq: seq, clock: { ...original.clock, [original.actorId]: seq },
+            pending: diffDocuments(projectDocuments(baseline, catalog), projectDocuments(desired, catalog),
+                original.actorId, seq, { ...original.clock, [original.actorId]: seq }),
+            syncMetaByDocument: { '': meta, 'nutrition_months/2026-11': meta },
+        }, owner)!;
+        await updateArchiveRecord(owner, () => local);
+        accountKeySource.acquire.mockResolvedValue(key.slice());
+        await preserveKindeCandidateRetiredReplicaConflicts({
+            expected, stillCurrent: () => true, send: network({ remote }),
+            browserCookies: () => '__Host-logbook_csrf=' + csrf,
+        });
+        accountKeySource.acquire.mockClear();
+        const send = network({ remote });
+        const args = { expected, stillCurrent: () => true, send,
+            browserCookies: () => '__Host-logbook_csrf=' + csrf };
+        const seen = await inspectOrChooseKindeCandidateRetiredConflicts(args);
+        expect(seen.entries).toHaveLength(1);
+        expect(seen.decisions).toEqual([]);
+        expect(seen.drafts).toEqual([expect.objectContaining({ kind: 'automatic-candidate' })]);
+        const identity = { kind: 'nutrition' as const, entityId: date };
+        const saved = await inspectOrChooseKindeCandidateRetiredConflicts({ ...args,
+            selection: { expectedRevision: seen.revision, identity, choice: 'combined' },
+        });
+        expect(saved.decisions).toEqual([{ ...identity, choice: 'combined' }]);
+        expect(saved.revision).toBe(seen.revision + 1);
+        const reopened = await unlockVaultForOwner(owner);
+        const persisted = (await readLocal(owner))!;
+        expect(persisted.pending).toEqual(local.pending);
+        expect(persisted.retiredReplicaConflictCapsule?.entries).toHaveLength(1);
+        expect(persisted.retiredReplicaConflictDecisions).toEqual(saved.decisions);
+        reopened.release();
+        expect(accountKeySource.acquire).not.toHaveBeenCalled();
+        const paths = vi.mocked(send).mock.calls.map(([input]) => String(input));
+        expect(paths.filter(path => path === '/v1/sync/control')).toHaveLength(4);
+        expect(paths.every(path => !/cloud-key|commit|claim|retire|receipt|scan/.test(path))).toBe(true);
+        await expect(inspectOrChooseKindeCandidateRetiredConflicts({ ...args,
+            selection: { expectedRevision: seen.revision, identity, choice: 'cloud' },
+        })).rejects.toThrow();
+        expect(await get(storage)).toBeTruthy();
+    });
+
+    it('refuses choices when the retired journal is no longer eligible or the consent/session has changed', async () => {
+        const send = network({ before: { ...control(), fenceEpoch: 6 } });
+        await expect(inspectOrChooseKindeCandidateRetiredConflicts({
+            expected, stillCurrent: () => true, send,
+            browserCookies: () => '__Host-logbook_csrf=' + csrf,
+        })).rejects.toThrow();
+        localStorage.setItem(`${storage}:health-consent-withdrawal`, 'pending:1');
+        const blocked = network();
+        await expect(inspectOrChooseKindeCandidateRetiredConflicts({
+            expected, stillCurrent: () => true, send: blocked,
+            browserCookies: () => '__Host-logbook_csrf=' + csrf,
+        })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        expect(blocked).not.toHaveBeenCalled();
     });
 });

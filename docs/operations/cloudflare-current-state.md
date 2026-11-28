@@ -1,25 +1,35 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
-**Ultimo rilascio verificato prima di questo candidato, 28/11/2026, CF-04 #1522:** [`main`
-`dd108cc46197e807e3fa3331a34474abde488e6c`](https://github.com/gernotfound/logbook/commit/dd108cc46197e807e3fa3331a34474abde488e6c),
-v2.783.0, con [CI PR Canonical/CodeQL e otto E2E](https://github.com/gernotfound/logbook/actions/runs/46141263688),
-[Main Release Gate e CodeQL](https://github.com/gernotfound/logbook/actions/runs/46141573639)
-e [Static Assets/smoke HTTPS byte-esatto](https://github.com/gernotfound/logbook/actions/runs/46141775983)
+**Ultimo rilascio verificato prima di questo candidato, 28/11/2026, CF-04 #1523:** [`main`
+`24fb8ed545e6a3972d337eaa51ef4fdc1262542c`](https://github.com/gernotfound/logbook/commit/24fb8ed545e6a3972d337eaa51ef4fdc1262542c),
+v2.784.0, con [CI PR Canonical/CodeQL e otto E2E](https://github.com/gernotfound/logbook/actions/runs/46147009607),
+[Main Release Gate e CodeQL](https://github.com/gernotfound/logbook/actions/runs/46147327929)
+e [Static Assets/smoke HTTPS byte-esatto](https://github.com/gernotfound/logbook/actions/runs/46147515297)
 riusciti. Il readback Cloudflare ha riportato `thelogbook-frontend`
-deployment `12e27812-46d5-48c8-89f1-4604cc3eadf3`, versione
-`e70e1f8e-3d84-471d-8b77-861490190d0b` al 100%, soli binding
+deployment `8abf7cf2-34bb-419a-b029-2e4f82edd7cd`, versione
+`7ce3e55e-e602-423b-8636-f48de0ee8426` al 100%, soli binding
 `APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`, senza `D1_API`. Il cambiamento
-conserva una copia JSON volontaria delle versioni separate; **non** completa
+conserva in IndexedDB cifrato una capsula delle versioni concorrenti della
+stessa entità, con journal e provenienza originali; **non** completa
 SYNC-7D/7E. Il frontend resta identity-only e il fitness è **NO-GO**.
 
-**Incremento candidato v2.784.0 (non ancora attestato qui come integrato):**
-la nuova capsula owner-scoped conserva nell'archivio cifrato del dispositivo
-le alternative della stessa giornata o seduta, provenienza e journal
-originale, dopo full scan AEAD e commit locale a revisione esatta. La
-schermata Kinde candidata offre un gesto esplicito; non crea un nuovo actor,
-non sceglie un winner e non invia/ACKa modifiche a D1. Test locali e futuri
-gate exact-SHA sono evidenze separate; trasferimento SYNC-7D, risoluzione
-esplicita SYNC-7E e GO fitness restano aperti.
+**Incremento candidato v2.785.0 (non ancora integrato o pubblicato):**
+l'anteprima pura della capsula prova a comporre campi indipendenti di
+versioni della stessa giornata o seduta soltanto se lo schema finale rimane
+senza perdita. Cancellazioni, spostamenti, creazioni concorrenti,
+array e stessa proprietà divergente richiedono scelta manuale; i conteggi
+sono visibili nella sola UI candidata dopo il salvataggio cifrato.
+In aggiunta, dopo il controllo di un journal di replica ritirata, la UI
+candidata permette di rivedere le alternative originali e di salvare
+in IndexedDB cifrato una preferenza esplicita per la versione device,
+cloud o una combinazione provvisoria solo se sicura: le tre versioni e il
+journal restano inalterati. Le preferenze rispettano consenso, epoch,
+sessione e revisione locale, senza chiamate D1 di scrittura o richiesta
+ADK; non sono un merge né un recupero. Nessuna bozza proposta diventa
+autorevole, nessuna membership viene
+assegnata e nessun journal è trasferito o ACKato. CI exact-SHA e
+prove di rilascio di questo candidato sono da verificare separatamente.
+SYNC-7D/7E, Safari/multi-device reale e GO fitness restano aperti.
 
 **Checkpoint verificato 28/11/2026, CF-04 #1520:** [`main`
 `d211565e38e0422250e871ef4e0aa107f464de7e`](https://github.com/gernotfound/logbook/commit/d211565e38e0422250e871ef4e0aa107f464de7e),

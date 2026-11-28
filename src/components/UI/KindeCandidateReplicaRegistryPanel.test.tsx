@@ -13,6 +13,7 @@ import { prepareKindeCandidateOwner } from '../../lib/sync/kindeCandidateOwnerBo
 import { inspectKindeCandidateOfflineReplicaJournal } from '../../lib/sync/kindeCandidateOfflineReplicaJournal';
 import { inspectKindeCandidateRetiredReplicaWithExistingKey } from '../../lib/sync/kindeCandidateRetiredReplicaReadOnly';
 import { preserveKindeCandidateRetiredReplicaConflicts } from '../../lib/sync/kindeCandidateRetiredReplicaConflictRecovery';
+import { inspectOrChooseKindeCandidateRetiredConflicts } from '../../lib/sync/kindeCandidateRetiredConflictDecisionBridge';
 import { recoverKindeCandidateStagedReceipt } from '../../lib/sync/kindeCandidateStagedReceiptRecovery';
 
 vi.mock('../../lib/sync/kindeCandidateReplicaRegistry', () => ({
@@ -32,6 +33,9 @@ vi.mock('../../lib/sync/kindeCandidateRetiredReplicaReadOnly', () => ({
 }));
 vi.mock('../../lib/sync/kindeCandidateRetiredReplicaConflictRecovery', () => ({
     preserveKindeCandidateRetiredReplicaConflicts: vi.fn(),
+}));
+vi.mock('../../lib/sync/kindeCandidateRetiredConflictDecisionBridge', () => ({
+    inspectOrChooseKindeCandidateRetiredConflicts: vi.fn(),
 }));
 vi.mock('../../lib/sync/kindeCandidateStagedReceiptRecovery', () => ({
     recoverKindeCandidateStagedReceipt: vi.fn(),
@@ -62,8 +66,19 @@ function authenticated() {
     });
     vi.mocked(recoverKindeCandidateStagedReceipt).mockResolvedValue('unconfirmed');
     vi.mocked(preserveKindeCandidateRetiredReplicaConflicts).mockResolvedValue({
-        preservedEntities: 1, cloudRevision: 5,
+        preservedEntities: 1, cloudRevision: 5, automaticCandidates: 1, manualRequired: 0,
     });
+    vi.mocked(inspectOrChooseKindeCandidateRetiredConflicts).mockReset().mockImplementation(async request => ({
+        revision: request.selection ? request.selection.expectedRevision + 1 : 9,
+        entries: [{ kind: 'nutrition', entityId: '2026-11-13',
+            baseline: { docPath: 'nutrition_months/2026-11', value: { weight: 70 }, sync: null },
+            device: { docPath: 'nutrition_months/2026-11', value: { weight: 71 }, sync: null },
+            cloud: { docPath: 'nutrition_months/2026-11', value: { sleepHours: '08:00' }, sync: null },
+        }],
+        drafts: [{ kind: 'automatic-candidate', entityKind: 'nutrition', entityId: '2026-11-13',
+            docPath: 'nutrition_months/2026-11', value: { weight: 71, sleepHours: '08:00' } }],
+        decisions: request.selection?.choice ? [{ ...request.selection.identity, choice: request.selection.choice }] : [],
+    }));
 }
 
 describe('candidate-only replica registry presentation', () => {
@@ -76,6 +91,7 @@ describe('candidate-only replica registry presentation', () => {
         expect(screen.queryByRole('button', { name: 'Analizza la copia cloud e i possibili conflitti' })).toBeNull();
         expect(screen.queryByRole('button', { name: 'Verifica la ricevuta di un invio sigillato' })).toBeNull();
         expect(screen.queryByRole('button', { name: 'Conserva le versioni concorrenti nell’archivio cifrato' })).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Esamina le alternative cifrate già conservate' })).toBeNull();
         publicEntry.unmount();
 
         render(<KindeAccountEntry guestArchivePresent candidateMode="preparation" />);
@@ -160,6 +176,33 @@ describe('candidate-only replica registry presentation', () => {
         expect(inspectKindeCandidateRetiredReplicaWithExistingKey).not.toHaveBeenCalled();
     });
 
+    it('lets the owner inspect and save a local preference only after a retired journal was observed', async () => {
+        authenticated();
+        vi.mocked(inspectKindeCandidateOfflineReplicaJournal).mockResolvedValue({
+            kind: 'retired-pending', slot: 's04', generation: 2, reason: 'retired', pendingOperations: 2,
+        });
+        render(<KindeAccountEntry candidateMode="preparation" />);
+        expect(screen.queryByRole('button', { name: 'Esamina le alternative cifrate già conservate' })).toBeNull();
+        fireEvent.click(await screen.findByRole('button', { name: 'Controlla modifiche offline su questo dispositivo' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Esamina le alternative cifrate già conservate' }));
+        await screen.findByText(/Alternativa 1 di 1: giornata nutrizionale/);
+        expect(screen.getByText(/questa scelta non recupera, cancella o sincronizza nulla/)).toBeTruthy();
+        expect(screen.getByText(/nessuna preferenza scelta/)).toBeTruthy();
+        expect(screen.getByRole('button', { name: 'Preferisci combinare i campi' })).toBeTruthy();
+        expect(screen.getByText(/Le preferenze sono archiviate solo su questo dispositivo/)).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: 'Preferisci combinare i campi' }));
+        await screen.findByText(/preferenza combinazione conservata/);
+        expect(inspectOrChooseKindeCandidateRetiredConflicts).toHaveBeenCalledWith({
+            expected: { uid: principal.uid, fenceEpoch: 1, healthConsentRevision: 1 },
+            stillCurrent: expect.any(Function),
+            selection: { expectedRevision: 9, identity: { kind: 'nutrition', entityId: '2026-11-13' }, choice: 'combined' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Rimuovi la preferenza' }));
+        await screen.findByText(/nessuna preferenza scelta/);
+        expect(prepareKindeCandidateOwner).not.toHaveBeenCalled();
+        expect(preserveKindeCandidateRetiredReplicaConflicts).not.toHaveBeenCalled();
+    });
+
     it('offers an authenticated, read-only baseline comparison only after a retired journal was observed', async () => {
         authenticated();
         vi.mocked(inspectKindeCandidateOfflineReplicaJournal).mockResolvedValue({
@@ -202,6 +245,7 @@ describe('candidate-only replica registry presentation', () => {
         const preserve = screen.getByRole('button', { name: 'Conserva le versioni concorrenti nell’archivio cifrato' });
         fireEvent.click(preserve);
         await screen.findByText(/Conservata 1 entità con versioni concorrenti/);
+        expect(screen.getByText(/1 entità con campi combinabili e 0 che richiedono una scelta esplicita/)).toBeTruthy();
         expect(preserveKindeCandidateRetiredReplicaConflicts).toHaveBeenCalledWith({
             expected: { uid: principal.uid, fenceEpoch: 1, healthConsentRevision: 1 },
             stillCurrent: expect.any(Function),

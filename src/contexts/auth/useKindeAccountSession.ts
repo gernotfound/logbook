@@ -26,6 +26,8 @@ type CandidateReplicaRegistryResult = Awaited<ReturnType<typeof import('../../li
 type CandidateOfflineReplicaJournalResult = Awaited<ReturnType<typeof import('../../lib/sync/kindeCandidateOfflineReplicaJournal').inspectKindeCandidateOfflineReplicaJournal>>;
 type CandidateRetiredReplicaPreflightResult = Awaited<ReturnType<typeof import('../../lib/sync/kindeCandidateRetiredReplicaReadOnly').inspectKindeCandidateRetiredReplicaWithExistingKey>>;
 type CandidateRetiredConflictPreservationResult = Awaited<ReturnType<typeof import('../../lib/sync/kindeCandidateRetiredReplicaConflictRecovery').preserveKindeCandidateRetiredReplicaConflicts>>;
+type CandidateRetiredConflictDecisionResult = Awaited<ReturnType<typeof import('../../lib/sync/kindeCandidateRetiredConflictDecisionBridge').inspectOrChooseKindeCandidateRetiredConflicts>>;
+type CandidateRetiredConflictSelection = import('../../lib/sync/kindeCandidateRetiredConflictDecisionBridge').RetiredConflictSelection;
 type CandidateStagedReceiptResult = Awaited<ReturnType<typeof import('../../lib/sync/kindeCandidateStagedReceiptRecovery').recoverKindeCandidateStagedReceipt>>;
 type CandidateRetirementWitness = import('../../lib/sync/kindeCandidateReplicaRetirementBridge').CandidateReplicaRetirementWitness;
 type CandidateRetirementOutcome = Awaited<ReturnType<typeof import('../../lib/sync/kindeCandidateReplicaRetirementBridge').retireKindeCandidateReplica>>;
@@ -402,6 +404,37 @@ export function useKindeAccountSession({
         }
     };
 
+    /** Explicit preferences are sealed in the owner vault; never an ACK or a writer grant. */
+    const inspectCandidateRetiredConflictDecisions = async (
+        selection?: CandidateRetiredConflictSelection,
+    ): Promise<CandidateRetiredConflictDecisionResult> => {
+        if (identityOnly || !candidatePreparationEnabled || !canAct()
+            || view.phase !== 'consent-confirmed' || !view.principal.emailVerified
+            || view.principal.healthConsentRevision < 1) throw new KindeCandidateBoundaryError();
+        const session = observed.current;
+        if (!session?.csrfToken || !session.stillCurrent()) throw new KindeCandidateBoundaryError();
+        const current = () => viewIsCurrent() && session.stillCurrent();
+        const expected = {
+            uid: view.principal.uid, fenceEpoch: view.principal.fenceEpoch,
+            healthConsentRevision: view.principal.healthConsentRevision,
+        };
+        busyRef.current = true;
+        setBusy(true);
+        try {
+            const { inspectOrChooseKindeCandidateRetiredConflicts } =
+                await import('../../lib/sync/kindeCandidateRetiredConflictDecisionBridge');
+            if (!current()) throw new KindeCandidateBoundaryError();
+            const result = await inspectOrChooseKindeCandidateRetiredConflicts({
+                expected, stillCurrent: current, ...(selection ? { selection } : {}),
+            });
+            if (!current()) throw new KindeCandidateBoundaryError();
+            return result;
+        } finally {
+            busyRef.current = false;
+            if (mounted.current) setBusy(false);
+        }
+    };
+
     /** Receipt-only recovery cannot create a new writer or re-send an old batch. */
     const recoverCandidateStagedReceipt = async (): Promise<CandidateStagedReceiptResult> => {
         if (identityOnly || !candidatePreparationEnabled || !canAct()
@@ -745,7 +778,7 @@ export function useKindeAccountSession({
     return {
         view, busy, reportInteraction, signIn, enterGuest, acceptConsent, logout, prepareCandidateArchive,
         inspectCandidateReplicas, inspectCandidateOfflineReplicaJournal, inspectCandidateRetiredReplicaPreflight,
-        preserveCandidateRetiredReplicaConflicts,
+        preserveCandidateRetiredReplicaConflicts, inspectCandidateRetiredConflictDecisions,
         recoverCandidateStagedReceipt,
         manageCandidateReplicaRetirement, manageCandidateReplicaCancellation,
         prepareCandidateBackup, prepareCandidateRetiredReplicaEvidence,
