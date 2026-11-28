@@ -102,6 +102,9 @@ describe('Cloudflare transport: primary non-commit and replica claim', () => {
             { ...content, replicas: { s00: { ...content.replicas.s00, checkpointClock: { wrong: 1 } } } },
             { ...content, replicas: { s00: { ...content.replicas.s00, generation: 0 } } },
             { ...content, replicas: { s00: { ...content.replicas.s00, status: 'unknown' } } },
+            { ...content, replicas: { ...content.replicas, s01: {
+                ...content.replicas.s00, generation: 2, status: 'retired',
+            } } },
             { ...content, fenceEpoch: 0 },
         ]) {
             const remote = createCloudflareReplicaTransport(vi.fn(async () =>

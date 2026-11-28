@@ -144,4 +144,24 @@ describe('Sync Protocol 3 replica registry', () => {
             mutation: { slot: 's00', action: 'checkpoint' },
         })).toThrow(/limite/i);
     });
+
+    it('rejects an incarnation reused across slots, including retired tombstones', () => {
+        const valid = control();
+        expect(parseReplicaControl(valid).replicas.s02.status).toBe('retired');
+
+        for (const slot of ['s01', 's02'] as const) {
+            expect(() => parseReplicaControl({
+                ...valid,
+                replicas: {
+                    ...valid.replicas,
+                    [slot]: { ...valid.replicas[slot], replicaId: valid.replicas.s00.replicaId },
+                },
+            })).toThrow(/replica id duplicato/i);
+        }
+
+        // Identity uniqueness is per owner register, not global across accounts.
+        const independentOwner = control();
+        independentOwner.replicas.s00.replicaId = valid.replicas.s00.replicaId;
+        expect(parseReplicaControl(independentOwner).replicas.s00.replicaId).toBe(valid.replicas.s00.replicaId);
+    });
 });
