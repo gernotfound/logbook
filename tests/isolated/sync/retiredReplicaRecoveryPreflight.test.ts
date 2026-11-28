@@ -509,6 +509,26 @@ describe('retired replica handoff to a new causal actor', () => {
     const successor = { slot: 's04', replicaId: 'new-device-replica', generation: 1,
         leaseUntilMs: Date.now() + 86_400_000, checkpointAtMs: Date.now() };
 
+    it('normalizes empty new-day collections without stamping over a concurrent meal', () => {
+        const path = 'nutrition_months/2026-11';
+        const date = '2026-11-14';
+        const base = new Map([[path, {}]]);
+        const empty = new Map([[path, { [date]: { date, weight: 70,
+            meals: [], supplementsIntake: [], cardioSessions: [] } }]]);
+        const withMeal = new Map([[path, { [date]: { date, weight: 70, meals: [{
+            id: 'meal-peer', name: 'Pasto', meal: 'pranzo', quantity: 1,
+            kcal: 100, carbs: 10, pro: 5, fat: 3,
+        }], supplementsIntake: [], cardioSessions: [] } }]]);
+        const mine = diffDocuments(base, empty, 's03', 1, { s03: 1 });
+        const peer = diffDocuments(base, withMeal, 's01', 1, { s01: 1 });
+        expect(mine.some(op => op.path[1] === 'meals')).toBe(false);
+        for (const ordered of [[...mine, ...peer], [...peer, ...mine]]) {
+            const result = applySemanticOperations(base, ordered).documents.get(path)?.[date];
+            expect(result).toMatchObject({ weight: 70, meals: [expect.objectContaining({ id: 'meal-peer' })],
+                supplementsIntake: [], cardioSessions: [] });
+        }
+    });
+
     async function staged() {
         const original = (await readLocal(owner))!;
         const cloud = await checkpoint();

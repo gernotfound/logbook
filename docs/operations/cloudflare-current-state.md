@@ -20,8 +20,9 @@ una nuova claim D1 vincolata alla proposta e un trasferimento causale nel
 D1 e nuova scansione AEAD. Rigenera actor/seq e journal dai documenti
 cloud verificati e dalle preferenze già scelte; l'escrow conserva il journal
 e le alternative originali. Il successivo writer riusa il normale batch AEAD
-e deve ottenere la receipt contenuto-bound prima dell'ACK. Il diff semantico
-conserva anche collezioni keyed nuove ma vuote, prima omesse nel replay.
+e deve ottenere la receipt contenuto-bound prima dell'ACK. Il replay
+ricostruisce le collezioni keyed vuote previste dallo schema, senza creare
+uno stamp causale che coprirebbe modifiche concorrenti indipendenti.
 La sesta membership è rifiutata dal backend candidato; nessuna espulsione
 automatica. **Il candidato non prova un commit D1 reale**, la durabilità
 delle versioni su altri dispositivi, un ripristino su Safari/iOS fisico o

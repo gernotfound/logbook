@@ -245,16 +245,13 @@ describe('CF-05 Kinde Schema 3 restore to encrypted IndexedDB and D1', () => {
             const after = await readLocal(owner);
             expect(after?.data.nutrition?.['2025-09-01']?.weight).toBe(78);
             expect(after?.baseline.nutrition?.['2025-09-01']).toBeUndefined();
-            // An inserted day must explicitly journal its empty keyed
-            // collections as well as scalar fields, or replay loses schema data.
+            // Empty keyed collections are normalized without ancestor stamps;
+            // only actual business edits occupy the causal journal.
             expect(after?.pending.map(op => [op.docPath, op.path])).toEqual([
                 ['nutrition_months/2025-09', ['2025-09-01', 'date']],
                 ['nutrition_months/2025-09', ['2025-09-01', 'weight']],
-                ['nutrition_months/2025-09', ['2025-09-01', 'meals']],
-                ['nutrition_months/2025-09', ['2025-09-01', 'supplementsIntake']],
-                ['nutrition_months/2025-09', ['2025-09-01', 'cardioSessions']],
             ]);
-            expect(outcome).toEqual({ kind: 'local-pending', pendingCount: 5 });
+            expect(outcome).toEqual({ kind: 'local-pending', pendingCount: 2 });
             grant.release();
 
             await expect(prepareKindeCandidateOwner({
