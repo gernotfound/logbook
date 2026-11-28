@@ -51,6 +51,13 @@ cambiamenti rilevati durante il controllo; **non** crea uno snapshot atomico
 cross-D1, non verifica l'isolamento IAM e non autorizza restore o riapertura
 degli accessi. Il risultato positivo resta soltanto diagnostico. Il censimento include anche gli intenti account, le richieste accettate, lo stato del principal, le ricevute terminali e i deny account indipendenti (anche per identità senza consenso salute). Per ciascuna delle due letture confronta il numero degli intenti e dei deny elencati con conteggi separati nelle rispettive primarie. I conteggi si fermano alla prima riga oltre il limite del censimento. La prima e l’ultima lettura avvengono sul registro indipendente. Ciascuna osserva nella stessa istruzione SQL modalità, generazione, cutoff pendenti e conteggi limitati. Il digest degli intenti e l’ultimo conteggio applicativo precedono il controllo conclusivo, così una riapertura anche temporanea del registro durante queste operazioni blocca il censimento. Un intento pending o un disallineamento impedisce un risultato coerente. Una decisione presente solo nella D1 applicativa prima del deny può sparire da entrambe le fonti dopo un rollback: prima di qualunque restore reale serve un censimento affidabile anche delle decisioni pendenti della sorgente sigillata. Il diagnostico non riconcilia scritture e non prova tale copertura storica.
 
+Il censimento non attesta la conservazione delle sessioni, delle revisioni
+sync o del contenuto cifrato di altri proprietari: possono cambiare dopo
+un bookmark senza modificare alcun floor indipendente. Un Time Travel D1
+completo può quindi perdere scritture altrui pur con esito diagnostico
+coerente. Metodo, esercitazioni e blocchi nella
+[guida di recupero D1](../../docs/operations/cloudflare-d1-recovery.md).
+
 **MUST prima di GO restore:** prova monotona indipendente e completa per
 tutti gli owner, protocollo di scritture cross-resource che fallisce chiuso,
 fence applicato ad Auth/consenso/chiavi/sync/diritti anche durante il
