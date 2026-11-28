@@ -4,6 +4,21 @@
 
 ## CF-04 · Frontend identity-only verificato · 28 novembre 2026
 
+**Ultimo readback verificato dopo [PR #1525](https://github.com/gernotfound/logbook/pull/1525):**
+`main` [`632daa6f15cd711bb1a89f314e236b0e1e1d5edc`](https://github.com/gernotfound/logbook/commit/632daa6f15cd711bb1a89f314e236b0e1e1d5edc),
+v2.786.0, con [gate post-merge](https://github.com/gernotfound/logbook/actions/runs/46156245246)
+e [smoke HTTPS](https://github.com/gernotfound/logbook/actions/runs/46156516703)
+verdi. Cloudflare: deployment `2ca0bc45-a1f1-453b-9f4e-fe4232616579`,
+versione `e816beae-e403-4077-8b1f-10a48e00fe91` al 100%; soli binding
+`APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`, nessun `D1_API`. Il nuovo candidato
+v2.787.0 verifica in memoria la copertura di percorsi offline indipendenti
+e conflittuali senza alcuna scrittura provider, modifica di membership,
+segreti, quote, IAM, DNS o servizi esterni. **Il journal reale non viene
+ancora trasferito e il fitness rimane NO-GO.** Le prove della PR, merge e
+deploy del candidato sono da registrare solo dopo la verifica effettiva.
+
+**Checkpoint storico precedente:**
+
 **Checkpoint più recente verificato prima del candidato v2.786.0:** [PR #1524](https://github.com/gernotfound/logbook/pull/1524),
 `main` [`e6969fd14f821217b9b267f592198c6994850668`](https://github.com/gernotfound/logbook/commit/e6969fd14f821217b9b267f592198c6994850668),
 v2.785.0. [CI PR](https://github.com/gernotfound/logbook/actions/runs/46149706849),
