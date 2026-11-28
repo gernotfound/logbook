@@ -133,7 +133,14 @@ export function parseReplicaControl(raw: unknown): ReplicaControl {
     const entries = Object.entries(raw.replicas);
     if (entries.length > REPLICA_SLOT_COUNT) throw new Error('Registro repliche oltre il limite');
     const replicas: Record<string, ReplicaControlEntry> = {};
-    for (const [slot, entry] of entries) replicas[slot] = parseReplicaEntry(slot, entry);
+    const replicaIds = new Set<string>();
+    for (const [slot, entry] of entries) {
+        const parsed = parseReplicaEntry(slot, entry);
+        // D1 fences historical replica IDs even after retirement: two slots cannot own one incarnation.
+        if (replicaIds.has(parsed.replicaId)) throw new Error('Replica ID duplicato nel registro');
+        replicaIds.add(parsed.replicaId);
+        replicas[slot] = parsed;
+    }
     assertSlot(raw.mutation.slot);
     const action = raw.mutation.action;
     if (action !== 'register' && action !== 'checkpoint' && action !== 'advance' && action !== 'retire' && action !== 'reuse-expired') {
