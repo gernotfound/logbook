@@ -1,5 +1,23 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
+**Checkpoint verificato 28/11/2026, CF-04 #1520:** [`main`
+`d211565e38e0422250e871ef4e0aa107f464de7e`](https://github.com/gernotfound/logbook/commit/d211565e38e0422250e871ef4e0aa107f464de7e),
+v2.781.0, tree `355695b6073a04d6a835333530c11d4e41cda685`
+identico al candidato. [CI PR exact-SHA con Canonical e
+CodeQL](https://github.com/gernotfound/logbook/actions/runs/46138248950),
+[gate main e CodeQL](https://github.com/gernotfound/logbook/actions/runs/46138502113),
+[deploy Static Assets e smoke HTTPS byte-exact](https://github.com/gernotfound/logbook/actions/runs/46138759283)
+riusciti. Nuovo readback Cloudflare del 28/11:
+`thelogbook-frontend` deployment `d52d0d16-6df7-450a-88a8-e0582ee1551c`,
+versione `7d81918d-4010-4060-88a7-a3af5c5ae130` al 100%, binding
+`APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`, nessun `D1_API`. Il preflight
+**candidato** ora individua versioni concorrenti della stessa giornata
+nutrizionale o dello stesso allenamento, anche con campi causali distinti.
+Non conserva ancora entrambe le versioni in una riconciliazione durevole,
+non trasferisce le pending di una replica ritirata e non espone il fitness
+pubblico: SYNC-7D/7E, multi-device reale e GO fitness restano **aperti**.
+Il checkpoint precedente #1513 e le sezioni datate sotto sono storici.
+
 **28/11/2026 · D1 e frontend**. Il readback Cloudflare conferma i ledger
 applicativo 0020 e recovery 0005, un bookmark Time Travel per ciascun database
 e il registro indipendente sigillato alla generazione 1. Dettagli nel

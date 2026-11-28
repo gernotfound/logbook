@@ -2,6 +2,22 @@
 
 **Stato di riferimento:** per l'ultimo readback Cloudflare consultare [quadro operativo](cloudflare-current-state.md). I valori sotto sono checkpoint datati, non una fotografia aggiornata automaticamente del provider.
 
+## CF-04 · Frontend e confine di sincronizzazione · 28 novembre 2026
+
+Readback diretto e **di sola lettura** del provider dopo il rilascio
+[#1520](https://github.com/gernotfound/logbook/pull/1520) su `main`
+`d211565e38e0422250e871ef4e0aa107f464de7e`, v2.781.0:
+Worker `thelogbook-frontend` con deployment
+`d52d0d16-6df7-450a-88a8-e0582ee1551c` del 28/11/2026
+11:13:25 UTC e versione `7d81918d-4010-4060-88a7-a3af5c5ae130` al
+100%. Bindings osservati: `APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`; nessun
+`D1_API`. [Gate post-merge](https://github.com/gernotfound/logbook/actions/runs/46138502113)
+e [deploy/smoke HTTPS byte-exact](https://github.com/gernotfound/logbook/actions/runs/46138759283)
+`success` sullo SHA. Questo non prova login fitness, trasferimento journal
+offline SYNC-7D, conservazione delle versioni in conflitto SYNC-7E,
+collaudo multi-device/Safari o accesso pubblico a D1: **NO-GO fitness**.
+Nessuna scrittura provider manuale, modifica binding o lettura dati salute.
+
 ## CF-08 · Inventario D1 del 28 novembre 2026
 
 Readback di sola lettura su entrambe le D1 identificate nel manifesto isolato.

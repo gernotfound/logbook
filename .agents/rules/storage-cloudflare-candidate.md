@@ -110,6 +110,11 @@ Lo stesso esito vale se una generazione successiva riusa il medesimo
 `replicaId` (vietato dal ledger SQL), oppure se `lastSeq` dello slot è
 inferiore alla sequenza già attestata da clock o writer nei metadati
 della baseline locale: il contatore D1 è monotono anche dopo il riuso.
+Il replay causale del journal originale deve ricostruire integralmente la
+versione business locale **prima** di attribuire differenze a un conflitto
+cloud, anche quando la scansione AEAD remota è divergente: una copia locale
+non spiegata dalle proprie pending richiede `local-replay-diverged` e non
+deve produrre un inventario di versioni concorrenti apparentemente valido.
 Il percorso rimane di sola lettura. Una baseline divergente, un documento
 extra/mancante o metadato avanzato anche con stesso
 valore business (ABA), transizione pendente o replay locale incongruente

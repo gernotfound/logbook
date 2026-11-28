@@ -15,7 +15,7 @@ import { REPLICA_CLOCK_SKEW_MARGIN_MS } from '../../../src/lib/sync/replicaProto
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
 import { updateArchiveRecord } from '../../../src/lib/sync/secureArchiveRepository';
-import { diffDocuments } from '../../../src/lib/sync/semanticProjection';
+import { applySemanticOperations, diffDocuments } from '../../../src/lib/sync/semanticProjection';
 import type { SyncMeta } from '../../../src/lib/sync/semanticProjection';
 import { fieldKey } from '../../../src/lib/sync/semanticProjection/metadata';
 
@@ -441,6 +441,26 @@ describe('retired replica recovery preflight, no mutation or new causal identity
             .toEqual({ kind: 'reconciliation-required', reason: 'local-replay-diverged' });
     });
 
+    it('refuses to attribute a corrupt offline journal to a cloud conflict even when both copies changed', async () => {
+        const original = (await readLocal(owner))!;
+        const sealed = await get(storageKey);
+        const changedLocal = { ...original, data: data(172) };
+        const changedRemote = projectDocuments(data(173), catalog).get('')!;
+        const cloudMeta: SyncMeta = { ...emptyMeta, clock: { s01: 1 }, fields: {
+            [fieldKey(['profile', 'height'])]: { actorId: 's01', seq: 1, clock: { s01: 1 } },
+        } };
+        const cloud = await checkpoint(changedRemote, cloudMeta);
+
+        expect(preflightRetiredReplicaRecovery(uid, changedLocal, cloud, control(), catalog))
+            .toEqual({ kind: 'reconciliation-required', reason: 'local-replay-diverged' });
+        expect(preflightRetiredReplicaRecovery(uid, original, cloud, control(), catalog))
+            .toEqual({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
+                changedCloudFieldStamps: 1, pendingWithOverlappingCloudStamps: 1,
+                unclassifiedDocuments: 0, entitiesWithCompetingVersions: 0,
+            } });
+        expect(await get(storageKey)).toBe(sealed);
+    });
+
     it('does not let a disjoint causal stamp conceal an unstamped edit of the pending field', async () => {
         const local = (await readLocal(owner))!;
         const remote = UserDataSchema.parse({ profile: { height: '173', gender: 'other' },
@@ -528,12 +548,18 @@ describe('retired replica recovery preflight, no mutation or new causal identity
     it('does not hide an ignored nutrition total behind another valid monthly field stamp', async () => {
         const original = (await readLocal(owner))!;
         const baseline = UserDataSchema.parse({ ...data(170), nutrition: {
-            '2026-11-13': { date: '2026-11-13', weight: 70, kcal: 100 },
+            '2026-11-13': { date: '2026-11-13', weight: 70, kcal: 0 },
         } }) as unknown as UserData;
         const desired = UserDataSchema.parse({ ...baseline, profile: { height: '171' } }) as unknown as UserData;
-        const local = { ...original, baseline, data: desired, syncMetaByDocument: {
-            ...original.syncMetaByDocument, 'nutrition_months/2026-11': emptyMeta,
-        } };
+        const pending = diffDocuments(projectDocuments(baseline, catalog), projectDocuments(desired, catalog),
+            original.actorId, original.actorSeq, original.clock);
+        const local = validateLocalEnvelope({ ...original, baseline, data: desired, pending,
+            syncMetaByDocument: { ...original.syncMetaByDocument, 'nutrition_months/2026-11': emptyMeta },
+        }, owner)!;
+        const expected = projectDocuments(local.data, catalog);
+        const actual = applySemanticOperations(projectDocuments(local.baseline, catalog),
+            local.pending, local.syncMetaByDocument).documents;
+        expect([...actual]).toEqual([...expected]);
         const remote = UserDataSchema.parse({ ...baseline, nutrition: {
             '2026-11-13': { date: '2026-11-13', weight: 71, kcal: 101 },
         } }) as unknown as UserData;
@@ -560,13 +586,16 @@ describe('retired replica recovery preflight, no mutation or new causal identity
     it('classifies ignored totals when a stamped nutrition day is newly created', async () => {
         const original = (await readLocal(owner))!;
         const baseline = UserDataSchema.parse({ ...data(170), nutrition: {
-            '2026-11-12': { date: '2026-11-12', weight: 70, kcal: 100 },
+            '2026-11-12': { date: '2026-11-12', weight: 70, kcal: 0 },
         } }) as unknown as UserData;
-        const local = { ...original, baseline, data: UserDataSchema.parse({
+        const desired = UserDataSchema.parse({
             ...baseline, profile: { height: '171' },
-        }) as unknown as UserData, syncMetaByDocument: {
-            ...original.syncMetaByDocument, 'nutrition_months/2026-11': emptyMeta,
-        } };
+        }) as unknown as UserData;
+        const pending = diffDocuments(projectDocuments(baseline, catalog), projectDocuments(desired, catalog),
+            original.actorId, original.actorSeq, original.clock);
+        const local = validateLocalEnvelope({ ...original, baseline, data: desired, pending,
+            syncMetaByDocument: { ...original.syncMetaByDocument, 'nutrition_months/2026-11': emptyMeta },
+        }, owner)!;
         const remote = UserDataSchema.parse({ ...baseline, nutrition: {
             ...baseline.nutrition,
             '2026-11-13': { date: '2026-11-13', weight: 71, kcal: 101 },
