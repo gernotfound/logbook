@@ -556,6 +556,46 @@ void test('operator census rejects switching between registry histories with mat
   }
 });
 
+void test('operator census checks the registry seal after the last application count', async t => {
+  for (const reseal of [false, true]) {
+    await t.test(reseal ? 'changed generation' : 'open registry', async () => {
+      const app = new DatabaseSync(':memory:');
+      const ledger = new DatabaseSync(':memory:');
+      try {
+        applyCurrentD1Schema(app);
+        applyCurrentD1RecoverySchema(ledger);
+        addOwner(app, 'owner-a');
+        const recovery = new D1Sqlite(ledger);
+        await enrollIndependentOwner(recovery, 'owner-a');
+        await recordVerifiedInitialConsent(new D1Sqlite(app), recovery, 'owner-a');
+
+        let counts = 0;
+        class RacingApplication extends D1Sqlite {
+          prepare(sql) {
+            const statement = super.prepare(sql);
+            if (!sql.includes('COUNT(*)') || !sql.includes('FROM sync_subjects')) return statement;
+            return { first: async () => {
+              const result = await statement.first();
+              if (++counts === 2) {
+                ledger.exec("UPDATE recovery_control SET mode='open', generation=generation+1");
+                if (reseal) ledger.exec("UPDATE recovery_control SET mode='sealed', generation=generation+1");
+              }
+              return result;
+            } };
+          }
+        }
+        const result = await inspectRestoredD1Census(new RacingApplication(app), recovery);
+        assert.equal(counts, 2);
+        assert.deepEqual(result, { outcome: 'blocked', reason: reseal
+          ? 'coverage-changed-during-scan' : 'independent-authority-not-sealed' });
+      } finally {
+        app.close();
+        ledger.close();
+      }
+    });
+  }
+});
+
 void test('operator census detects a registry write racing two primary reads', async () => {
   const app = new DatabaseSync(':memory:');
   const ledger = new DatabaseSync(':memory:');
