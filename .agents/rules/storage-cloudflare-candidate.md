@@ -14,6 +14,26 @@ avere le stesse revisioni, lo stesso epoch e registri di replica equivalenti.
 
 ## Checkpoint candidati CF-03/04
 
+### CF-04 — Proiezione delle scelte su snapshot autenticato (candidato 28/11/2026)
+
+`materializeRetiredReplicaConflictChoices()` non applica ancora una
+risoluzione autorevole. Prima di preparare la proiezione di una scelta
+owner-local verifica journal, clock, replica, baseline e versioni device
+contro la capsula cifrata; richiede il preflight causale che escluda un
+possibile lost ACK e riceve dal chiamante uno snapshot AEAD autenticato
+coerente con consenso/epoch, revisione e alternative cloud originali. Prima
+di usare la proposta il chiamante dovrà dimostrarne la freschezza con un
+nuovo control/scan e con il proprio session fence. Tutte le entità conflittuali devono
+avere una scelta esplicita e con schema business senza perdita. Il risultato
+può inserire o rimuovere entità da mesi diversi in una **copia in memoria**,
+senza modificare gli originali. Non produce nonce, claim, nuovo actor,
+field stamp, receipt, ACK, mutation D1 o conferma di sincronizzazione.
+
+Qualunque cambiamento della frontiera fa scadere la proiezione. Il futuro
+writer deve ripetere le prove immediatamente prima della transazione che
+reinterpreta le pending, preservare gli originali durante recovery e
+riconciliarne la ricevuta dopo crash. SYNC-7D e SYNC-7E restano aperte.
+
 ### CF-04 — Anteprima conservativa dei conflitti (candidato 28/11/2026)
 
 `previewRetiredReplicaConflictResolution()` valuta localmente la capsula
