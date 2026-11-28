@@ -139,6 +139,10 @@ diagnosi usa il diff semantico e richiede che gli eventi causali nuovi
 siano coperti dai testimoni disponibili; un diff non rappresentabile è
 non classificabile. Il conteggio resta conservativo, non una dimostrazione
 di assenza di conflitti né un permesso di merge automatico.
+La scomparsa di un field stamp già autenticato dalla baseline locale è
+parimenti non classificabile: un clock documentale invariato o altri stamp
+validi non provano la compaction causale che avrebbe autorizzato il ritiro
+di quel testimone. La diagnosi non attribuisce tale perdita a un merge sicuro.
 
 ### CF-04 — Barriera journal per il rientro di una replica ritirata (candidato 27/11/2026)
 

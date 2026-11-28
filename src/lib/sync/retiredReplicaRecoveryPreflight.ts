@@ -97,6 +97,7 @@ function describeCloudDivergence(
         const currentMeta = parseSyncMeta(remote.sync);
         const fieldKeys = new Set([...Object.keys(previousMeta.fields), ...Object.keys(currentMeta.fields)]);
         let changedFields = 0;
+        let lostFieldWitness = false;
         let explainedClock = previousMeta.clock;
         const witnessedPaths: string[][] = [];
         for (const key of fieldKeys) {
@@ -110,6 +111,10 @@ function describeCloudDivergence(
                 explainedClock = mergeVectors(explainedClock, currentStamp.clock,
                     ...(currentStamp.deleteClock ? [currentStamp.deleteClock] : []),
                     ...(currentStamp.candidates?.map(candidate => candidate.clock) ?? []));
+            } else {
+                // A vanished witness might be legitimate causal GC, but a
+                // document clock alone does not prove its safe retirement.
+                lostFieldWitness = true;
             }
             local.pending.forEach((operation, index) => {
                 if (operation.docPath === path && (pathsOverlap(operation.path, changedPath)
@@ -120,7 +125,7 @@ function describeCloudDivergence(
         }
         // A legitimate stamped edit can coexist with an untracked business edit
         // or an advanced frontier. Never let the presence of one stamp mask it.
-        if (hasUnexplainedBusinessChange(path, baseline, remote.business, witnessedPaths)
+        if (lostFieldWitness || hasUnexplainedBusinessChange(path, baseline, remote.business, witnessedPaths)
             || !coversVectorClock(currentMeta.clock, previousMeta.clock)
             || !coversVectorClock(explainedClock, currentMeta.clock)
             || (changedFields === 0 && !equal(previousMeta, currentMeta))) {

@@ -354,6 +354,45 @@ describe('retired replica recovery preflight, no mutation or new causal identity
             } });
     });
 
+    it('does not classify a lost causal field stamp as explained by a matching document clock', async () => {
+        const original = (await readLocal(owner))!;
+        const previousMeta: SyncMeta = { ...emptyMeta, clock: { s01: 1 }, fields: {
+            [fieldKey(['profile', 'height'])]: { actorId: 's01', seq: 1, clock: { s01: 1 } },
+        } };
+        const local = validateLocalEnvelope({ ...original, clock: { ...original.clock, s01: 1 },
+            syncMetaByDocument: { '': previousMeta },
+        }, owner)!;
+        const cloud = await checkpoint(undefined, { ...previousMeta, fields: {} });
+        const sealed = await get(storageKey);
+        expect(preflightRetiredReplicaRecovery(uid, local, cloud, control(), catalog))
+            .toEqual({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
+                changedCloudFieldStamps: 1, pendingWithOverlappingCloudStamps: 1,
+                unclassifiedDocuments: 1,
+            } });
+        expect(await get(storageKey)).toBe(sealed);
+    });
+
+    it('does not let another valid stamp conceal the loss of a previous causal witness', async () => {
+        const original = (await readLocal(owner))!;
+        const previousMeta: SyncMeta = { ...emptyMeta, clock: { s01: 1 }, fields: {
+            [fieldKey(['profile', 'height'])]: { actorId: 's01', seq: 1, clock: { s01: 1 } },
+        } };
+        const local = validateLocalEnvelope({ ...original, clock: { ...original.clock, s01: 1 },
+            syncMetaByDocument: { '': previousMeta },
+        }, owner)!;
+        const remote = UserDataSchema.parse({ profile: { height: '170', gender: 'other' },
+            legalConsent: legal }) as unknown as UserData;
+        const cloudMeta: SyncMeta = { ...emptyMeta, clock: { s01: 1, s02: 1 }, fields: {
+            [fieldKey(['profile', 'gender'])]: { actorId: 's02', seq: 1, clock: { s02: 1 } },
+        } };
+        expect(preflightRetiredReplicaRecovery(uid, local,
+            await checkpoint(projectDocuments(remote, catalog).get('')!, cloudMeta), control(), catalog))
+            .toEqual({ kind: 'reconciliation-required', reason: 'cloud-diverged', evidence: {
+                changedCloudFieldStamps: 2, pendingWithOverlappingCloudStamps: 1,
+                unclassifiedDocuments: 1,
+            } });
+    });
+
     it('does not hide an ignored nutrition total behind another valid monthly field stamp', async () => {
         const original = (await readLocal(owner))!;
         const baseline = UserDataSchema.parse({ ...data(170), nutrition: {
