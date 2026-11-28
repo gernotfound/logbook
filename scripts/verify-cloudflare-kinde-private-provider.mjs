@@ -14,11 +14,11 @@ const OAUTH_SECRETS = [
 export async function verifyPrivateKindeWorker({ account, bearer, request = fetch, requireConfiguredOAuth = false }) {
   assert.match(account ?? '', /^[a-f0-9]{32}$/, 'invalid Cloudflare account id');
   assert.ok(typeof bearer === 'string' && bearer.length > 0, 'missing Cloudflare token');
-  const base = 'https://api.cloudflare.com/client/v4/accounts/' + account +
-    '/workers/scripts/' + WORKER;
+  const accountBase = 'https://api.cloudflare.com/client/v4/accounts/' + account;
+  const base = accountBase + '/workers/scripts/' + WORKER;
 
-  async function read(path) {
-    const response = await request(base + path, {
+  async function read(path, accountWide = false) {
+    const response = await request((accountWide ? accountBase : base) + path, {
       method: 'GET', headers: { Authorization: 'Bearer ' + bearer },
     });
     assert.ok(response.ok, 'Kinde private Worker readback HTTP ' + response.status);
@@ -27,9 +27,14 @@ export async function verifyPrivateKindeWorker({ account, bearer, request = fetc
     return body.result;
   }
 
-  const [settings, subdomain] = await Promise.all([
-    read('/settings'), read('/subdomain'),
+  const [settings, subdomain, schedule, domains] = await Promise.all([
+    read('/settings'), read('/subdomain'), read('/schedules'), read('/workers/domains', true),
   ]);
+  assert.deepEqual(schedule?.schedules, [], 'Kinde private Worker unexpected scheduled trigger');
+  assert.ok(Array.isArray(domains) && domains.every(domain => typeof domain?.service === 'string'),
+    'Kinde private Worker domain inventory unavailable');
+  assert.ok(!domains.some(domain => domain.service === WORKER),
+    'Kinde private Worker public custom domain attached');
   const bindings = settings?.bindings;
   assert.ok(Array.isArray(bindings), 'Kinde private Worker settings missing');
   const secrets = bindings.filter(binding => binding.type === 'secret_text');
@@ -73,5 +78,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     bearer: process.env.CLOUDFLARE_API_TOKEN,
     requireConfiguredOAuth: process.argv.includes('--require-configured-oauth'),
   });
-  console.log('Kinde HTTP Worker verified: private bindings and disabled workers.dev / preview');
+  console.log('Kinde HTTP Worker verified: private bindings, no public domains, schedules, workers.dev or preview');
 }

@@ -6,6 +6,11 @@ const DB_ID = '9aa51833-8adc-495f-bdfc-93b5542e8023';
 const RECOVERY_DB_ID = '19dad53f-0dda-4503-b161-758ac8cb7b21';
 const GATE_NAME = 'thelogbook-cf03-auth-gate-isolated';
 const DATA_WORKER_NAME = 'thelogbook-api-isolated';
+const LEGAL_BINDINGS = [
+  ['API_ORIGIN', 'https://thelogbook.me'],
+  ['CONSENT_PRIVACY_VERSION', '1.3.9'],
+  ['CONSENT_TERMS_VERSION', '1.2.5'],
+];
 
 // The deploy token is scoped to Workers only. D1 schema and jurisdiction
 // require an independently authorized provider readback, not a broader
@@ -23,9 +28,36 @@ export async function verifyPrivateWorkerBindings({ account, bearer, request = f
     return body.result;
   }
 
+  // The account-wide domain list is needed: workers.dev=false does not
+  // prevent someone from manually attaching a custom domain to a Worker.
+  const domains = await read('/workers/domains');
+  assert.ok(Array.isArray(domains), 'Cloudflare Worker domains inventory missing');
+  assert.ok(domains.every(domain => typeof domain?.service === 'string'),
+    'Cloudflare Worker domains inventory malformed');
+
   for (const name of [GATE_NAME, DATA_WORKER_NAME]) {
+    assert.ok(!domains.some(domain => domain.service === name), name + ': public custom domain attached');
     const settings = await read('/workers/scripts/' + name + '/settings');
-    const bindings = settings?.bindings ?? [];
+    const bindings = settings?.bindings;
+    assert.ok(Array.isArray(bindings), name + ': Worker bindings inventory missing');
+    if (name === DATA_WORKER_NAME) {
+      // Only secret metadata is read; a Wrangler redeploy must not silently
+      // remove the independently provisioned KEK or turn it into plaintext.
+      const kek = bindings.filter(binding => binding.name === 'CLOUD_ACCOUNT_KEK_V1');
+      assert.equal(kek.length, 1, 'private API KEK binding missing or duplicated');
+      assert.equal(kek[0].type, 'secret_text', 'private API KEK must remain a secret');
+    }
+    const expectedNames = [
+      ...LEGAL_BINDINGS.map(([key]) => key), 'DB',
+      ...(name === DATA_WORKER_NAME ? ['AUTH_GATE', 'CLOUD_ACCOUNT_KEK_V1', 'RECOVERY_DB'] : ['API_RATE_LIMITER']),
+    ].sort();
+    assert.deepEqual(bindings.map(binding => binding.name).sort(), expectedNames,
+      name + ': missing, duplicated or unapproved binding');
+    for (const [key, value] of LEGAL_BINDINGS) {
+      const binding = bindings.find(item => item.name === key);
+      assert.ok(binding.type === 'plain_text' && binding.text === value,
+        name + ': origin or legal version mismatch');
+    }
     assert.ok(bindings.some(binding => binding.name === 'DB' &&
       binding.type === 'd1' && binding.id === DB_ID &&
       (!binding.database_id || binding.database_id === DB_ID)),
@@ -40,12 +72,6 @@ export async function verifyPrivateWorkerBindings({ account, bearer, request = f
       assert.ok(bindings.some(binding => binding.name === 'AUTH_GATE' &&
         binding.type === 'service' && binding.service === GATE_NAME),
         'private API authorization binding absent');
-      // A successful Wrangler deploy is not sufficient if a manual KEK
-      // binding was lost or replaced by a plaintext variable. Read metadata
-      // only: the value must never enter CI, logs or repository fixtures.
-      const kek = bindings.filter(binding => binding.name === 'CLOUD_ACCOUNT_KEK_V1');
-      assert.equal(kek.length, 1, 'private API KEK binding missing or duplicated');
-      assert.equal(kek[0].type, 'secret_text', 'private API KEK must remain a secret');
     } else {
       assert.ok(bindings.some(binding => binding.name === 'API_RATE_LIMITER' &&
         (binding.type === 'ratelimit' || binding.type === 'rate_limit') &&
@@ -55,6 +81,8 @@ export async function verifyPrivateWorkerBindings({ account, bearer, request = f
     const subdomain = await read('/workers/scripts/' + name + '/subdomain');
     assert.equal(subdomain.enabled, false, name + ': workers.dev exposed');
     assert.equal(subdomain.previews_enabled, false, name + ': preview exposed');
+    const schedule = await read('/workers/scripts/' + name + '/schedules');
+    assert.deepEqual(schedule?.schedules, [], name + ': unexpected scheduled trigger');
   }
 }
 
@@ -63,5 +91,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     account: process.env.CLOUDFLARE_ACCOUNT_ID,
     bearer: process.env['CLOUDFLARE_API_TOKEN'],
   });
-  console.log('Cloudflare provider verified private API/Auth Gate, EU D1 UUID bindings and disabled public URLs');
+  console.log('Cloudflare provider verified private API/Auth Gate bindings, no custom domains, schedules or public URLs');
 }
