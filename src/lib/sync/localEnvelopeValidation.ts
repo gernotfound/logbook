@@ -13,6 +13,7 @@ import { parseCloudflareReplicaClaimIntent, type CloudflareReplicaClaimIntent } 
 import { parseCloudflareReplicaRetirementIntent, type CloudflareReplicaRetirementIntent } from './cloudReplicaRetirementRecord';
 import { parseRetiredReplicaConflictCapsule, type RetiredReplicaConflictCapsule } from './retiredReplicaConflictRecord';
 import { parseRetiredReplicaConflictDecisions, type RetiredReplicaConflictDecision } from './retiredReplicaConflictDecisionRecord';
+import { parseRetiredReplicaTransferDraft, type RetiredReplicaTransferDraft } from './retiredReplicaTransferDraftRecord';
 import {
     coversVectorClock, parseSemanticOperation, parseSyncMeta, parseVectorClock,
     type SemanticOperation, type SyncMeta, type VectorClock,
@@ -44,6 +45,8 @@ interface LocalEnvelopeV5 {
     retiredReplicaConflictCapsule?: RetiredReplicaConflictCapsule;
     // Explicit owner-local preferences. They cannot authorize a cloud merge or ACK.
     retiredReplicaConflictDecisions?: RetiredReplicaConflictDecision[];
+    // An owner-vault escrow of both authenticated alternatives; never a new causal actor or receipt.
+    retiredReplicaTransferDraft?: RetiredReplicaTransferDraft;
     revision: number;
     // Persistent owner-scoped barrier for unverified cloud snapshots.
     cloudIntegrityFence?: string;
@@ -209,6 +212,8 @@ export function validateLocalEnvelope(value: unknown, owner: string): LocalEnvel
     const retiredReplicaConflictDecisions = parseRetiredReplicaConflictDecisions(
         record.retiredReplicaConflictDecisions, retiredReplicaConflictCapsule,
     );
+    const retiredReplicaTransferDraft = record.retiredReplicaTransferDraft === undefined ? undefined
+        : parseRetiredReplicaTransferDraft(record.retiredReplicaTransferDraft, canonicalOwner);
 
     return {
         ...(record as unknown as LocalEnvelopeV5),
@@ -226,6 +231,7 @@ export function validateLocalEnvelope(value: unknown, owner: string): LocalEnvel
         ...(cloudflareReplicaRetirement ? { cloudflareReplicaRetirement } : {}),
         ...(retiredReplicaConflictCapsule ? { retiredReplicaConflictCapsule } : {}),
         ...(retiredReplicaConflictDecisions ? { retiredReplicaConflictDecisions } : {}),
+        ...(retiredReplicaTransferDraft ? { retiredReplicaTransferDraft } : {}),
         revision: record.revision,
     };
 }

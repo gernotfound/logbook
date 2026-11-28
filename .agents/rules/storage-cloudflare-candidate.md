@@ -280,6 +280,24 @@ frontier primari freschi, produrre una nuova identità causale e rendere
 durevole il trasferimento con CAS locale prima della rete. Nessun ACK o
 completamento SYNC-7D/7E può essere inferito da questa anteprima.
 
+Il candidato successivo `retiredReplicaTransferDraft` (v2.788.0) può
+**sigillare nell'owner-vault IndexedDB** una copia immutabile della proposta:
+journal/clock/replica e business originali, documenti cloud AEAD e metadati
+causali, proiezione completa e scelte esplicite. Il percorso Kinde candidato
+richiede una nuova diagnosi `retired-pending`, controllo D1 coerente prima/dopo
+la scansione, chiave account già emessa, consenso/sessione correnti e verifica
+che l'archivio non sia cambiato; il salvataggio è un solo CAS cifrato. Un crash
+non cancella il journal originale, un secondo tentativo non sovrascrive la
+prima proposta, e un record invalido blocca la lettura senza ricreare dati.
+Il limite corrente è 8 MiB di proposta serializzata e 1024 documenti per
+insieme: oltre soglia si fallisce senza perdita, in attesa di un recovery a
+streaming. La proposta storica non è una prova di freschezza futura: il
+successivo writer **MUST** verificare nuovamente receipt primaria, clock,
+owner/consenso/epoch, snapshot AEAD completo, decisioni locali e CAS prima
+di acquisire membership, produrre una nuova sequenza o scrivere in D1.
+La modalità pubblica `identityOnly` non espone questa azione; nessun
+trasferimento reale né ACK è stato implementato, SYNC-7D/7E restano aperti.
+
 ### CF-04 — Barriera journal per il rientro di una replica ritirata (candidato 27/11/2026)
 
 La diagnostica candidata `inspectKindeCandidateOfflineReplicaJournal()` apre

@@ -1,6 +1,34 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
-**Ultimo rilascio verificato prima del candidato corrente, 28/11/2026, CF-04 #1525:**
+**Ultimo rilascio verificato prima del candidato corrente, 28/11/2026, CF-04 #1526:**
+[`main` `42493c06e3b010e80c9b01587001a69bb302cfe1`](https://github.com/gernotfound/logbook/commit/42493c06e3b010e80c9b01587001a69bb302cfe1),
+v2.787.0, tree `36dbe5ead11fbcbc333ff8401884f14b693b858b`.
+[CI PR Canonical/CodeQL e otto E2E](https://github.com/gernotfound/logbook/actions/runs/46158716374),
+[Main Release Gate/CodeQL](https://github.com/gernotfound/logbook/actions/runs/46159084717)
+e [Static Assets/smoke HTTPS byte-esatto](https://github.com/gernotfound/logbook/actions/runs/46159367808)
+`success`. Readback diretto Cloudflare: Worker `thelogbook-frontend`,
+deployment `0cb9ef87-9a4a-4fee-9791-2c2149a1a7e2`, versione
+`f2277c7e-79a2-4eee-b11b-cf461b5231b4` al 100%; solo `APP_ORIGIN`,
+`ASSETS`, `KINDE_HTTP`, nessun `D1_API`. La #1526 copre in memoria i percorsi
+business toccati dal journal di replica ritirata, senza stage, claim o ACK:
+**SYNC-7D/7E e GO fitness restano aperti.**
+
+**Incremento candidato v2.788.0, non ancora integrato o pubblicato:**
+la proposta `retiredReplicaTransferDraft` conserva nel vault cifrato del
+dispositivo le versioni locali originali, tutti i pending e i loro metadati,
+la copia cloud AEAD e la proiezione selezionata. Un comando esplicito nella
+UI tecnica candidata ripete i controlli D1/sessione/consenso e sigilla il
+record in un solo CAS IndexedDB, verificato anche dopo riapertura del vault.
+Non elimina il journal, non registra nuovi dispositivi, non produce nuove
+sequenze, richieste D1 o ACK. Limiti di dimensione possono bloccare la bozza
+senza eliminare dati. Prima del recovery reale servono receipt primaria,
+nuovo claim, conversione causale durevole e consegna/ACK verificabili.
+Questa UI resta esclusa dalla modalità pubblica identity-only; **fitness
+Production NO-GO, SYNC-7D/7E e SYNC-1–6 incompleti.**
+
+**Checkpoint storico precedente:**
+
+**Ultimo rilascio verificato prima del candidato #1526, 28/11/2026, CF-04 #1525:**
 [`main` `632daa6f15cd711bb1a89f314e236b0e1e1d5edc`](https://github.com/gernotfound/logbook/commit/632daa6f15cd711bb1a89f314e236b0e1e1d5edc),
 v2.786.0, tree `790020b6f873e3065f9b3c1cabd980f05f90a879`.
 [CI della PR exact-SHA](https://github.com/gernotfound/logbook/actions/runs/46155918436),
@@ -13,7 +41,7 @@ deployment `2ca0bc45-a1f1-453b-9f4e-fe4232616579`, versione
 esplicite su singole entità soltanto in memoria: nessun writer, ACK,
 trasferimento journal o fitness pubblico. **SYNC-7D/7E e GO fitness aperti.**
 
-**Incremento candidato v2.787.0, non ancora integrato o pubblicato:**
+**Incremento poi integrato come v2.787.0 con #1526:**
 `previewRetiredReplicaTransferCoverage()` estende l'anteprima dall'entità in
 conflitto all'insieme dei percorsi business toccati dal journal offline:
 conserva le versioni cloud indipendenti anche nello stesso mese o in campi

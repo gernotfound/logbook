@@ -17,6 +17,8 @@ type RecoveryState = { kind: 'idle' | 'loading' | 'unavailable' }
     | { kind: 'observed'; result: Awaited<ReturnType<Session['inspectCandidateRetiredReplicaPreflight']>> };
 type ConflictPreservationState = { kind: 'idle' | 'working' | 'unavailable' }
     | { kind: 'saved'; count: number; revision: number; automatic: number; manual: number };
+type TransferDraftState = { kind: 'idle' | 'working' | 'unavailable' }
+    | { kind: 'saved'; revision: number; pending: number; conflicts: number };
 type ConflictDecisionsState = { kind: 'idle' | 'loading' | 'saving' | 'unavailable' }
     | { kind: 'observed'; result: Awaited<ReturnType<Session['inspectCandidateRetiredConflictDecisions']>> };
 
@@ -38,6 +40,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
     const [offlineState, setOfflineState] = useState<OfflineState>({ kind: 'idle' });
     const [recoveryState, setRecoveryState] = useState<RecoveryState>({ kind: 'idle' });
     const [conflictPreservation, setConflictPreservation] = useState<ConflictPreservationState>({ kind: 'idle' });
+    const [transferDraft, setTransferDraft] = useState<TransferDraftState>({ kind: 'idle' });
     const [conflictDecisions, setConflictDecisions] = useState<ConflictDecisionsState>({ kind: 'idle' });
     const [conflictIndex, setConflictIndex] = useState(0);
     const [receiptState, setReceiptState] = useState<'idle' | 'working' | 'acknowledged' | 'unconfirmed' | 'none' | 'unknown'>('idle');
@@ -61,6 +64,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
         setOfflineState({ kind: 'idle' });
         setRecoveryState({ kind: 'idle' });
         setConflictPreservation({ kind: 'idle' });
+        setTransferDraft({ kind: 'idle' });
         setConflictDecisions({ kind: 'idle' });
         setReceiptState('idle');
         setState({ kind: 'loading' });
@@ -81,6 +85,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
         setOfflineState({ kind: 'idle' });
         setRecoveryState({ kind: 'idle' });
         setConflictPreservation({ kind: 'idle' });
+        setTransferDraft({ kind: 'idle' });
         setConflictDecisions({ kind: 'idle' });
         setReceiptState('idle');
         void session.manageCandidateReplicaRetirement(witness).then(outcome => {
@@ -113,6 +118,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
         setOfflineState({ kind: 'idle' });
         setRecoveryState({ kind: 'idle' });
         setConflictPreservation({ kind: 'idle' });
+        setTransferDraft({ kind: 'idle' });
         setConflictDecisions({ kind: 'idle' });
         setReceiptState('idle');
         setPendingState({ kind: 'loading' });
@@ -150,6 +156,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
         setOfflineState({ kind: 'loading' });
         setRecoveryState({ kind: 'idle' });
         setConflictPreservation({ kind: 'idle' });
+        setTransferDraft({ kind: 'idle' });
         setConflictDecisions({ kind: 'idle' });
         setReceiptState('idle');
         void session.inspectCandidateOfflineReplicaJournal().then(result => {
@@ -186,6 +193,19 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
                 automatic: result.automaticCandidates, manual: result.manualRequired });
         }).catch(() => {
             if (mounted.current) setConflictPreservation({ kind: 'unavailable' });
+        }).finally(() => { running.current = false; });
+    };
+
+    const saveTransferDraft = () => {
+        if (running.current || session.busy || offlineState.kind !== 'observed'
+            || offlineState.result.kind !== 'retired-pending' || recoveryState.kind !== 'observed') return;
+        running.current = true;
+        setTransferDraft({ kind: 'working' });
+        void session.preserveCandidateRetiredReplicaTransferDraft().then(result => {
+            if (mounted.current) setTransferDraft({ kind: 'saved', revision: result.cloudRevision,
+                pending: result.pendingOperations, conflicts: result.conflictingEntities });
+        }).catch(() => {
+            if (mounted.current) setTransferDraft({ kind: 'unavailable' });
         }).finally(() => { running.current = false; });
     };
 
@@ -243,6 +263,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
         || offlineState.kind === 'loading'
         || recoveryState.kind === 'loading'
         || conflictPreservation.kind === 'working'
+        || transferDraft.kind === 'working'
         || conflictDecisions.kind === 'loading' || conflictDecisions.kind === 'saving'
         || receiptState === 'working'
         || maintenance === 'working' || cancelOutcome === 'working';
@@ -317,8 +338,17 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
                     && recoveryState.result.evidence.entitiesWithCompetingVersions > 0
                     && <button type="button" className="btn" disabled={disabled || conflictPreservation.kind === 'saved'}
                         onClick={preserveConflicts}>Conserva le versioni concorrenti nell’archivio cifrato</button>}
+                {(recoveryState.result.kind === 'baseline-unchanged'
+                    || (recoveryState.result.kind === 'reconciliation-required'
+                        && recoveryState.result.reason === 'cloud-diverged'
+                        && recoveryState.result.evidence.unclassifiedDocuments === 0))
+                    && <button type="button" className="btn" disabled={disabled || transferDraft.kind === 'saved'}
+                        onClick={saveTransferDraft}>Salva una proposta cifrata di recupero offline</button>}
                 <p>Diagnosi temporanea di sola lettura: nessun ACK, claim, scelta di conflitto o riattribuzione del journal. Non cancellare questa copia finché il recupero non sarà disponibile.</p>
             </div>}
+            {transferDraft.kind === 'working' && <p role="status">Nuova lettura cloud autenticata e salvataggio cifrato della proposta, senza inviare modifiche…</p>}
+            {transferDraft.kind === 'saved' && <p role="status">Proposta cifrata salvata su questo dispositivo: {transferDraft.pending} operazioni originali, {transferDraft.conflicts} scelte di conflitto e revisione cloud osservata {transferDraft.revision}. Il journal originale resta intatto. La proposta non registra un nuovo dispositivo e non sincronizza né conferma alcuna modifica: conserva questo archivio.</p>}
+            {transferDraft.kind === 'unavailable' && <p role="alert">Proposta non confermata. Potrebbero mancare scelte sui conflitti, o sessione, dati o cloud potrebbero essere cambiati. Conserva il journal, verifica le alternative e ripeti la diagnosi; un salvataggio già riuscito non va sovrascritto.</p>}
             {conflictPreservation.kind === 'working' && <p role="status">Nuovo confronto autenticato e salvataggio cifrato delle versioni: nessuna modifica inviata al cloud…</p>}
             {conflictPreservation.kind === 'saved' && <p role="status">{conflictPreservation.count === 1
                 ? 'Conservata 1 entità con versioni concorrenti' : `Conservate ${conflictPreservation.count} entità con versioni concorrenti`}, insieme alle alternative e al journal originale, nell’archivio cifrato di questo dispositivo (revisione cloud osservata {conflictPreservation.revision}). L’anteprima classifica {conflictPreservation.automatic} entità con campi combinabili e {conflictPreservation.manual} che richiedono una scelta esplicita. Non è una prova di trasferibilità: nessuna versione è stata scelta o sincronizzata. Conserva questo dispositivo.</p>}
