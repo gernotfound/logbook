@@ -136,13 +136,12 @@ export async function withKindeReplicaDevices<T>(
 
     try {
         await fixture.consent(uid);
-        const firstCookies: string[] = (await issueVerifiedSession(fixture.db, uid)).setCookies;
-        const secondCookies: string[] = (await issueVerifiedSession(fixture.db, uid)).setCookies;
-        const firstSession = firstCookies[0].split(';')[0];
-        const sessions = new Map([['first', firstCookies], ['second', secondCookies]]);
-        // Use Set-Cookie over actual loopback TLS so WebKit and Chromium apply
-        // their own host-only Secure/HttpOnly rules. The synthetic sign-in is
-        // invoked once per profile and never runs during archive recovery.
+        const sharedCookies: string[] = (await issueVerifiedSession(fixture.db, uid)).setCookies;
+        const sessions = new Map([['first', sharedCookies], ['second', sharedCookies]]);
+        // Two browser contexts can exercise the encrypted replica protocol
+        // under one authorized session. Issuing a second login now revokes the
+        // first; independent-login handoff has separate Auth coverage.
+        // Use Set-Cookie over actual loopback TLS for Secure/HttpOnly behavior.
         const env = { ...fixture.env, APP_ORIGIN: ORIGIN,
             ...(foregroundActivity ? { CF06_FOREGROUND_ACTIVITY_ENABLED: 'enabled' } : {}),
         };
@@ -155,7 +154,8 @@ export async function withKindeReplicaDevices<T>(
                     ? sessions.get(url.pathname.slice('/session/'.length)) : undefined;
                 if (browserSession) {
                     outgoing.writeHead(303, {
-                        'Set-Cookie': browserSession,
+                        'Set-Cookie': [...browserSession,
+                            `logbook_fixture_device=${url.pathname.slice('/session/'.length)}; Path=/; Secure; SameSite=Lax`],
                         Location: '/', 'Cache-Control': 'no-store',
                     }).end();
                 } else if (url.pathname === '/') {
@@ -183,7 +183,7 @@ export async function withKindeReplicaDevices<T>(
             let body = '';
             incoming.setEncoding('utf8');
             for await (const chunk of incoming) body += chunk;
-            const isFirst = (headers.get('cookie') ?? '').split('; ').includes(firstSession);
+            const isFirst = (headers.get('cookie') ?? '').split('; ').includes('logbook_fixture_device=first');
             if (isFirst && url.pathname === '/v1/sync/read') {
                 // Interleave only the first profile's reads. The callback can
                 // complete a real commit from the second profile meanwhile.
@@ -225,8 +225,7 @@ export async function withKindeReplicaDevices<T>(
             beforeFirstDocumentRead: action => { beforeFirstReads.push(action); },
             additionalDevice: async () => {
                 const label = `additional-${sessions.size}`;
-                const cookies = (await issueVerifiedSession(fixture.db, uid)).setCookies;
-                sessions.set(label, cookies);
+                sessions.set(label, sharedCookies);
                 return createDevice(label);
             },
             replicaCount: () => countRows('sync_replicas'),

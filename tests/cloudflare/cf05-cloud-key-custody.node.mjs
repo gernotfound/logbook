@@ -22,6 +22,7 @@ class Statement {
   constructor(sqlite, sql, args = []) { this.sqlite = sqlite; this.sql = sql; this.args = args; }
   bind(...args) { return new Statement(this.sqlite, this.sql, args); }
   async first() { return this.sqlite.prepare(this.sql).get(...this.args) ?? null; }
+  async all() { return { success: true, results: this.sqlite.prepare(this.sql).all(...this.args) }; }
   async run() {
     const result = this.sqlite.prepare(this.sql).run(...this.args);
     return { success: true, meta: { changes: result.changes } };
@@ -31,6 +32,21 @@ class D1Sqlite {
   constructor(sqlite) { this.sqlite = sqlite; }
   withSession(mode) { assert.equal(mode, 'first-primary'); return this; }
   prepare(sql) { return new Statement(this.sqlite, sql); }
+  async batch(statements) {
+    this.sqlite.exec('BEGIN IMMEDIATE');
+    try {
+      const results = [];
+      for (const statement of statements) {
+        if (/^\s*SELECT\b/i.test(statement.sql)) results.push(await statement.all());
+        else results.push(await statement.run());
+      }
+      this.sqlite.exec('COMMIT');
+      return results;
+    } catch (error) {
+      this.sqlite.exec('ROLLBACK');
+      throw error;
+    }
+  }
 }
 function sqlCount(f, table, uid) {
   return f.sqlite.prepare('SELECT COUNT(*) AS n FROM ' + table + ' WHERE uid = ?').get(uid).n;

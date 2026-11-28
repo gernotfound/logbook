@@ -38,6 +38,21 @@ class D1Sqlite {
   constructor(sqlite) { this.sqlite = sqlite; }
   withSession(mode) { assert.equal(mode, 'first-primary'); return this; }
   prepare(sql) { return new Statement(this.sqlite, sql); }
+  async batch(statements) {
+    this.sqlite.exec('BEGIN IMMEDIATE');
+    try {
+      const results = [];
+      for (const statement of statements) {
+        if (/^\s*SELECT\b/i.test(statement.sql)) results.push(await statement.all());
+        else results.push(await statement.run());
+      }
+      this.sqlite.exec('COMMIT');
+      return results;
+    } catch (error) {
+      this.sqlite.exec('ROLLBACK');
+      throw error;
+    }
+  }
 }
 function addOwner(sqlite, uid) {
   const now = Date.now() - 10000;

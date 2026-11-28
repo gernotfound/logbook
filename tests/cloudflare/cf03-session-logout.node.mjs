@@ -56,8 +56,8 @@ async function fixture() {
   const a = await issueVerifiedSession(db, 'owner-a');
   const another = await issueVerifiedSession(db, 'owner-a');
   const b = await issueVerifiedSession(db, 'owner-b');
-  const cookie = a.setCookies.map(item => item.split(';')[0]).join('; ');
-  const csrf = a.setCookies[1].split(';')[0].split('=')[1];
+  const cookie = another.setCookies.map(item => item.split(';')[0]).join('; ');
+  const csrf = another.setCookies[1].split(';')[0].split('=')[1];
   const env = { DB: db, RECOVERY_DB: recoveryDb, API_ORIGIN: ORIGIN,
     CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5',
     AUTH_GATE: { fetch: request => gate.fetch(request, {
@@ -109,7 +109,7 @@ void test('the same API entry serves consent, encrypted sync and session-only lo
     assert.equal(result.response.status, 200);
     assert.deepEqual(result.body, { status: 'signed-out' });
     clearCookies(result.response);
-    assert.equal(active(f.sqlite, 'owner-a'), 1);
+    assert.equal(active(f.sqlite, 'owner-a'), 0);
     assert.equal(active(f.sqlite, 'owner-b'), 1);
     assert.equal((await call(f, '/v1/consent/status')).response.status, 401);
     assert.equal((await call(f, '/v1/sync/control', { body: {} })).response.status, 401);
@@ -135,9 +135,9 @@ void test('zero-byte browser logout stream is allowed but forged empty body cann
       return { status: response.status, body: await response.json() };
     };
     assert.deepEqual(await streamed([[32]]), { status: 400, body: { error: 'invalid-body' } });
-    assert.equal(active(f.sqlite, 'owner-a'), 2);
-    assert.deepEqual(await streamed([[], []]), { status: 200, body: { status: 'signed-out' } });
     assert.equal(active(f.sqlite, 'owner-a'), 1);
+    assert.deepEqual(await streamed([[], []]), { status: 200, body: { status: 'signed-out' } });
+    assert.equal(active(f.sqlite, 'owner-a'), 0);
     assert.equal(active(f.sqlite, 'owner-b'), 1);
   } finally { f.close(); }
 });
@@ -182,7 +182,7 @@ void test('origin, CSRF, method, body, query and owner identity are required', a
       assert.notEqual(result.response.status, 200);
       assert.equal(result.response.headers.getSetCookie().length, 0);
     }
-    assert.equal(active(f.sqlite, 'owner-a'), 2);
+    assert.equal(active(f.sqlite, 'owner-a'), 1);
     assert.equal(active(f.sqlite, 'owner-b'), 1);
     assert.equal((await call(f, '/v1/auth/unknown')).response.status, 404);
   } finally { f.close(); }
@@ -203,7 +203,7 @@ void test('a lost D1 write response is reconciled only from primary proof', asyn
     const result = await call(f, '/v1/auth/logout', { env: { ...f.env, DB: db } });
     assert.equal(result.response.status, 200);
     clearCookies(result.response);
-    assert.equal(active(f.sqlite, 'owner-a'), 1);
+    assert.equal(active(f.sqlite, 'owner-a'), 0);
   } finally { f.close(); }
 });
 void test('failed D1 write, stale epoch or unreadable proof never clear a cookie', async () => {
@@ -229,7 +229,7 @@ void test('failed D1 write, stale epoch or unreadable proof never clear a cookie
       const result = await call(f, '/v1/auth/logout', { env: { ...f.env, DB: db } });
       assert.equal(result.response.status, 503, fault);
       assert.equal(result.response.headers.getSetCookie().length, 0);
-      assert.equal(active(f.sqlite, 'owner-a'), 2);
+      assert.equal(active(f.sqlite, 'owner-a'), 1);
     } finally { f.close(); }
   }
 });
@@ -247,6 +247,6 @@ void test('rate-limited or malformed internal claims cannot revoke any session',
       }) },
     } });
     assert.equal(malformed.response.status, 503);
-    assert.equal(active(f.sqlite, 'owner-a'), 2);
+    assert.equal(active(f.sqlite, 'owner-a'), 1);
   } finally { f.close(); }
 });

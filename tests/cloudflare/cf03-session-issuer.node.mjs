@@ -17,12 +17,16 @@ function fixture() {
       return {
         bind(...params) {
           return {
+            sql,
             async run() {
               const outcome = sqlite.prepare(sql).run(...params);
               return { success: true, meta: { changes: outcome.changes } };
             },
             async first() {
               return sqlite.prepare(sql).get(...params) ?? null;
+            },
+            async all() {
+              return { success: true, results: sqlite.prepare(sql).all(...params) };
             },
           };
         },
@@ -31,6 +35,21 @@ function fixture() {
     withSession(mode) {
       assert.equal(mode, 'first-primary');
       return this;
+    },
+    async batch(statements) {
+      sqlite.exec('BEGIN IMMEDIATE');
+      try {
+        const results = [];
+        for (const statement of statements) {
+          results.push(/^\s*SELECT\b/i.test(statement.sql)
+            ? await statement.all() : await statement.run());
+        }
+        sqlite.exec('COMMIT');
+        return results;
+      } catch (error) {
+        sqlite.exec('ROLLBACK');
+        throw error;
+      }
     },
   };
   const now = Date.now();
@@ -69,10 +88,46 @@ void test('issuer creates 32-byte random session and host-only CSRF cookies afte
     assert.ok(first.absoluteExpiresAtMs <= after + 2592000000);
     const rows = sqlite.prepare('SELECT * FROM auth_sessions WHERE uid = ?').all('verified-a');
     assert.equal(rows.length, 2);
+    assert.equal(rows.filter(row => row.revoked_at_ms === null).length, 1);
+    const firstHash = await hashSessionSecret(a.session);
+    const secondHash = await hashSessionSecret(b.session);
+    assert.ok(rows.find(row => row.token_hash === firstHash)?.revoked_at_ms >= before);
+    assert.equal(rows.find(row => row.token_hash === secondHash)?.revoked_at_ms, null);
     assert.ok(rows.every(row => row.token_hash !== a.session && row.csrf_hash !== a.csrf));
     const expectedSessionHash = await hashSessionSecret(a.session);
     assert.ok(rows.some(row => row.token_hash === expectedSessionHash));
     assert.equal(rows[0].auth_epoch, 1);
+    // Both browser sessions remain auditable; only the latest is accepted.
+    const env = { DB: db, API_ORIGIN: ORIGIN,
+      API_RATE_LIMITER: { limit: async () => ({ success: true }) } };
+    const status = (session, csrf) => gate.fetch(new Request('https://auth-gate.internal/__internal/authorize', {
+      method: 'POST', headers: {
+        origin: ORIGIN, 'x-original-route': '/v1/consent/status', 'x-original-method': 'POST',
+        cookie: '__Host-logbook_session=' + session + '; __Host-logbook_csrf=' + csrf,
+      },
+    }), env);
+    assert.equal((await status(a.session, a.csrf)).status, 401);
+    assert.equal((await status(b.session, b.csrf)).status, 200);
+  } finally { sqlite.close(); }
+});
+
+void test('a failed new issuance preserves the existing session and never revokes another owner', async () => {
+  const { db, sqlite } = fixture();
+  try {
+    sqlite.prepare('INSERT INTO auth_principals(uid,status,verified_at_ms,auth_epoch) VALUES (?,?,?,?)')
+      .run('verified-b', 'active', Date.now() - 10000, 1);
+    const a = tokens(await issueVerifiedSession(db, 'verified-a'));
+    const b = tokens(await issueVerifiedSession(db, 'verified-b'));
+    const aHash = await hashSessionSecret(a.session);
+    const bHash = await hashSessionSecret(b.session);
+    // Reject revocation after the issuer's INSERT. A D1 batch must roll back
+    // the new row and keep the previous login usable, including across owners.
+    sqlite.exec(`CREATE TRIGGER synthetic_reject_revoke BEFORE UPDATE OF revoked_at_ms ON auth_sessions
+      BEGIN SELECT RAISE(ABORT, 'synthetic failed revocation'); END`);
+    await assert.rejects(issueVerifiedSession(db, 'verified-a'), SessionIssuanceError);
+    assert.equal(sqlite.prepare('SELECT revoked_at_ms FROM auth_sessions WHERE token_hash=?').get(aHash).revoked_at_ms, null);
+    assert.equal(sqlite.prepare('SELECT revoked_at_ms FROM auth_sessions WHERE token_hash=?').get(bHash).revoked_at_ms, null);
+    assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 2);
   } finally { sqlite.close(); }
 });
 

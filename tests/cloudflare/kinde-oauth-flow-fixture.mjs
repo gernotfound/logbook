@@ -17,11 +17,13 @@ export async function createKindeOAuthFixture() {
   const db = {
     prepare(sql) {
       const bind = (...params) => ({
+        sql,
         async run() {
           const out = sqlite.prepare(sql).run(...params);
           return { success: true, meta: { changes: out.changes } };
         },
         async first() { return sqlite.prepare(sql).get(...params) ?? null; },
+        async all() { return { success: true, results: sqlite.prepare(sql).all(...params) }; },
         bind,
       });
       return bind();
@@ -29,6 +31,21 @@ export async function createKindeOAuthFixture() {
     withSession(mode) {
       assert.equal(mode, 'first-primary');
       return this;
+    },
+    async batch(statements) {
+      sqlite.exec('BEGIN IMMEDIATE');
+      try {
+        const results = [];
+        for (const statement of statements) {
+          results.push(/^\s*SELECT\b/i.test(statement.sql)
+            ? await statement.all() : await statement.run());
+        }
+        sqlite.exec('COMMIT');
+        return results;
+      } catch (error) {
+        sqlite.exec('ROLLBACK');
+        throw error;
+      }
     },
   };
   const { publicKey, privateKey } = await generateKeyPair('RS256');
