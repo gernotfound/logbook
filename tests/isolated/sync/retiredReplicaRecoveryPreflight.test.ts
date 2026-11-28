@@ -17,6 +17,8 @@ import { parseRetiredReplicaConflictCapsule } from '../../../src/lib/sync/retire
 import { previewRetiredReplicaConflictResolution } from '../../../src/lib/sync/retiredReplicaConflictResolution';
 import { materializeRetiredReplicaConflictChoices, previewRetiredReplicaSelectedDocuments } from '../../../src/lib/sync/retiredReplicaConflictMaterialization';
 import { previewRetiredReplicaTransferCoverage } from '../../../src/lib/sync/retiredReplicaTransferCoverage';
+import { buildRetiredReplicaTransferDraft, stageRetiredReplicaTransferDraft } from '../../../src/lib/sync/retiredReplicaTransferDraft';
+import { parseRetiredReplicaTransferDraft } from '../../../src/lib/sync/retiredReplicaTransferDraftRecord';
 import { parseRetiredReplicaConflictDecisions } from '../../../src/lib/sync/retiredReplicaConflictDecisionRecord';
 import { inspectRetiredReplicaConflictDecisions, recordRetiredReplicaConflictDecision } from '../../../src/lib/sync/retiredReplicaConflictDecisions';
 import { REPLICA_CLOCK_SKEW_MARGIN_MS } from '../../../src/lib/sync/replicaProtocol';
@@ -365,6 +367,137 @@ afterEach(() => {
     lockAllVaults();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+});
+
+describe('retired replica encrypted transfer draft, not claim or ACK', () => {
+    it('persists an immutable full-scan proposal across vault lock and reopening, without touching the old actor', async () => {
+        const before = (await readLocal(owner))!;
+        const cloud = await checkpoint();
+        const snapshot = await get<string>(storageKey);
+        const plan = buildRetiredReplicaTransferDraft(uid, before, cloud, control(), catalog);
+        expect(plan.sourcePending).toEqual(before.pending);
+        expect(plan.proposedDocuments[0].business.profile).toMatchObject({ height: '171' });
+        expect(plan.remoteDocuments[0].business.profile).toMatchObject({ height: '170' });
+        expect(await get(storageKey)).toBe(snapshot);
+        const revision = await stageRetiredReplicaTransferDraft(owner, before, plan, () => true);
+        expect(revision).toBe(before.revision + 1);
+        const ciphertext = await get<string>(storageKey);
+        expect(ciphertext).not.toBe(snapshot);
+        expect(ciphertext).not.toContain('height');
+        expect(ciphertext).not.toContain('171');
+        expect(ciphertext).not.toContain('retiredReplicaTransferDraft');
+        const saved = (await readLocal(owner))!;
+        expect(saved.retiredReplicaTransferDraft).toEqual(plan);
+        expect(saved.data).toEqual(before.data);
+        expect(saved.baseline).toEqual(before.baseline);
+        expect(saved.pending).toEqual(before.pending);
+        expect(saved.replica).toEqual(before.replica);
+        expect(saved.clock).toEqual(before.clock);
+        expect(saved.actorSeq).toEqual(before.actorSeq);
+        expect(saved.cloudflareDelivery).toBeUndefined();
+        expect(saved.cloudflareReplicaClaim).toBeUndefined();
+        lockAllVaults();
+        const grant = await (await import('../../../src/lib/sync/secureArchiveSession')).unlockVaultForOwner(owner);
+        try { expect((await readLocal(owner))!.retiredReplicaTransferDraft).toEqual(plan); }
+        finally { grant.release(); }
+    });
+
+    it('preserves ciphertext when a concurrent edit, stale session, or duplicate draft races the transaction', async () => {
+        const before = (await readLocal(owner))!;
+        const plan = buildRetiredReplicaTransferDraft(uid, before, await checkpoint(), control(), catalog);
+        const original = await get(storageKey);
+        await expect(stageRetiredReplicaTransferDraft(owner, before, plan, () => false)).rejects.toThrow(/Sessione/);
+        expect(await get(storageKey)).toBe(original);
+        await commitLocal(owner, data(172), before.data);
+        const afterEdit = await get(storageKey);
+        await expect(stageRetiredReplicaTransferDraft(owner, before, plan, () => true)).rejects.toThrow(/concorrente/);
+        expect(await get(storageKey)).toBe(afterEdit);
+        await updateArchiveRecord(owner, () => before);
+        await stageRetiredReplicaTransferDraft(owner, before, plan, () => true);
+        const encrypted = await get(storageKey);
+        await expect(stageRetiredReplicaTransferDraft(owner, before, plan, () => true)).rejects.toThrow(/concorrente/);
+        expect(await get(storageKey)).toBe(encrypted);
+    });
+
+    it('rejects tampered owner, missing cloud root, changed proposal, untracked path and oversized draft', async () => {
+        const before = (await readLocal(owner))!;
+        const plan = buildRetiredReplicaTransferDraft(uid, before, await checkpoint(), control(), catalog);
+        const original = await get(storageKey);
+        expect(() => parseRetiredReplicaTransferDraft({ ...plan, owner: 'user:wrong' }, owner)).toThrow();
+        expect(() => parseRetiredReplicaTransferDraft({ ...plan, remoteDocuments: [] }, owner)).toThrow();
+        expect(() => parseRetiredReplicaTransferDraft({ ...plan,
+            proposedDocuments: [{ path: 'rogue/path', business: {} }],
+        }, owner)).toThrow();
+        expect(() => parseRetiredReplicaTransferDraft({ ...plan,
+            sourcePending: [{ ...plan.sourcePending[0], actorId: 's02' }],
+        }, owner)).toThrow();
+        expect(() => parseRetiredReplicaTransferDraft({ ...plan,
+            proposedDocuments: [{ path: '', business: { excess: 'x'.repeat(9 * 1024 * 1024) } }],
+        }, owner)).toThrow(/grande/);
+        expect(await get(storageKey)).toBe(original);
+        await updateArchiveRecord<unknown>(owner, raw => ({ ...(raw as object),
+            retiredReplicaTransferDraft: { ...plan, owner: 'user:wrong' },
+        }));
+        const corruptedCiphertext = await get(storageKey);
+        await expect(readLocal(owner)).rejects.toThrow(/Proposta/);
+        expect(await get(storageKey)).toBe(corruptedCiphertext);
+    });
+
+    it('rejects lost ACK, mismatched epoch, stale consent and a delivery intent before escrow', async () => {
+        const before = (await readLocal(owner))!;
+        const cloud = await checkpoint();
+        expect(() => buildRetiredReplicaTransferDraft(uid, before, cloud,
+            control({ lastSeq: before.pending[0].seq }), catalog)).toThrow(/causale/);
+        expect(() => buildRetiredReplicaTransferDraft(uid, before, cloud,
+            { ...control(), fenceEpoch: 6 }, catalog)).toThrow();
+        expect(() => buildRetiredReplicaTransferDraft(uid, before, cloud,
+            { ...control(), consentRevision: 2 }, catalog)).toThrow();
+        const plan = buildRetiredReplicaTransferDraft(uid, before, cloud, control(), catalog);
+        await updateArchiveRecord<unknown>(owner, raw => ({ ...(raw as object), cloudIntegrityFence: 'fenced' }));
+        const frozen = await get(storageKey);
+        await expect(stageRetiredReplicaTransferDraft(owner, before, plan, () => true)).rejects.toThrow();
+        expect(await get(storageKey)).toBe(frozen);
+    });
+
+    it('retains a selected conflict and all three original versions, even after a local edit', async () => {
+        const date = '2026-11-13';
+        const baseline = UserDataSchema.parse({ ...data(170), nutrition: {
+            [date]: { date, weight: 70, sleepHours: '07:00' },
+        } }) as unknown as UserData;
+        const desired = UserDataSchema.parse({ ...baseline, nutrition: {
+            [date]: { ...baseline.nutrition![date], weight: 71 },
+        } }) as unknown as UserData;
+        const remote = UserDataSchema.parse({ ...baseline, nutrition: {
+            [date]: { ...baseline.nutrition![date], sleepHours: '08:00' },
+        } }) as unknown as UserData;
+        const sources = await competingEntitySources({ baseline, desired, remote,
+            changedPath: ['nutrition_months/2026-11', date, 'sleepHours'] });
+        await updateArchiveRecord(owner, () => sources.local);
+        const capsule = buildRetiredReplicaConflictCapsule(uid, sources.local, sources.cloud, control(), catalog);
+        await stageRetiredReplicaConflictCapsule(owner, sources.local, capsule, () => true);
+        const staged = (await readLocal(owner))!;
+        const identity = { kind: 'nutrition' as const, entityId: date };
+        await recordRetiredReplicaConflictDecision(owner, staged.revision,
+            { ...identity, choice: 'combined' }, identity, legal, expectedFrontier, () => true);
+        const chosen = (await readLocal(owner))!;
+        const plan = buildRetiredReplicaTransferDraft(uid, chosen, sources.cloud, control(), catalog);
+        expect(plan.selectedConflicts).toEqual([expect.objectContaining({ choice: 'combined', entityId: date,
+            value: expect.objectContaining({ weight: 71, sleepHours: '08:00' }) })]);
+        await stageRetiredReplicaTransferDraft(owner, chosen, plan, () => true);
+        const encrypted = (await readLocal(owner))!;
+        expect(encrypted.retiredReplicaConflictCapsule?.entries[0]).toMatchObject({
+            baseline: { value: { weight: 70 } }, device: { value: { weight: 71 } }, cloud: { value: { sleepHours: '08:00' } },
+        });
+        expect(encrypted.retiredReplicaTransferDraft?.remoteDocuments.find(doc => doc.path === 'nutrition_months/2026-11')
+            ?.business[date]).toMatchObject({ weight: 70, sleepHours: '08:00' });
+        expect(encrypted.retiredReplicaTransferDraft?.proposedDocuments.find(doc => doc.path === 'nutrition_months/2026-11')
+            ?.business[date]).toMatchObject({ weight: 71, sleepHours: '08:00' });
+        await commitLocal(owner, data(178), encrypted.data);
+        const later = (await readLocal(owner))!;
+        expect(later.retiredReplicaTransferDraft).toEqual(plan);
+        expect(later.retiredReplicaConflictCapsule).toEqual(capsule);
+        expect(later.pending.length).toBeGreaterThan(0);
+    });
 });
 
 describe('retired replica recovery preflight, no mutation or new causal identity', () => {

@@ -4,7 +4,24 @@
 
 ## CF-04 · Frontend identity-only verificato · 28 novembre 2026
 
-**Ultimo readback verificato dopo [PR #1525](https://github.com/gernotfound/logbook/pull/1525):**
+**Ultimo readback verificato dopo [PR #1526](https://github.com/gernotfound/logbook/pull/1526):**
+`main` [`42493c06e3b010e80c9b01587001a69bb302cfe1`](https://github.com/gernotfound/logbook/commit/42493c06e3b010e80c9b01587001a69bb302cfe1),
+v2.787.0, con [gate post-merge](https://github.com/gernotfound/logbook/actions/runs/46159084717)
+e [smoke HTTPS byte-esatto](https://github.com/gernotfound/logbook/actions/runs/46159367808)
+`success`. Readback Cloudflare: deployment
+`0cb9ef87-9a4a-4fee-9791-2c2149a1a7e2`, Worker version
+`f2277c7e-79a2-4eee-b11b-cf461b5231b4` al 100% con i soli binding
+`APP_ORIGIN`, `ASSETS`, `KINDE_HTTP` (senza `D1_API`). La PR #1526 ha
+aggiunto una copertura **solo in memoria** dei percorsi business offline.
+Il candidato v2.788.0 sigilla localmente la proposta con copie AEAD già
+autenticate e guardie CAS; non cambia alcun servizio, binding, dominio,
+quota o database provider e non invia dati sanitari a D1. La sua CI e il
+deploy devono essere registrati soltanto dopo verifica reale. Recupero
+SYNC-7D/7E e GO fitness **ancora aperti**.
+
+**Checkpoint storico precedente:**
+
+**Readback precedente dopo [PR #1525](https://github.com/gernotfound/logbook/pull/1525):**
 `main` [`632daa6f15cd711bb1a89f314e236b0e1e1d5edc`](https://github.com/gernotfound/logbook/commit/632daa6f15cd711bb1a89f314e236b0e1e1d5edc),
 v2.786.0, con [gate post-merge](https://github.com/gernotfound/logbook/actions/runs/46156245246)
 e [smoke HTTPS](https://github.com/gernotfound/logbook/actions/runs/46156516703)

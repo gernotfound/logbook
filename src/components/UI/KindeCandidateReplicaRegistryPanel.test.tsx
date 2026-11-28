@@ -13,6 +13,7 @@ import { prepareKindeCandidateOwner } from '../../lib/sync/kindeCandidateOwnerBo
 import { inspectKindeCandidateOfflineReplicaJournal } from '../../lib/sync/kindeCandidateOfflineReplicaJournal';
 import { inspectKindeCandidateRetiredReplicaWithExistingKey } from '../../lib/sync/kindeCandidateRetiredReplicaReadOnly';
 import { preserveKindeCandidateRetiredReplicaConflicts } from '../../lib/sync/kindeCandidateRetiredReplicaConflictRecovery';
+import { preserveKindeCandidateRetiredReplicaTransferDraft } from '../../lib/sync/kindeCandidateRetiredReplicaTransferDraft';
 import { inspectOrChooseKindeCandidateRetiredConflicts } from '../../lib/sync/kindeCandidateRetiredConflictDecisionBridge';
 import { recoverKindeCandidateStagedReceipt } from '../../lib/sync/kindeCandidateStagedReceiptRecovery';
 
@@ -33,6 +34,9 @@ vi.mock('../../lib/sync/kindeCandidateRetiredReplicaReadOnly', () => ({
 }));
 vi.mock('../../lib/sync/kindeCandidateRetiredReplicaConflictRecovery', () => ({
     preserveKindeCandidateRetiredReplicaConflicts: vi.fn(),
+}));
+vi.mock('../../lib/sync/kindeCandidateRetiredReplicaTransferDraft', () => ({
+    preserveKindeCandidateRetiredReplicaTransferDraft: vi.fn(),
 }));
 vi.mock('../../lib/sync/kindeCandidateRetiredConflictDecisionBridge', () => ({
     inspectOrChooseKindeCandidateRetiredConflicts: vi.fn(),
@@ -68,6 +72,9 @@ function authenticated() {
     vi.mocked(preserveKindeCandidateRetiredReplicaConflicts).mockResolvedValue({
         preservedEntities: 1, cloudRevision: 5, automaticCandidates: 1, manualRequired: 0,
     });
+    vi.mocked(preserveKindeCandidateRetiredReplicaTransferDraft).mockResolvedValue({
+        cloudRevision: 5, savedRevision: 10, pendingOperations: 3, conflictingEntities: 0,
+    });
     vi.mocked(inspectOrChooseKindeCandidateRetiredConflicts).mockReset().mockImplementation(async request => ({
         revision: request.selection ? request.selection.expectedRevision + 1 : 9,
         entries: [{ kind: 'nutrition', entityId: '2026-11-13',
@@ -82,6 +89,26 @@ function authenticated() {
 }
 
 describe('candidate-only replica registry presentation', () => {
+    it('offers explicit local escrow after preflight and does not claim a synchronized journal', async () => {
+        authenticated();
+        vi.mocked(inspectKindeCandidateOfflineReplicaJournal).mockResolvedValue({
+            kind: 'retired-pending', pendingOperations: 3, slot: 's03', generation: 2, reason: 'retired',
+        });
+        render(<KindeAccountEntry candidateMode="preparation" />);
+        const offline = await screen.findByRole('button', { name: 'Controlla modifiche offline su questo dispositivo' });
+        fireEvent.click(offline);
+        fireEvent.click(await screen.findByRole('button', { name: 'Analizza la copia cloud e i possibili conflitti' }));
+        const save = await screen.findByRole('button', { name: 'Salva una proposta cifrata di recupero offline' });
+        fireEvent.click(save);
+        await screen.findByText(/Proposta cifrata salvata su questo dispositivo/);
+        expect(screen.getByText(/Il journal originale resta intatto/)).toBeTruthy();
+        expect((save as HTMLButtonElement).disabled).toBe(true);
+        expect(preserveKindeCandidateRetiredReplicaTransferDraft).toHaveBeenCalledWith({
+            expected: { uid: principal.uid, fenceEpoch: 1, healthConsentRevision: 1 },
+            stillCurrent: expect.any(Function),
+        });
+    });
+
     it('does not expose registry inspection in public identity-only or guest mode', async () => {
         authenticated();
         const publicEntry = render(<KindeAccountEntry identityOnly />);
@@ -91,6 +118,7 @@ describe('candidate-only replica registry presentation', () => {
         expect(screen.queryByRole('button', { name: 'Analizza la copia cloud e i possibili conflitti' })).toBeNull();
         expect(screen.queryByRole('button', { name: 'Verifica la ricevuta di un invio sigillato' })).toBeNull();
         expect(screen.queryByRole('button', { name: 'Conserva le versioni concorrenti nell’archivio cifrato' })).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Salva una proposta cifrata di recupero offline' })).toBeNull();
         expect(screen.queryByRole('button', { name: 'Esamina le alternative cifrate già conservate' })).toBeNull();
         publicEntry.unmount();
 

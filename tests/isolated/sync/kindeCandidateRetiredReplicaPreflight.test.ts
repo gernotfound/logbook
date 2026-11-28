@@ -9,6 +9,7 @@ import { projectDocuments } from '../../../src/lib/sync/documentProjection';
 import { inspectKindeCandidateRetiredReplicaPreflight } from '../../../src/lib/sync/kindeCandidateRetiredReplicaPreflight';
 import { inspectKindeCandidateRetiredReplicaWithExistingKey } from '../../../src/lib/sync/kindeCandidateRetiredReplicaReadOnly';
 import { preserveKindeCandidateRetiredReplicaConflicts } from '../../../src/lib/sync/kindeCandidateRetiredReplicaConflictRecovery';
+import { preserveKindeCandidateRetiredReplicaTransferDraft } from '../../../src/lib/sync/kindeCandidateRetiredReplicaTransferDraft';
 import { inspectOrChooseKindeCandidateRetiredConflicts } from '../../../src/lib/sync/kindeCandidateRetiredConflictDecisionBridge';
 import { adoptReplicaCheckpoint, commitLocal, initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
@@ -126,6 +127,54 @@ afterEach(() => {
 });
 
 describe('Kinde candidate: authenticated retired replica preflight', () => {
+    it('escrows the baseline-unchanged proposal via real authenticated scan, never a claim or business write', async () => {
+        const old = (await readLocal(owner))!;
+        const original = await get<string>(storage);
+        const transient = key.slice();
+        accountKeySource.acquire.mockResolvedValue(transient);
+        const send = network();
+        const result = await preserveKindeCandidateRetiredReplicaTransferDraft({
+            expected, stillCurrent: () => true, send,
+            browserCookies: () => '__Host-logbook_csrf=' + csrf,
+        });
+        expect(result).toEqual({ cloudRevision: 8, savedRevision: old.revision + 1,
+            pendingOperations: old.pending.length, conflictingEntities: 0 });
+        expect(await get(storage)).not.toBe(original);
+        const grant = await unlockVaultForOwner(owner);
+        const stored = (await readLocal(owner))!;
+        expect(stored.retiredReplicaTransferDraft?.sourcePending).toEqual(old.pending);
+        expect(stored.retiredReplicaTransferDraft?.proposedDocuments[0].business.profile)
+            .toMatchObject({ height: '171' });
+        expect(stored.pending).toEqual(old.pending);
+        expect(stored.actorSeq).toEqual(old.actorSeq);
+        expect(stored.replica).toEqual(old.replica);
+        grant.release();
+        expect(Array.from(transient)).toEqual(Array(32).fill(0));
+        expect(vi.mocked(send).mock.calls.map(([input]) => String(input))
+            .every(path => !/cloud-key|commit|claim|retire|receipt/.test(path))).toBe(true);
+    });
+
+    it('does not escrow a lost-ACK candidate or a cloud scan racing with an offline edit', async () => {
+        const before = (await readLocal(owner))!;
+        accountKeySource.acquire.mockResolvedValue(key.slice());
+        const args = { expected, stillCurrent: () => true,
+            browserCookies: () => '__Host-logbook_csrf=' + csrf };
+        const original = await get(storage);
+        await expect(preserveKindeCandidateRetiredReplicaTransferDraft({ ...args,
+            send: network({ before: control(8, before.pending[0].seq) }),
+        })).rejects.toThrow();
+        expect(await get(storage)).toBe(original);
+        accountKeySource.acquire.mockResolvedValue(key.slice());
+        await expect(preserveKindeCandidateRetiredReplicaTransferDraft({ ...args,
+            send: network({ onScan: async () => { await commitLocal(owner, data(172), before.data); } }),
+        })).rejects.toThrow();
+        const grant = await unlockVaultForOwner(owner);
+        const after = (await readLocal(owner))!;
+        expect(after.retiredReplicaTransferDraft).toBeUndefined();
+        expect(after.pending.length).toBeGreaterThan(before.pending.length);
+        grant.release();
+    });
+
     it('joins owner vault, complete AEAD scan and two matching controls without any write or ADK request', async () => {
         const sealed = await get(storage);
         const local = (await readLocal(owner))!;
