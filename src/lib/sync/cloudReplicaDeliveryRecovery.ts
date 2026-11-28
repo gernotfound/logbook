@@ -84,12 +84,13 @@ function independentProfileRebase(
 }
 
 /**
- * Workout history is sharded by month but causally keyed by workout ID. Two
- * independent upserts in the SAME month can be restaged without replacing
- * one another. Overlapping workout IDs, incomplete stamps, peer deletes and
- * unaccounted clocks must stay pending for explicit reconciliation.
+ * Monthly documents contain independent workout IDs or nutrition days. An
+ * authenticated peer edit to a different entity can be restaged without
+ * replacing the local edit only with a complete semantic/causal witness.
+ * Nutrition totals are intentionally ignored by the diff: their changes are
+ * never inferred from a neighbouring field stamp.
  */
-function independentHistoryEntityRebase(
+function independentMonthlyEntityRebase(
     local: LocalEnvelope,
     operations: CloudflareDeliveryIntent['operations'],
     path: string,
@@ -98,7 +99,9 @@ function independentHistoryEntityRebase(
     baseline: DocumentData,
     allDocuments: ReadonlyMap<string, NormalizedCloudDocument>,
 ): boolean {
-    if (!path.startsWith('history_months/') || !staged || !verified
+    const history = path.startsWith('history_months/');
+    const nutrition = path.startsWith('nutrition_months/');
+    if ((!history && !nutrition) || !staged || !verified
         || !operations.length || operations.some(op => op.docPath !== path || op.path.length < 1
             || op.guard || op.isDelete)) return false;
 
@@ -122,17 +125,27 @@ function independentHistoryEntityRebase(
         changed.add(id);
     }
     if (!changed.size) return false;
-    // A workout ID is globally stable even though its storage is monthly.
-    // A competing move or duplicate ID in another month cannot be treated as
-    // an independent insertion in this shard.
-    for (const [otherPath, document] of allDocuments) {
-        if (otherPath === path || !otherPath.startsWith('history_months/')) continue;
-        if ([...touched, ...changed].some(id => Object.hasOwn(document.business, id))) return false;
+    if (history) {
+        // A workout ID is globally stable even though its storage is monthly.
+        for (const [otherPath, document] of allDocuments) {
+            if (otherPath === path || !otherPath.startsWith('history_months/')) continue;
+            if ([...touched, ...changed].some(id => Object.hasOwn(document.business, id))) return false;
+        }
+    } else {
+        // Existing nutrition days only: day creation/deletion and computed
+        // totals need a separate proof because the semantic diff ignores
+        // kcal/carbs/pro/fat, even when it emits other leaf changes.
+        for (const id of changed) {
+            if (!Object.hasOwn(baseline, id) || !Object.hasOwn(remote, id)) return false;
+            const before = baseline[id] as Record<string, unknown>;
+            const after = remote[id] as Record<string, unknown>;
+            if (['kcal', 'carbs', 'pro', 'fat'].some(key => !equal(before[key], after[key]))) return false;
+        }
     }
 
     // Use the SAME semantic diff policy as production, and demand a current
-    // field stamp for every changed path. A stamp on one field of a workout
-    // cannot account for changed sibling fields or an ignored mutation.
+    // field stamp for every changed path. A stamp on one field of an entity
+    // cannot account for changed siblings or ignored mutations.
     let remoteChanges;
     try {
         remoteChanges = diffDocuments(new Map([[path, baseline]]), new Map([[path, remote]]),
@@ -140,6 +153,12 @@ function independentHistoryEntityRebase(
     } catch { return false; }
     if (!remoteChanges.length || remoteChanges.some(op => op.isDelete
         || !changed.has(op.path[0]) || touched.has(op.path[0]))) return false;
+    if (nutrition) {
+        // A diff returning valid-looking operations does not prove it covered
+        // every byte of a nutrition day (for example omitted derived fields).
+        const recreated = applySemanticOperations(new Map([[path, baseline]]), remoteChanges).documents.get(path);
+        if (!equal(recreated, remote)) return false;
+    }
     const witnessed = new Set(remoteChanges.map(op => fieldKey(op.path)));
 
     const previous = parseSyncMeta(local.syncMetaByDocument[path]);
@@ -246,15 +265,17 @@ export async function restageUncommittedCloudflareDelivery(
     const openedOriginalRoot = originalRoot ? readAccountCloudDocument(
         originalRoot, 'D1 original recovery intent', uid, '', accountKey,
     ) : undefined;
-    const changedHistory = paths.some(path => path.startsWith('history_months/')
+    const changedMonthly = paths.some(path => (path.startsWith('history_months/')
+        || path.startsWith('nutrition_months/'))
         && (byPath.get(path)?.revision ?? 0) > original.batch.expectedRevision);
-    const catalog = changedHistory ? await getCachedCatalog() : undefined;
+    const catalog = changedMonthly ? await getCachedCatalog() : undefined;
     requireCurrent(guard);
     const baselineDocuments = catalog ? projectDocuments(local.baseline, catalog) : new Map<string, DocumentData>();
     if (paths.some(path => (byPath.get(path)?.revision ?? 0) > original.batch.expectedRevision
         && !(path === '' && openedOriginalRoot && independentProfileRebase(local,
             original.operations, openedOriginalRoot, checkpoint.documents.get(path)))
-        && !(path.startsWith('history_months/') && independentHistoryEntityRebase(
+        && !((path.startsWith('history_months/') || path.startsWith('nutrition_months/'))
+            && independentMonthlyEntityRebase(
             local, original.operations.filter(op => op.docPath === path), path,
             stagedByPath.has(path)
                 ? readAccountCloudDocument(stagedByPath.get(path),
