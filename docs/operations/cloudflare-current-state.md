@@ -1,5 +1,40 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
+**Ultimo rilascio funzionale verificato, 28/11/2026, CF-04 [PR #1528](https://github.com/gernotfound/logbook/pull/1528):**
+[`main` `e95523747c178317c35d6b021962083ee43e99cf`](https://github.com/gernotfound/logbook/commit/e95523747c178317c35d6b021962083ee43e99cf),
+v2.789.0, tree `b7c5d62fa62ee38286cdac9ec279caf21166574b`
+identico al candidato PR exact-SHA `6c3957e672d3236aaeab6ce96fbb21d0153c0eb9`.
+[Canonical/CodeQL e otto E2E](https://github.com/gernotfound/logbook/actions/runs/46167030558),
+[Main Release Gate/CodeQL](https://github.com/gernotfound/logbook/actions/runs/46167381577)
+e [Static Assets/smoke HTTPS byte-esatto](https://github.com/gernotfound/logbook/actions/runs/46167609598)
+`success`. Readback diretto Cloudflare: `thelogbook-frontend` deployment
+`6960dd5e-19c5-4fc5-b994-31122ed6b17f`, versione
+`182fc51e-3918-41cc-8587-6e26f2dcf1cc` al 100%; binding
+`APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`, **senza `D1_API`**.
+[API D1 privata](https://github.com/gernotfound/logbook/actions/runs/46167609646)
+e [Kinde HTTP privato](https://github.com/gernotfound/logbook/actions/runs/46167609602)
+`success`; provider ha confermato i deployment `thelogbook-api-isolated`
+`f678246c-3445-41b3-9628-5b822890574b`, Auth Gate
+`9f3394ae-ae8b-4b62-ba42-283b8dfaabeb` e Kinde HTTP
+`306f02a0-d5b7-4d3d-afbd-25d8e6d0f556`. Sono **Worker privati**,
+non un'attivazione del fitness pubblico né una prova di login/commit D1
+end-to-end su dispositivi reali.
+
+La #1528 integra il recupero cifrato del journal della replica ritirata
+nella nuova replica autorizzata dopo receipt, scansione AEAD, doppio control
+e CAS IndexedDB; conserva gli originali nell'escrow e non crea ACK senza
+receipt contenuto-bound. Il replay non crea stamp causali artificiali sulle
+liste keyed vuote, preservando aggiunte concorrenti. Il backend mantiene
+massimo **cinque** dispositivi attivi e rifiuta il sesto. I 1.597 test
+isolati, la regressione di concorrenza e il test SQL a due connessioni sono
+verdi, ma **SYNC-7D/7E e SYNC-1–6 rimangono PARZIALI / NO-GO**: mancano
+cross-device e Safari/iOS reali, commit/ACK osservati sul runtime, versioni
+originali condivise in cloud, recupero dopo D1 concorrente, quote estreme,
+backup/restore, privacy, rollback e GO prodotto. Per le prove più recenti
+consultare anche [issue #1058](https://github.com/gernotfound/logbook/issues/1058).
+
+**Checkpoint storico precedente:**
+
 **Ultimo rilascio verificato, 28/11/2026, CF-04 [PR #1527](https://github.com/gernotfound/logbook/pull/1527):**
 [`main` `96e5aadf575455b7c5a51496c84122a59d809f86`](https://github.com/gernotfound/logbook/commit/96e5aadf575455b7c5a51496c84122a59d809f86),
 v2.788.0, tree `a82b10690f731a58847b3fce521b9ff8a140a301`.
@@ -13,7 +48,7 @@ e [smoke HTTPS byte-esatto](https://github.com/gernotfound/logbook/actions/runs/
 `skipped`: nessuna attivazione D1 fitness pubblica. La #1527 conserva
 la proposta di recupero nel vault cifrato: non esegue claim/commit/ACK.
 
-**Candidato in sviluppo v2.789.0 (non ancora integrato né pubblicato):**
+**Incremento poi integrato come v2.789.0 con #1528:**
 `retiredReplicaHandoff` permette, esclusivamente dopo l'escrow esplicito,
 una nuova claim D1 vincolata alla proposta e un trasferimento causale nel
 **singolo CAS IndexedDB** successivo a ricevuta di membership, doppio control
@@ -26,8 +61,9 @@ uno stamp causale che coprirebbe modifiche concorrenti indipendenti.
 La sesta membership è rifiutata dal backend candidato; nessuna espulsione
 automatica. **Il candidato non prova un commit D1 reale**, la durabilità
 delle versioni su altri dispositivi, un ripristino su Safari/iOS fisico o
-un GO fitness. Fino al merge le prove di versione/deploy restano quelle
-della #1527. SYNC-7D/7E e SYNC-1–6 **PARZIALI / NO-GO**.
+un GO fitness. Le prove antecedenti al merge usavano ancora il readback
+della #1527; quelle post-merge sono nel checkpoint iniziale. SYNC-7D/7E
+e SYNC-1–6 **PARZIALI / NO-GO**.
 
 **Checkpoint storico precedente:**
 
