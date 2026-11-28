@@ -128,6 +128,14 @@ function traverseAndDiff(
                 Object.hasOwn(effDVal, k) ? effDVal[k] : undefined, actorId, seq, clock, ops);
         }
     } else if (policy === 'keyed' || policy === 'ordered-keyed') {
+        // Expanding a newly created property container can encounter an empty
+        // keyed collection. Without an explicit initialization operation its
+        // presence vanishes on replay, diverging from the durable business
+        // snapshot (notably an offline workout with exercises: []).
+        if (bVal === undefined && Array.isArray(dVal) && dVal.length === 0) {
+            ops.push({ docPath, path: currentPath, value: [], isDelete: false, actorId, seq, clock });
+            return;
+        }
         const bArr = Array.isArray(bVal) ? bVal : [];
         const dArr = Array.isArray(dVal) ? dVal : [];
 

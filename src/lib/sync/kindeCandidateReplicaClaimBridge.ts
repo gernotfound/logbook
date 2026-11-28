@@ -11,6 +11,7 @@ import { createCloudflareReplicaTransport, type CloudReplicaControlSnapshot } fr
 import { readLocal } from './localArchiveBootstrap';
 import { userOwner } from './owner';
 import { requireUnlockedLocalKey } from './secureArchiveSession';
+import { hasIntactRetiredReplicaHandoff } from './retiredReplicaHandoff';
 
 type Confirmed = Extract<KindeCandidateAccess, { kind: 'consent-confirmed' }>;
 type Principal = Confirmed['principal'];
@@ -92,7 +93,7 @@ export async function claimKindeCandidateReplica({
     // A live membership is not a request to register again. If the device and
     // primary ledger differ, recovery must reconcile them instead of minting
     // another replica or treating an expired lease as active.
-    if (!local.cloudflareReplicaClaim && local.replica) {
+    if (!local.cloudflareReplicaClaim && local.replica && !hasIntactRetiredReplicaHandoff(local)) {
         const remote = control.replicas[local.replica.slot];
         const same = remote?.status === 'active'
             && remote.replicaId === local.replica.replicaId

@@ -1,5 +1,35 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
+**Ultimo rilascio verificato, 28/11/2026, CF-04 [PR #1527](https://github.com/gernotfound/logbook/pull/1527):**
+[`main` `96e5aadf575455b7c5a51496c84122a59d809f86`](https://github.com/gernotfound/logbook/commit/96e5aadf575455b7c5a51496c84122a59d809f86),
+v2.788.0, tree `a82b10690f731a58847b3fce521b9ff8a140a301`.
+[Canonical/CodeQL e otto E2E PR](https://github.com/gernotfound/logbook/actions/runs/46162371797),
+[Main Release Gate/CodeQL](https://github.com/gernotfound/logbook/actions/runs/46162710328)
+e [smoke HTTPS byte-esatto](https://github.com/gernotfound/logbook/actions/runs/46162961391)
+`success`. Readback Cloudflare: `thelogbook-frontend` deployment
+`bf30f253-d62d-45ca-80b5-e7867cd9d3a7`, Worker version
+`ba350514-50f3-4070-9797-f27406029c02` al 100%; binding `APP_ORIGIN`,
+`ASSETS`, `KINDE_HTTP`, **senza `D1_API`**. API/Kinde privati con job deploy
+`skipped`: nessuna attivazione D1 fitness pubblica. La #1527 conserva
+la proposta di recupero nel vault cifrato: non esegue claim/commit/ACK.
+
+**Candidato in sviluppo v2.789.0 (non ancora integrato né pubblicato):**
+`retiredReplicaHandoff` permette, esclusivamente dopo l'escrow esplicito,
+una nuova claim D1 vincolata alla proposta e un trasferimento causale nel
+**singolo CAS IndexedDB** successivo a ricevuta di membership, doppio control
+D1 e nuova scansione AEAD. Rigenera actor/seq e journal dai documenti
+cloud verificati e dalle preferenze già scelte; l'escrow conserva il journal
+e le alternative originali. Il successivo writer riusa il normale batch AEAD
+e deve ottenere la receipt contenuto-bound prima dell'ACK. Il diff semantico
+conserva anche collezioni keyed nuove ma vuote, prima omesse nel replay.
+La sesta membership è rifiutata dal backend candidato; nessuna espulsione
+automatica. **Il candidato non prova un commit D1 reale**, la durabilità
+delle versioni su altri dispositivi, un ripristino su Safari/iOS fisico o
+un GO fitness. Fino al merge le prove di versione/deploy restano quelle
+della #1527. SYNC-7D/7E e SYNC-1–6 **PARZIALI / NO-GO**.
+
+**Checkpoint storico precedente:**
+
 **Ultimo rilascio verificato prima del candidato corrente, 28/11/2026, CF-04 #1526:**
 [`main` `42493c06e3b010e80c9b01587001a69bb302cfe1`](https://github.com/gernotfound/logbook/commit/42493c06e3b010e80c9b01587001a69bb302cfe1),
 v2.787.0, tree `36dbe5ead11fbcbc333ff8401884f14b693b858b`.
@@ -13,7 +43,7 @@ deployment `0cb9ef87-9a4a-4fee-9791-2c2149a1a7e2`, versione
 business toccati dal journal di replica ritirata, senza stage, claim o ACK:
 **SYNC-7D/7E e GO fitness restano aperti.**
 
-**Incremento candidato v2.788.0, non ancora integrato o pubblicato:**
+**Incremento poi integrato come v2.788.0 con #1527:**
 la proposta `retiredReplicaTransferDraft` conserva nel vault cifrato del
 dispositivo le versioni locali originali, tutti i pending e i loro metadati,
 la copia cloud AEAD e la proiezione selezionata. Un comando esplicito nella
