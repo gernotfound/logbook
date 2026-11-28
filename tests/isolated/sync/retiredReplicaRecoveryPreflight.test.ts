@@ -14,6 +14,9 @@ import { preflightRetiredReplicaRecovery } from '../../../src/lib/sync/retiredRe
 import { buildRetiredReplicaConflictCapsule,
     stageRetiredReplicaConflictCapsule } from '../../../src/lib/sync/retiredReplicaConflictCapsule';
 import { parseRetiredReplicaConflictCapsule } from '../../../src/lib/sync/retiredReplicaConflictRecord';
+import { previewRetiredReplicaConflictResolution } from '../../../src/lib/sync/retiredReplicaConflictResolution';
+import { parseRetiredReplicaConflictDecisions } from '../../../src/lib/sync/retiredReplicaConflictDecisionRecord';
+import { inspectRetiredReplicaConflictDecisions, recordRetiredReplicaConflictDecision } from '../../../src/lib/sync/retiredReplicaConflictDecisions';
 import { REPLICA_CLOCK_SKEW_MARGIN_MS } from '../../../src/lib/sync/replicaProtocol';
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
@@ -29,6 +32,7 @@ vi.mock('../../../src/lib/firebase', () => { throw Error('Recovery preflight mus
 const uid = 'k_' + 'A'.repeat(43);
 const owner = `user:${uid}`;
 const storageKey = `logbook:v2:${owner}`;
+const expectedFrontier = { consentRevision: 1, fenceEpoch: 5 };
 const accountKey = new Uint8Array(32).fill(31);
 const replica = { slot: 's03', replicaId: 'old-device-replica', generation: 2,
     leaseUntilMs: Date.now() + 86_400_000, checkpointAtMs: Date.now() };
@@ -645,6 +649,15 @@ describe('retired replica recovery preflight, no mutation or new causal identity
         await updateArchiveRecord(owner, () => local);
         const original = await get(storageKey);
         const capsule = buildRetiredReplicaConflictCapsule(uid, local, cloud, control(), catalog);
+        const preview = previewRetiredReplicaConflictResolution(capsule);
+        expect(preview).toEqual([expect.objectContaining({ kind: 'automatic-candidate',
+            entityKind: 'nutrition', entityId: '2026-11-13',
+            docPath: 'nutrition_months/2026-11', value: expect.objectContaining({
+                weight: 71, sleepHours: '08:00',
+            }),
+        })]);
+        expect(capsule.entries[0].cloud?.value).toMatchObject({ sleepHours: '08:00', weight: 70 });
+        expect(capsule.entries[0].device?.value).toMatchObject({ sleepHours: '07:00', weight: 71 });
         expect(capsule.entries).toHaveLength(1);
         expect(capsule.sourceDocuments).toEqual([expect.objectContaining({
             path: 'nutrition_months/2026-11',
@@ -684,12 +697,114 @@ describe('retired replica recovery preflight, no mutation or new causal identity
             const { local, cloud } = await competingEntitySources({ baseline, desired, remote,
                 changedPath: ['history_months/2026-12', 'session-move'], withoutStamp: true });
             const capsule = buildRetiredReplicaConflictCapsule(uid, local, cloud, control(), catalog);
+            expect(previewRetiredReplicaConflictResolution(capsule)).toEqual([{
+                kind: 'manual-required', entityKind: 'history', entityId: 'session-move',
+            }]);
             expect(capsule.entries).toHaveLength(1);
             expect(capsule.entries[0].device?.docPath).toBe('history_months/2026-11');
             expect(capsule.entries[0].cloud?.docPath ?? null).toBe(remoteHistory.length
                 ? 'history_months/2026-12' : null);
             expect(parseRetiredReplicaConflictCapsule(capsule, owner)).toEqual(capsule);
         }
+    });
+
+    it('never auto-merges same-field clashes, concurrent creations, or array replacements', async () => {
+        const date = '2026-11-13';
+        const original = { date, weight: 70, sleepHours: '07:00' };
+        const initial = UserDataSchema.parse({ ...data(170), nutrition: { [date]: original } }) as unknown as UserData;
+        const device = UserDataSchema.parse({ ...initial, nutrition: {
+            [date]: { ...original, weight: 71 },
+        } }) as unknown as UserData;
+        const cloudState = UserDataSchema.parse({ ...initial, nutrition: {
+            [date]: { ...original, weight: 72 },
+        } }) as unknown as UserData;
+        const { local, cloud } = await competingEntitySources({ baseline: initial, desired: device,
+            remote: cloudState, changedPath: ['nutrition_months/2026-11', date, 'weight'] });
+        const capsule = buildRetiredReplicaConflictCapsule(uid, local, cloud, control(), catalog);
+        expect(previewRetiredReplicaConflictResolution(capsule)).toEqual([{
+            kind: 'manual-required', entityKind: 'nutrition', entityId: date,
+        }]);
+        const concurrentCreate = structuredClone(capsule);
+        const entry = concurrentCreate.entries[0];
+        entry.baseline = null;
+        expect(previewRetiredReplicaConflictResolution(concurrentCreate)).toEqual([{
+            kind: 'manual-required', entityKind: 'nutrition', entityId: date,
+        }]);
+        const arrays = structuredClone(capsule);
+        arrays.entries[0].baseline!.value = { meals: [{ id: 'meal-1', amount: 10 }] };
+        arrays.entries[0].device!.value = { meals: [{ id: 'meal-1', amount: 20 }] };
+        arrays.entries[0].cloud!.value = { meals: [{ id: 'meal-1', amount: 30 }] };
+        expect(previewRetiredReplicaConflictResolution(arrays)).toEqual([{
+            kind: 'manual-required', entityKind: 'nutrition', entityId: date,
+        }]);
+        const oneChangedList = structuredClone(capsule);
+        const baseList = { date, meals: [{ id: 'meal-1', amount: 10 }] };
+        oneChangedList.entries[0].baseline!.value = baseList;
+        oneChangedList.entries[0].device!.value = { date, meals: [{ id: 'meal-1', amount: 20 }] };
+        oneChangedList.entries[0].cloud!.value = { ...baseList, sleepHours: '08:00' };
+        expect(previewRetiredReplicaConflictResolution(oneChangedList)).toEqual([{
+            kind: 'manual-required', entityKind: 'nutrition', entityId: date,
+        }]);
+        const nestedList = structuredClone(capsule);
+        const nestedBase = { date, weight: 70, group: { meals: [{ id: 'meal-1', amount: 10 }] } };
+        nestedList.entries[0].baseline!.value = nestedBase;
+        nestedList.entries[0].device!.value = { ...nestedBase,
+            group: { meals: [{ id: 'meal-1', amount: 20 }] },
+        };
+        nestedList.entries[0].cloud!.value = { ...nestedBase, weight: 71 };
+        expect(previewRetiredReplicaConflictResolution(nestedList)).toEqual([{
+            kind: 'manual-required', entityKind: 'nutrition', entityId: date,
+        }]);
+        const fieldRemoval = structuredClone(capsule);
+        fieldRemoval.entries[0].baseline!.value = { date, weight: 70, sleepHours: '07:00' };
+        fieldRemoval.entries[0].device!.value = { date, sleepHours: '07:00' };
+        fieldRemoval.entries[0].cloud!.value = { date, weight: 70, sleepHours: '08:00' };
+        expect(previewRetiredReplicaConflictResolution(fieldRemoval)).toEqual([{
+            kind: 'manual-required', entityKind: 'nutrition', entityId: date,
+        }]);
+        const nestedRemoval = structuredClone(capsule);
+        const nestedBefore = { date, weight: 70, notes: { a: 'old', b: 'keep' } };
+        nestedRemoval.entries[0].baseline!.value = nestedBefore;
+        nestedRemoval.entries[0].device!.value = { ...nestedBefore, notes: { b: 'keep' } };
+        nestedRemoval.entries[0].cloud!.value = { ...nestedBefore, weight: 71 };
+        expect(previewRetiredReplicaConflictResolution(nestedRemoval)).toEqual([{
+            kind: 'manual-required', entityKind: 'nutrition', entityId: date,
+        }]);
+        const replacedObject = structuredClone(capsule);
+        replacedObject.entries[0].baseline!.value = nestedBefore;
+        replacedObject.entries[0].device!.value = { ...nestedBefore, notes: null };
+        replacedObject.entries[0].cloud!.value = { ...nestedBefore, weight: 71 };
+        expect(previewRetiredReplicaConflictResolution(replacedObject)).toEqual([{
+            kind: 'manual-required', entityKind: 'nutrition', entityId: date,
+        }]);
+        const active = structuredClone(capsule);
+        active.entries = [{ kind: 'active-workout', entityId: 'activeWorkout',
+            baseline: { docPath: '', value: { id: 'running', exercises: [] }, sync: null },
+            device: { docPath: '', value: { id: 'running', exercises: [], moodRating: 3 }, sync: null },
+            cloud: { docPath: '', value: { id: 'running', exercises: [], waterLiters: 1 }, sync: null },
+        }];
+        expect(previewRetiredReplicaConflictResolution(active)).toEqual([{
+            kind: 'manual-required', entityKind: 'active-workout', entityId: 'activeWorkout',
+        }]);
+    });
+
+    it('composes independent workout fields only within one unchanged shard, without changing the source', async () => {
+        const workout = { id: 'session-safe', date: '2026-11-13', globalDurationStr: '01:00',
+            waterLiters: 1, exercises: [] };
+        const baseline = UserDataSchema.parse({ ...data(170), history: [workout] }) as unknown as UserData;
+        const desired = UserDataSchema.parse({ ...baseline, history: [{ ...workout, waterLiters: 2 }] }) as unknown as UserData;
+        const remote = UserDataSchema.parse({ ...baseline, history: [{ ...workout, globalDurationStr: '01:10' }] }) as unknown as UserData;
+        const { local, cloud } = await competingEntitySources({ baseline, desired, remote,
+            changedPath: ['history_months/2026-11', 'session-safe', 'globalDurationStr'] });
+        const capsule = buildRetiredReplicaConflictCapsule(uid, local, cloud, control(), catalog);
+        const original = structuredClone(capsule);
+        const first = previewRetiredReplicaConflictResolution(capsule);
+        expect(first).toEqual([expect.objectContaining({ kind: 'automatic-candidate',
+            entityKind: 'history', entityId: 'session-safe', docPath: 'history_months/2026-11',
+            value: expect.objectContaining({ waterLiters: 2, globalDurationStr: '01:10' }),
+        })]);
+        expect(previewRetiredReplicaConflictResolution(capsule)).toEqual(first);
+        expect(capsule).toEqual(original);
     });
 
     it('rejects an old snapshot, duplicate stage, lost-ACK possibility, wrong owner and stale guard', async () => {
@@ -721,5 +836,109 @@ describe('retired replica recovery preflight, no mutation or new causal identity
         expect(() => parseRetiredReplicaConflictCapsule(capsule, 'user:another')).toThrow();
         expect(() => buildRetiredReplicaConflictCapsule(uid, local, cloud,
             control({ lastSeq: local.pending[0].seq }), catalog)).toThrow();
+    });
+
+    it('atomically seals an explicit choice without touching any competing version, journal, or replica', async () => {
+        const date = '2026-11-13';
+        const initial = UserDataSchema.parse({ ...data(170), nutrition: {
+            [date]: { date, weight: 70, sleepHours: '07:00' },
+        } }) as unknown as UserData;
+        const device = UserDataSchema.parse({ ...initial, nutrition: {
+            [date]: { date, weight: 71, sleepHours: '07:00' },
+        } }) as unknown as UserData;
+        const remote = UserDataSchema.parse({ ...initial, nutrition: {
+            [date]: { date, weight: 70, sleepHours: '08:00' },
+        } }) as unknown as UserData;
+        const { local, cloud } = await competingEntitySources({ baseline: initial, desired: device,
+            remote, changedPath: ['nutrition_months/2026-11', date, 'sleepHours'] });
+        await updateArchiveRecord(owner, () => local);
+        const capsule = buildRetiredReplicaConflictCapsule(uid, local, cloud, control(), catalog);
+        await stageRetiredReplicaConflictCapsule(owner, local, capsule, () => true);
+        const before = (await readLocal(owner))!;
+        const identity = { kind: 'nutrition' as const, entityId: date };
+        const observed = await inspectRetiredReplicaConflictDecisions(owner, legal, expectedFrontier, () => true);
+        expect(observed.drafts).toMatchObject([{ kind: 'automatic-candidate' }]);
+        expect(observed.decisions).toEqual([]);
+        const combined = { ...identity, choice: 'combined' as const };
+        expect(await recordRetiredReplicaConflictDecision(owner, before.revision, combined,
+            identity, legal, expectedFrontier, () => true)).toBe(before.revision + 1);
+        const sealed = await get<string>(storageKey);
+        expect(sealed).not.toContain(date);
+        expect(sealed).not.toContain('08:00');
+        expect(sealed).not.toContain('combined');
+        const chosen = (await readLocal(owner))!;
+        expect(chosen.retiredReplicaConflictDecisions).toEqual([combined]);
+        expect(chosen.retiredReplicaConflictCapsule).toEqual(before.retiredReplicaConflictCapsule);
+        expect(chosen.pending).toEqual(before.pending);
+        expect(chosen.data).toEqual(before.data);
+        expect(chosen.baseline).toEqual(before.baseline);
+        expect(chosen.replica).toEqual(before.replica);
+        expect(chosen.clock).toEqual(before.clock);
+        expect(chosen.actorSeq).toBe(before.actorSeq);
+
+        await expect(recordRetiredReplicaConflictDecision(owner, before.revision,
+            { ...identity, choice: 'cloud' }, identity, legal, expectedFrontier, () => true)).rejects.toThrow();
+        expect(await get(storageKey)).toBe(sealed);
+        await expect(recordRetiredReplicaConflictDecision(owner, chosen.revision,
+            { ...identity, choice: 'device' }, identity, legal, expectedFrontier, () => false)).rejects.toThrow();
+        expect(await get(storageKey)).toBe(sealed);
+        await expect(recordRetiredReplicaConflictDecision(owner, chosen.revision,
+            { ...identity, choice: 'device' }, identity, { ...legal, acceptedAt: '2025-01-01' },
+            expectedFrontier, () => true)).rejects.toThrow();
+        expect(await get(storageKey)).toBe(sealed);
+
+        lockAllVaults();
+        const grant = await (await import('../../../src/lib/sync/secureArchiveSession')).unlockVaultForOwner(owner);
+        try {
+            expect((await inspectRetiredReplicaConflictDecisions(owner, legal, expectedFrontier, () => true)).decisions).toEqual([combined]);
+            expect(await recordRetiredReplicaConflictDecision(owner, chosen.revision, null,
+                identity, legal, expectedFrontier, () => true)).toBe(chosen.revision + 1);
+            expect((await readLocal(owner))!.retiredReplicaConflictDecisions).toEqual([]);
+            expect((await readLocal(owner))!.retiredReplicaConflictCapsule).toEqual(capsule);
+        } finally { grant.release(); }
+    });
+
+    it('rejects forged, duplicate and inapplicable conflict choices before any encrypted write', async () => {
+        const date = '2026-11-13';
+        const base = UserDataSchema.parse({ ...data(170), nutrition: {
+            [date]: { date, weight: 70 },
+        } }) as unknown as UserData;
+        const mine = UserDataSchema.parse({ ...base, nutrition: { [date]: { date, weight: 71 } } }) as unknown as UserData;
+        const remote = UserDataSchema.parse({ ...base, nutrition: { [date]: { date, weight: 72 } } }) as unknown as UserData;
+        const { local, cloud } = await competingEntitySources({ baseline: base, desired: mine,
+            remote, changedPath: ['nutrition_months/2026-11', date, 'weight'] });
+        await updateArchiveRecord(owner, () => local);
+        const capsule = buildRetiredReplicaConflictCapsule(uid, local, cloud, control(), catalog);
+        await stageRetiredReplicaConflictCapsule(owner, local, capsule, () => true);
+        const identity = { kind: 'nutrition' as const, entityId: date };
+        const revision = (await readLocal(owner))!.revision;
+        const sealed = await get(storageKey);
+        const combined = { ...identity, choice: 'combined' as const };
+        expect(() => parseRetiredReplicaConflictDecisions([combined], capsule)).toThrow();
+        expect(() => parseRetiredReplicaConflictDecisions([
+            { ...identity, choice: 'cloud' }, { ...identity, choice: 'device' },
+        ], capsule)).toThrow();
+        expect(() => parseRetiredReplicaConflictDecisions([
+            { ...identity, choice: 'cloud', extra: 'sneaky' },
+        ], capsule)).toThrow();
+        await expect(recordRetiredReplicaConflictDecision(owner, revision, combined,
+            identity, legal, expectedFrontier, () => true)).rejects.toThrow();
+        await expect(recordRetiredReplicaConflictDecision(owner, revision,
+            { kind: 'nutrition', entityId: '2026-11-14', choice: 'device' },
+            { kind: 'nutrition', entityId: '2026-11-14' }, legal, expectedFrontier, () => true)).rejects.toThrow();
+        expect(await get(storageKey)).toBe(sealed);
+        await updateArchiveRecord<unknown>(owner, raw => ({ ...(raw as object),
+            cloudIntegrityFence: 'remote-invalidated',
+        }));
+        const fenced = await get(storageKey);
+        await expect(recordRetiredReplicaConflictDecision(owner, revision, null,
+            identity, legal, expectedFrontier, () => true)).rejects.toThrow();
+        expect(await get(storageKey)).toBe(fenced);
+        await expect(inspectRetiredReplicaConflictDecisions(owner, legal,
+            { ...expectedFrontier, fenceEpoch: 6 }, () => true)).rejects.toThrow();
+        const persisted = (await readLocal(owner))!;
+        expect(() => validateLocalEnvelope({ ...persisted, retiredReplicaConflictDecisions: [
+            combined,
+        ] }, owner)).toThrow();
     });
 });

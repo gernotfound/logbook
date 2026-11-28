@@ -11,7 +11,7 @@ const MONTH = /^(history_months|nutrition_months)\/\d{4}-(0[1-9]|1[0-2])$/;
 const record = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
 
-type RetiredConflictKind = 'history' | 'nutrition' | 'active-workout';
+export type RetiredConflictKind = 'history' | 'nutrition' | 'active-workout';
 export type RetiredConflictVersion = { docPath: string; value: unknown; sync: SyncMeta | null } | null;
 type SourceDocument = { path: string; baseline: Record<string, unknown> | null;
     device: Record<string, unknown> | null; sync: SyncMeta | null };

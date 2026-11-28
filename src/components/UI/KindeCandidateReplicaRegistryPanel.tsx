@@ -16,7 +16,9 @@ type OfflineState = { kind: 'idle' | 'loading' | 'unavailable' }
 type RecoveryState = { kind: 'idle' | 'loading' | 'unavailable' }
     | { kind: 'observed'; result: Awaited<ReturnType<Session['inspectCandidateRetiredReplicaPreflight']>> };
 type ConflictPreservationState = { kind: 'idle' | 'working' | 'unavailable' }
-    | { kind: 'saved'; count: number; revision: number };
+    | { kind: 'saved'; count: number; revision: number; automatic: number; manual: number };
+type ConflictDecisionsState = { kind: 'idle' | 'loading' | 'saving' | 'unavailable' }
+    | { kind: 'observed'; result: Awaited<ReturnType<Session['inspectCandidateRetiredConflictDecisions']>> };
 
 function dateText(milliseconds: number): string {
     const date = new Date(milliseconds);
@@ -36,6 +38,8 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
     const [offlineState, setOfflineState] = useState<OfflineState>({ kind: 'idle' });
     const [recoveryState, setRecoveryState] = useState<RecoveryState>({ kind: 'idle' });
     const [conflictPreservation, setConflictPreservation] = useState<ConflictPreservationState>({ kind: 'idle' });
+    const [conflictDecisions, setConflictDecisions] = useState<ConflictDecisionsState>({ kind: 'idle' });
+    const [conflictIndex, setConflictIndex] = useState(0);
     const [receiptState, setReceiptState] = useState<'idle' | 'working' | 'acknowledged' | 'unconfirmed' | 'none' | 'unknown'>('idle');
     const mounted = useRef(false);
     const running = useRef(false);
@@ -57,6 +61,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
         setOfflineState({ kind: 'idle' });
         setRecoveryState({ kind: 'idle' });
         setConflictPreservation({ kind: 'idle' });
+        setConflictDecisions({ kind: 'idle' });
         setReceiptState('idle');
         setState({ kind: 'loading' });
         void session.inspectCandidateReplicas().then(observed => {
@@ -76,6 +81,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
         setOfflineState({ kind: 'idle' });
         setRecoveryState({ kind: 'idle' });
         setConflictPreservation({ kind: 'idle' });
+        setConflictDecisions({ kind: 'idle' });
         setReceiptState('idle');
         void session.manageCandidateReplicaRetirement(witness).then(outcome => {
             if (!mounted.current) return;
@@ -107,6 +113,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
         setOfflineState({ kind: 'idle' });
         setRecoveryState({ kind: 'idle' });
         setConflictPreservation({ kind: 'idle' });
+        setConflictDecisions({ kind: 'idle' });
         setReceiptState('idle');
         setPendingState({ kind: 'loading' });
         void session.manageCandidateReplicaCancellation().then(mutation => {
@@ -143,6 +150,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
         setOfflineState({ kind: 'loading' });
         setRecoveryState({ kind: 'idle' });
         setConflictPreservation({ kind: 'idle' });
+        setConflictDecisions({ kind: 'idle' });
         setReceiptState('idle');
         void session.inspectCandidateOfflineReplicaJournal().then(result => {
             if (mounted.current) setOfflineState({ kind: 'observed', result });
@@ -157,6 +165,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
         running.current = true;
         setRecoveryState({ kind: 'loading' });
         setConflictPreservation({ kind: 'idle' });
+        setConflictDecisions({ kind: 'idle' });
         void session.inspectCandidateRetiredReplicaPreflight().then(result => {
             if (mounted.current) setRecoveryState({ kind: 'observed', result });
         }).catch(() => {
@@ -173,9 +182,41 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
         setConflictPreservation({ kind: 'working' });
         void session.preserveCandidateRetiredReplicaConflicts().then(result => {
             if (mounted.current) setConflictPreservation({ kind: 'saved',
-                count: result.preservedEntities, revision: result.cloudRevision });
+                count: result.preservedEntities, revision: result.cloudRevision,
+                automatic: result.automaticCandidates, manual: result.manualRequired });
         }).catch(() => {
             if (mounted.current) setConflictPreservation({ kind: 'unavailable' });
+        }).finally(() => { running.current = false; });
+    };
+
+    const inspectDecisions = () => {
+        if (running.current || session.busy || offlineState.kind !== 'observed'
+            || offlineState.result.kind !== 'retired-pending') return;
+        running.current = true;
+        setConflictDecisions({ kind: 'loading' });
+        void session.inspectCandidateRetiredConflictDecisions().then(result => {
+            if (!mounted.current) return;
+            setConflictIndex(0);
+            setConflictDecisions({ kind: 'observed', result });
+        }).catch(() => {
+            if (mounted.current) setConflictDecisions({ kind: 'unavailable' });
+        }).finally(() => { running.current = false; });
+    };
+
+    const chooseConflict = (choice: 'device' | 'cloud' | 'combined' | null) => {
+        if (running.current || session.busy || conflictDecisions.kind !== 'observed') return;
+        const result = conflictDecisions.result;
+        const entry = result.entries[conflictIndex];
+        if (!entry) return;
+        running.current = true;
+        setConflictDecisions({ kind: 'saving' });
+        void session.inspectCandidateRetiredConflictDecisions({
+            expectedRevision: result.revision,
+            identity: { kind: entry.kind, entityId: entry.entityId }, choice,
+        }).then(saved => {
+            if (mounted.current) setConflictDecisions({ kind: 'observed', result: saved });
+        }).catch(() => {
+            if (mounted.current) setConflictDecisions({ kind: 'unavailable' });
         }).finally(() => { running.current = false; });
     };
 
@@ -202,6 +243,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
         || offlineState.kind === 'loading'
         || recoveryState.kind === 'loading'
         || conflictPreservation.kind === 'working'
+        || conflictDecisions.kind === 'loading' || conflictDecisions.kind === 'saving'
         || receiptState === 'working'
         || maintenance === 'working' || cancelOutcome === 'working';
 
@@ -237,6 +279,8 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
                 {offlineState.result.kind === 'retired-pending' && <p role="alert"><strong>Recupero necessario:</strong> {offlineState.result.pendingOperations} operazioni restano nel journal locale senza ACK verificato della replica {offlineState.result.slot} (generazione {offlineState.result.generation}). La sua registrazione non è più utilizzabile ({offlineState.result.reason === 'retired' ? 'ritirata' : offlineState.result.reason === 'replaced' ? 'sostituita' : offlineState.result.reason === 'expired' ? 'scaduta' : 'non presente nel registro'}). Non eliminare l’archivio e non tentare di riattribuire automaticamente le modifiche: la riconciliazione causale è ancora da completare.</p>}
                 {offlineState.result.kind === 'retired-pending' && <button className="btn" type="button" disabled={disabled}
                     onClick={inspectRecovery}>Analizza la copia cloud e i possibili conflitti</button>}
+                {offlineState.result.kind === 'retired-pending' && <button className="btn" type="button"
+                    disabled={disabled} onClick={inspectDecisions}>Esamina le alternative cifrate già conservate</button>}
                 {offlineState.result.kind === 'retired-pending' && <KindeCandidateJsonPanel
                     label="Copia di sicurezza delle versioni per replica ritirata"
                     prepareLabel="Prepara copia delle versioni offline e cloud"
@@ -277,7 +321,47 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
             </div>}
             {conflictPreservation.kind === 'working' && <p role="status">Nuovo confronto autenticato e salvataggio cifrato delle versioni: nessuna modifica inviata al cloud…</p>}
             {conflictPreservation.kind === 'saved' && <p role="status">{conflictPreservation.count === 1
-                ? 'Conservata 1 entità con versioni concorrenti' : `Conservate ${conflictPreservation.count} entità con versioni concorrenti`}, insieme alle alternative e al journal originale, nell’archivio cifrato di questo dispositivo (revisione cloud osservata {conflictPreservation.revision}). È una copia storica: nessuna versione è stata scelta o sincronizzata. Conserva questo dispositivo.</p>}
+                ? 'Conservata 1 entità con versioni concorrenti' : `Conservate ${conflictPreservation.count} entità con versioni concorrenti`}, insieme alle alternative e al journal originale, nell’archivio cifrato di questo dispositivo (revisione cloud osservata {conflictPreservation.revision}). L’anteprima classifica {conflictPreservation.automatic} entità con campi combinabili e {conflictPreservation.manual} che richiedono una scelta esplicita. Non è una prova di trasferibilità: nessuna versione è stata scelta o sincronizzata. Conserva questo dispositivo.</p>}
+            {(conflictDecisions.kind === 'loading' || conflictDecisions.kind === 'saving')
+                && <p role="status">{conflictDecisions.kind === 'loading'
+                    ? 'Lettura delle versioni cifrate locali…' : 'Salvataggio cifrato della preferenza…'}</p>}
+            {conflictDecisions.kind === 'unavailable' && <p role="alert">Non è possibile leggere o salvare la preferenza: sessione, consenso, revisione locale o archivio potrebbero essere cambiati. Nessuna alternativa viene eliminata. Ripeti il controllo.</p>}
+            {conflictDecisions.kind === 'observed' && (() => {
+                const { entries, decisions, drafts } = conflictDecisions.result;
+                const entry = entries[conflictIndex];
+                if (!entry) return null;
+                const current = decisions.find(item => item.kind === entry.kind && item.entityId === entry.entityId);
+                const combinable = drafts[conflictIndex]?.kind === 'automatic-candidate';
+                return <div className="kinde-replica-registry__confirmation" aria-label="Preferenze di riconciliazione locali">
+                    <p>Alternativa {conflictIndex + 1} di {entries.length}: {entry.kind === 'history' ? 'allenamento storico'
+                        : entry.kind === 'nutrition' ? 'giornata nutrizionale' : 'allenamento attivo'}. Stato: {current
+                        ? `preferenza ${current.choice === 'device' ? 'dispositivo' : current.choice === 'cloud'
+                            ? 'cloud' : 'combinazione'} conservata` : 'nessuna preferenza scelta'}.</p>
+                    <p>Confronta le versioni qui sotto prima di scegliere. Il cloud potrebbe già essere cambiato: questa scelta non recupera, cancella o sincronizza nulla.</p>
+                    <details><summary className="disclosure-summary">Versione originale del dispositivo</summary>
+                        <pre>{JSON.stringify(entry.device?.value ?? null, null, 2)}</pre></details>
+                    <details><summary className="disclosure-summary">Versione osservata nel cloud</summary>
+                        <pre>{JSON.stringify(entry.cloud?.value ?? null, null, 2)}</pre></details>
+                    <details><summary className="disclosure-summary">Versione precedente comune</summary>
+                        <pre>{JSON.stringify(entry.baseline?.value ?? null, null, 2)}</pre></details>
+                    {combinable && <details><summary className="disclosure-summary">Proposta di combinazione dei campi</summary>
+                        <pre>{JSON.stringify(drafts[conflictIndex].kind === 'automatic-candidate'
+                            ? drafts[conflictIndex].value : null, null, 2)}</pre></details>}
+                    <button type="button" className="btn" disabled={disabled}
+                        onClick={() => chooseConflict('device')}>Preferisci la versione del dispositivo</button>
+                    <button type="button" className="btn" disabled={disabled}
+                        onClick={() => chooseConflict('cloud')}>Preferisci la versione cloud</button>
+                    {combinable && <button type="button" className="btn" disabled={disabled}
+                        onClick={() => chooseConflict('combined')}>Preferisci combinare i campi</button>}
+                    {current && <button type="button" className="btn" disabled={disabled}
+                        onClick={() => chooseConflict(null)}>Rimuovi la preferenza</button>}
+                    <div><button type="button" className="btn" disabled={disabled || conflictIndex === 0}
+                        onClick={() => setConflictIndex(index => index - 1)}>Precedente</button>
+                    <button type="button" className="btn" disabled={disabled || conflictIndex + 1 >= entries.length}
+                        onClick={() => setConflictIndex(index => index + 1)}>Successiva</button></div>
+                    <p>Le preferenze sono archiviate solo su questo dispositivo, separate dalle versioni storiche. Nessun ACK o nuovo writer è autorizzato.</p>
+                </div>;
+            })()}
             {conflictPreservation.kind === 'unavailable' && <p role="alert">Conservazione non confermata: una scheda concorrente, la sessione, il consenso o la copia cloud potrebbero essere cambiati. Verifica nuovamente l’archivio prima di riprovare. Non eliminare il journal originale.</p>}
             {pendingState.kind === 'loading' && <p role="status">Lettura della richiesta cifrata in corso…</p>}
             {pendingState.kind === 'none' && <p role="status">Nessuna richiesta di registrazione o ritiro in sospeso in questo archivio.</p>}

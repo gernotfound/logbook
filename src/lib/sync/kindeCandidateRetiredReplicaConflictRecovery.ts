@@ -6,6 +6,7 @@ import { getCachedCatalog } from '../catalog/catalogService';
 import { createCloudflareReplicaTransport } from './cloudReplicaTransport';
 import { inspectKindeCandidateOfflineReplicaJournal } from './kindeCandidateOfflineReplicaJournal';
 import { buildRetiredReplicaConflictCapsule, stageRetiredReplicaConflictCapsule } from './retiredReplicaConflictCapsule';
+import { previewRetiredReplicaConflictResolution } from './retiredReplicaConflictResolution';
 import { userOwner } from './owner';
 import { unlockVaultForOwner } from './secureArchiveSession';
 
@@ -18,7 +19,8 @@ type Options = Parameters<typeof inspectKindeCandidateOfflineReplicaJournal>[0];
  */
 export async function preserveKindeCandidateRetiredReplicaConflicts({
     expected, stillCurrent, send = fetch, browserCookies = () => document.cookie,
-}: Options): Promise<{ preservedEntities: number; cloudRevision: number }> {
+}: Options): Promise<{ preservedEntities: number; cloudRevision: number;
+    automaticCandidates: number; manualRequired: number }> {
     const observed = await inspectKindeCandidateOfflineReplicaJournal({
         expected, stillCurrent, send, browserCookies,
     });
@@ -54,11 +56,14 @@ export async function preserveKindeCandidateRetiredReplicaConflicts({
         if (!current()) throw new KindeCandidateBoundaryError();
         const capsule = buildRetiredReplicaConflictCapsule(expected.uid, local,
             sources.observed.checkpoint, afterControl, catalog);
+        const drafts = previewRetiredReplicaConflictResolution(capsule);
         await assertKindeCandidatePreWithdrawalSourcesStable(sources);
         if (!current()) throw new KindeCandidateBoundaryError();
         const preservedEntities = await stageRetiredReplicaConflictCapsule(owner, local, capsule, current);
         if (!current()) throw new KindeCandidateBoundaryError();
-        return { preservedEntities, cloudRevision: capsule.cloudRevision };
+        return { preservedEntities, cloudRevision: capsule.cloudRevision,
+            automaticCandidates: drafts.filter(draft => draft.kind === 'automatic-candidate').length,
+            manualRequired: drafts.filter(draft => draft.kind === 'manual-required').length };
     } finally {
         grant.release();
     }

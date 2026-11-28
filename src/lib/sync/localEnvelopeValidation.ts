@@ -12,6 +12,7 @@ import { parseCloudflareDeliveryIntent, type CloudflareDeliveryIntent } from './
 import { parseCloudflareReplicaClaimIntent, type CloudflareReplicaClaimIntent } from './cloudReplicaClaimRecord';
 import { parseCloudflareReplicaRetirementIntent, type CloudflareReplicaRetirementIntent } from './cloudReplicaRetirementRecord';
 import { parseRetiredReplicaConflictCapsule, type RetiredReplicaConflictCapsule } from './retiredReplicaConflictRecord';
+import { parseRetiredReplicaConflictDecisions, type RetiredReplicaConflictDecision } from './retiredReplicaConflictDecisionRecord';
 import {
     coversVectorClock, parseSemanticOperation, parseSyncMeta, parseVectorClock,
     type SemanticOperation, type SyncMeta, type VectorClock,
@@ -41,6 +42,8 @@ interface LocalEnvelopeV5 {
     cloudflareReplicaCancellation?: string;
     // Historical, non-ACKed competing versions, sealed within the same owner vault.
     retiredReplicaConflictCapsule?: RetiredReplicaConflictCapsule;
+    // Explicit owner-local preferences. They cannot authorize a cloud merge or ACK.
+    retiredReplicaConflictDecisions?: RetiredReplicaConflictDecision[];
     revision: number;
     // Persistent owner-scoped barrier for unverified cloud snapshots.
     cloudIntegrityFence?: string;
@@ -203,6 +206,9 @@ export function validateLocalEnvelope(value: unknown, owner: string): LocalEnvel
             typeof record.consentRevision === 'number' ? record.consentRevision : undefined);
     const retiredReplicaConflictCapsule = record.retiredReplicaConflictCapsule === undefined ? undefined
         : parseRetiredReplicaConflictCapsule(record.retiredReplicaConflictCapsule, canonicalOwner);
+    const retiredReplicaConflictDecisions = parseRetiredReplicaConflictDecisions(
+        record.retiredReplicaConflictDecisions, retiredReplicaConflictCapsule,
+    );
 
     return {
         ...(record as unknown as LocalEnvelopeV5),
@@ -219,6 +225,7 @@ export function validateLocalEnvelope(value: unknown, owner: string): LocalEnvel
         ...(cloudflareReplicaClaim ? { cloudflareReplicaClaim } : {}),
         ...(cloudflareReplicaRetirement ? { cloudflareReplicaRetirement } : {}),
         ...(retiredReplicaConflictCapsule ? { retiredReplicaConflictCapsule } : {}),
+        ...(retiredReplicaConflictDecisions ? { retiredReplicaConflictDecisions } : {}),
         revision: record.revision,
     };
 }
