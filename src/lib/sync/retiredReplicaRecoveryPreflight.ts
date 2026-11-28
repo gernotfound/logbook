@@ -15,6 +15,7 @@ type RetiredReplicaDivergenceEvidence = Readonly<{
     changedCloudFieldStamps: number;
     pendingWithOverlappingCloudStamps: number;
     unclassifiedDocuments: number;
+    entitiesWithCompetingVersions: number;
 }>;
 
 export type RetiredReplicaRecoveryPreflight =
@@ -71,6 +72,63 @@ function hasUnexplainedBusinessChange(
     }
 }
 
+function monthlyEntities(documents: ReadonlyMap<string, DocumentData>, collection: string): Map<string, unknown> {
+    const entities = new Map<string, unknown>();
+    for (const [path, document] of documents) {
+        if (!path.startsWith(`${collection}/`)) continue;
+        for (const [id, value] of Object.entries(document)) {
+            // The authenticated full scan must not contain two histories for
+            // the same workout ID in different months. A diagnosis cannot
+            // safely choose one when provenance is ambiguous.
+            if (entities.has(id)) throw new Error('Identità business duplicata nella scansione cloud.');
+            entities.set(id, value);
+        }
+    }
+    return entities;
+}
+
+/**
+ * Same-entity changes can conflict even when their field stamps are disjoint.
+ * This count compares authenticated business versions, never timestamps or
+ * stamp overlap, and does not declare either version the winner.
+ */
+function countCompetingEntityVersions(
+    local: LocalEnvelope,
+    base: ReadonlyMap<string, DocumentData>,
+    desired: ReadonlyMap<string, DocumentData>,
+    remote: ReadonlyMap<string, DocumentData>,
+): number {
+    const touched = new Map<string, Set<string>>();
+    let activeWorkoutTouched = false;
+    for (const operation of local.pending) {
+        if (operation.docPath === '' && (!operation.path.length || operation.path[0] === 'activeWorkout')) {
+            activeWorkoutTouched = true;
+        }
+        const collection = operation.docPath.split('/')[0];
+        if (collection !== 'history_months' && collection !== 'nutrition_months') continue;
+        const ids = touched.get(collection) ?? new Set<string>();
+        if (operation.path.length) ids.add(operation.path[0]);
+        else {
+            for (const snapshot of [base, desired, remote]) {
+                for (const id of Object.keys(snapshot.get(operation.docPath) ?? {})) ids.add(id);
+            }
+        }
+        touched.set(collection, ids);
+    }
+    let competing = 0;
+    for (const [collection, ids] of touched) {
+        const before = monthlyEntities(base, collection);
+        const mine = monthlyEntities(desired, collection);
+        const theirs = monthlyEntities(remote, collection);
+        for (const id of ids) {
+            if (!equal(before.get(id), theirs.get(id)) && !equal(mine.get(id), theirs.get(id))) competing++;
+        }
+    }
+    if (activeWorkoutTouched && !equal(base.get('')?.activeWorkout, remote.get('')?.activeWorkout)
+        && !equal(desired.get('')?.activeWorkout, remote.get('')?.activeWorkout)) competing++;
+    return competing;
+}
+
 /**
  * Counts causal witnesses, not user-visible conflicts or safe-to-replay edits.
  * A field-level non-overlap cannot prove semantic independence (guards,
@@ -81,6 +139,7 @@ function describeCloudDivergence(
     local: LocalEnvelope,
     cloud: AuthenticatedCloudflareCheckpoint,
     base: ReturnType<typeof projectDocuments>,
+    desired: ReturnType<typeof projectDocuments>,
 ): RetiredReplicaDivergenceEvidence {
     let changedCloudFieldStamps = 0;
     let unclassifiedDocuments = 0;
@@ -133,7 +192,9 @@ function describeCloudDivergence(
         }
     }
     return { changedCloudFieldStamps,
-        pendingWithOverlappingCloudStamps: overlappingPending.size, unclassifiedDocuments };
+        pendingWithOverlappingCloudStamps: overlappingPending.size, unclassifiedDocuments,
+        entitiesWithCompetingVersions: countCompetingEntityVersions(local, base, desired,
+            new Map([...cloud.documents].map(([path, document]) => [path, document.business]))) };
 }
 
 /**
@@ -212,7 +273,7 @@ export function preflightRetiredReplicaRecovery(
         }
     }
     if (diverged) return { kind: 'reconciliation-required', reason: 'cloud-diverged',
-        evidence: describeCloudDivergence(local, cloud, base) };
+        evidence: describeCloudDivergence(local, cloud, base, current) };
     const replay = applySemanticOperations(base, local.pending, local.syncMetaByDocument).documents;
     if (replay.size !== current.size || [...current].some(([path, desired]) => !equal(replay.get(path), desired))) {
         return { kind: 'reconciliation-required', reason: 'local-replay-diverged' };

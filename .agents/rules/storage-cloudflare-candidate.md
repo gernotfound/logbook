@@ -144,6 +144,18 @@ parimenti non classificabile: un clock documentale invariato o altri stamp
 validi non provano la compaction causale che avrebbe autorizzato il ritiro
 di quel testimone. La diagnosi non attribuisce tale perdita a un merge sicuro.
 
+La diagnosi distingue inoltre la sovrapposizione di *field stamp* dalle
+**versioni business concorrenti della stessa entità**: confronta baseline,
+stato locale e documenti AEAD del cloud per giornata nutrizionale e ID di
+allenamento (anche se spostato fra mesi), oltre all'allenamento attivo.
+Due modifiche a campi differenti della stessa giornata/allenamento possono
+produrre zero sovrapposizioni di stamp e una versione alternativa reale;
+una delete remota senza testimone non diventa per questo un merge sicuro.
+Sono mostrati soltanto conteggi aggregati, mai contenuti sanitari o ID.
+Il confronto non archivia automaticamente versioni remote, non assegna un
+winner, non autorizza claim/ACK e non completa SYNC-7D/7E: queste prove
+richiedono una riconciliazione esplicita e una transazione di recovery distinta.
+
 ### CF-04 — Barriera journal per il rientro di una replica ritirata (candidato 27/11/2026)
 
 La diagnostica candidata `inspectKindeCandidateOfflineReplicaJournal()` apre
