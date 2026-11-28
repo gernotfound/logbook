@@ -6,6 +6,7 @@ import { KindeCandidateBoundaryError } from '../../../src/lib/auth/kindeCandidat
 import { UserDataSchema } from '../../../src/lib/schema';
 import type { UserData } from '../../../src/types';
 import { inspectKindeCandidateOfflineReplicaJournal } from '../../../src/lib/sync/kindeCandidateOfflineReplicaJournal';
+import { stageCloudflareDelivery } from '../../../src/lib/sync/cloudReplicaDurableDelivery';
 import { REPLICA_CLOCK_SKEW_MARGIN_MS } from '../../../src/lib/sync/replicaProtocol';
 import { adoptReplicaCheckpoint, commitLocal, initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
@@ -185,8 +186,28 @@ describe('Kinde candidate: read-only retired replica journal inspection', () => 
         const send = network();
         await expect(inspect(send)).resolves.toEqual({
             kind: 'transition-pending', pendingOperations: before.pending.length,
+            transition: 'replica-management',
         });
         expect(vi.mocked(send).mock.calls.some(([path]) => String(path) === '/v1/sync/control')).toBe(false);
+    });
+
+    it('identifies an actually sealed delivery without retransmitting it or altering the encrypted journal', async () => {
+        const original = await withOldPending();
+        await stageCloudflareDelivery(owner, original.pending, {
+            revision: 8, fenceEpoch: 5, consentRevision: 1,
+            documents: [{ path: '', revision: null, document: null }],
+        }, control(), replica, 'batch000000000191', new Uint8Array(32).fill(17), () => true);
+        const sealed = await get(storage);
+        const send = network();
+        await expect(inspect(send)).resolves.toEqual({
+            kind: 'transition-pending', pendingOperations: original.pending.length,
+            transition: 'sealed-delivery',
+        });
+        expect(await get(storage)).toBe(sealed);
+        const grant = await unlockVaultForOwner(owner);
+        expect((await readLocal(owner))?.pending).toEqual(original.pending);
+        grant.release();
+        expect(vi.mocked(send).mock.calls.some(([path]) => String(path).startsWith('/v1/sync/'))).toBe(false);
     });
 
     it('fails closed for a foreign account, stale controls or a simultaneous local edit', async () => {

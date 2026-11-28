@@ -157,7 +157,8 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
 
     const recoverReceipt = () => {
         if (running.current || session.busy || offlineState.kind !== 'observed'
-            || offlineState.result.kind !== 'transition-pending') return;
+            || offlineState.result.kind !== 'transition-pending'
+            || offlineState.result.transition !== 'sealed-delivery') return;
         running.current = true;
         setReceiptState('working');
         void session.recoverCandidateStagedReceipt().then(result => {
@@ -202,9 +203,10 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
             {offlineState.kind === 'observed' && <div className="kinde-replica-registry__confirmation">
                 {offlineState.result.kind === 'no-pending' && <p role="status">Nessuna operazione nel journal corrente di questo archivio al momento della verifica. Questo non verifica eventuali bozze device o altri dispositivi offline.</p>}
                 {offlineState.result.kind === 'archived-consent-pending' && <p role="alert">Il journal corrente è vuoto, ma l’archivio conserva {offlineState.result.archivedOperations} operazioni storiche di un consenso precedente. Non sono autorizzate al replay con il consenso corrente: conserva la copia per un recupero esplicito.</p>}
-                {offlineState.result.kind === 'transition-pending' && <p role="alert">Esiste una transizione di sincronizzazione da riconciliare prima di valutare il recupero. Operazioni nel journal: {offlineState.result.pendingOperations}. Usa la verifica della richiesta in sospeso; nessun dato è stato scartato.</p>}
-                {offlineState.result.kind === 'transition-pending' && <button className="btn" type="button"
+                {offlineState.result.kind === 'transition-pending' && <p role="alert">Esiste una transizione di sincronizzazione da riconciliare prima di valutare il recupero. Operazioni nel journal: {offlineState.result.pendingOperations}. Nessun dato è stato scartato.</p>}
+                {offlineState.result.kind === 'transition-pending' && offlineState.result.transition === 'sealed-delivery' && <button className="btn" type="button"
                     disabled={disabled} onClick={recoverReceipt}>Verifica la ricevuta di un invio sigillato</button>}
+                {offlineState.result.kind === 'transition-pending' && offlineState.result.transition === 'replica-management' && <p role="status">Questa transizione non è un invio sigillato: per registrazione, ritiro o annullamento usa la verifica della richiesta corrispondente.</p>}
                 {offlineState.result.kind === 'first-claim-pending' && <p role="status">Questo archivio conserva {offlineState.result.pendingOperations} operazioni locali e non ha ancora una replica assegnata. Non è un rientro di replica ritirata; non è stata effettuata alcuna registrazione.</p>}
                 {offlineState.result.kind === 'active-pending' && <p role="status">La replica {offlineState.result.slot} (generazione {offlineState.result.generation}) risultava attiva nel registro verificato. Restano {offlineState.result.pendingOperations} operazioni locali non confermate: questa osservazione non è un ACK né autorizza il replay senza i controlli ordinari.</p>}
                 {offlineState.result.kind === 'retired-pending' && <p role="alert"><strong>Recupero necessario:</strong> {offlineState.result.pendingOperations} operazioni restano nel journal locale senza ACK verificato della replica {offlineState.result.slot} (generazione {offlineState.result.generation}). La sua registrazione non è più utilizzabile ({offlineState.result.reason === 'retired' ? 'ritirata' : offlineState.result.reason === 'replaced' ? 'sostituita' : offlineState.result.reason === 'expired' ? 'scaduta' : 'non presente nel registro'}). Non eliminare l’archivio e non tentare di riattribuire automaticamente le modifiche: la riconciliazione causale è ancora da completare.</p>}

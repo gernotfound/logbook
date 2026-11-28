@@ -82,7 +82,7 @@ describe('candidate-only replica registry presentation', () => {
     it('checks only a sealed delivery after observing a pending transition, preserving uncertainty', async () => {
         authenticated();
         vi.mocked(inspectKindeCandidateOfflineReplicaJournal).mockResolvedValue({
-            kind: 'transition-pending', pendingOperations: 2,
+            kind: 'transition-pending', pendingOperations: 2, transition: 'sealed-delivery',
         });
         render(<KindeAccountEntry candidateMode="preparation" />);
         const check = 'Verifica la ricevuta di un invio sigillato';
@@ -98,10 +98,26 @@ describe('candidate-only replica registry presentation', () => {
         expect(prepareKindeCandidateOwner).not.toHaveBeenCalled();
     });
 
+    it('does not offer receipt recovery for a pending claim, retirement or cancellation', async () => {
+        authenticated();
+        vi.mocked(inspectKindeCandidateOfflineReplicaJournal).mockResolvedValue({
+            kind: 'transition-pending', pendingOperations: 2, transition: 'replica-management',
+        });
+        render(<KindeAccountEntry candidateMode="preparation" />);
+        fireEvent.click(await screen.findByRole('button', {
+            name: 'Controlla modifiche offline su questo dispositivo',
+        }));
+        await screen.findByText(/Questa transizione non è un invio sigillato/);
+        expect(screen.queryByRole('button', {
+            name: 'Verifica la ricevuta di un invio sigillato',
+        })).toBeNull();
+        expect(recoverKindeCandidateStagedReceipt).not.toHaveBeenCalled();
+    });
+
     it('distinguishes a verified historical ACK from an unknown error after the operation', async () => {
         authenticated();
         vi.mocked(inspectKindeCandidateOfflineReplicaJournal).mockResolvedValue({
-            kind: 'transition-pending', pendingOperations: 1,
+            kind: 'transition-pending', pendingOperations: 1, transition: 'sealed-delivery',
         });
         vi.mocked(recoverKindeCandidateStagedReceipt).mockResolvedValueOnce('acknowledged')
             .mockRejectedValueOnce(new Error('session changed'));
