@@ -267,6 +267,19 @@ Il confronto non archivia automaticamente versioni remote, non assegna un
 winner, non autorizza claim/ACK e non completa SYNC-7D/7E: queste prove
 richiedono una riconciliazione esplicita e una transazione di recovery distinta.
 
+L'anteprima `previewRetiredReplicaTransferCoverage()` combina in memoria
+**tutti** i percorsi business con pending di una replica ritirata con una
+scansione cloud AEAD completa: una modifica indipendente di un altro giorno,
+allenamento o campo root non viene soprascritta, mentre la stessa entità
+concorrente richiede le decisioni originali verificate nella capsula.
+Metadati non spiegati, possibile lost ACK, modifiche con guard, dati di
+consenso, root sovrapposti o journal senza effetto finale sospendono il
+tentativo. Il risultato non è una nuova baseline autorevole né uno stato
+persistito: il successivo writer **MUST** ripetere le prove su ricevute e
+frontier primari freschi, produrre una nuova identità causale e rendere
+durevole il trasferimento con CAS locale prima della rete. Nessun ACK o
+completamento SYNC-7D/7E può essere inferito da questa anteprima.
+
 ### CF-04 — Barriera journal per il rientro di una replica ritirata (candidato 27/11/2026)
 
 La diagnostica candidata `inspectKindeCandidateOfflineReplicaJournal()` apre

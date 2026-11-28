@@ -1,5 +1,33 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
+**Ultimo rilascio verificato prima del candidato corrente, 28/11/2026, CF-04 #1525:**
+[`main` `632daa6f15cd711bb1a89f314e236b0e1e1d5edc`](https://github.com/gernotfound/logbook/commit/632daa6f15cd711bb1a89f314e236b0e1e1d5edc),
+v2.786.0, tree `790020b6f873e3065f9b3c1cabd980f05f90a879`.
+[CI della PR exact-SHA](https://github.com/gernotfound/logbook/actions/runs/46155918436),
+[Main Release Gate/CodeQL](https://github.com/gernotfound/logbook/actions/runs/46156245246)
+e [Static Assets/smoke HTTPS byte-esatto](https://github.com/gernotfound/logbook/actions/runs/46156516703)
+`success`. Il readback Cloudflare ha mostrato `thelogbook-frontend`,
+deployment `2ca0bc45-a1f1-453b-9f4e-fe4232616579`, versione
+`e816beae-e403-4077-8b1f-10a48e00fe91` al 100%, binding `APP_ORIGIN`,
+`ASSETS`, `KINDE_HTTP` e nessun `D1_API`. La #1525 materializza scelte
+esplicite su singole entità soltanto in memoria: nessun writer, ACK,
+trasferimento journal o fitness pubblico. **SYNC-7D/7E e GO fitness aperti.**
+
+**Incremento candidato v2.787.0, non ancora integrato o pubblicato:**
+`previewRetiredReplicaTransferCoverage()` estende l'anteprima dall'entità in
+conflitto all'insieme dei percorsi business toccati dal journal offline:
+conserva le versioni cloud indipendenti anche nello stesso mese o in campi
+root distinti, richiede una scelta esplicita per una stessa entità concorrente
+e valida la proiezione business completa. Rifiuta possibili ACK persi,
+metadati cloud non spiegati, operazioni con guard, consenso, percorsi
+sovrapposti e mutazioni senza effetto finale. Non cambia IndexedDB né D1,
+non trasferisce la causalità alla nuova replica e non crea receipt/ACK.
+Prima di un vero recovery servono escrow cifrato durevole, nuovo claim
+autorizzato, re-sequencing verificato con CAS e receipt content-bound.
+**SYNC-7D/7E e SYNC-1–6 restano incompleti; fitness Production NO-GO.**
+
+**Checkpoint storico precedente:**
+
 **Ultimo rilascio verificato prima di questo candidato, 28/11/2026, CF-04 #1524:** [`main`
 `e6969fd14f821217b9b267f592198c6994850668`](https://github.com/gernotfound/logbook/commit/e6969fd14f821217b9b267f592198c6994850668),
 v2.785.0, tree `11b13e438c426aabd3dc7eb113af253d5c19f194`, con

@@ -16,6 +16,7 @@ import { buildRetiredReplicaConflictCapsule,
 import { parseRetiredReplicaConflictCapsule } from '../../../src/lib/sync/retiredReplicaConflictRecord';
 import { previewRetiredReplicaConflictResolution } from '../../../src/lib/sync/retiredReplicaConflictResolution';
 import { materializeRetiredReplicaConflictChoices, previewRetiredReplicaSelectedDocuments } from '../../../src/lib/sync/retiredReplicaConflictMaterialization';
+import { previewRetiredReplicaTransferCoverage } from '../../../src/lib/sync/retiredReplicaTransferCoverage';
 import { parseRetiredReplicaConflictDecisions } from '../../../src/lib/sync/retiredReplicaConflictDecisionRecord';
 import { inspectRetiredReplicaConflictDecisions, recordRetiredReplicaConflictDecision } from '../../../src/lib/sync/retiredReplicaConflictDecisions';
 import { REPLICA_CLOCK_SKEW_MARGIN_MS } from '../../../src/lib/sync/replicaProtocol';
@@ -178,6 +179,120 @@ describe('retired replica conflict choices as non-authoritative materialized can
         expect(materializeRetiredReplicaConflictChoices(chosen, cloud, control(), catalog))
             .toEqual([expect.objectContaining({ choice: 'cloud', value: old.business[date] })]);
         expect((await readLocal(owner))!.pending).toEqual(chosen.pending);
+    });
+});
+
+describe('retired replica complete pending-entity transfer coverage, without claim or ACK', () => {
+    it('projects a journal over an unchanged authenticated baseline without altering its original provenance', async () => {
+        const local = (await readLocal(owner))!;
+        const cloud = await checkpoint();
+        const sealed = await get(storageKey);
+        const controlBefore = control();
+        const plan = previewRetiredReplicaTransferCoverage(local, cloud, controlBefore, catalog);
+        expect(plan.localRevision).toBe(local.revision);
+        expect(plan.originalReplica).toEqual(replica);
+        expect(plan.originalClock).toEqual(local.clock);
+        expect(plan.originalPending).toEqual(local.pending);
+        expect(plan.selectedConflicts).toEqual([]);
+        expect(plan.proposedDocuments.get('')).toEqual(projectDocuments(local.data, catalog).get(''));
+        expect([...cloud.documents].map(([path, entry]) => [path, entry.business]))
+            .toEqual([...projectDocuments(local.baseline, catalog)]);
+        expect(await get(storageKey)).toBe(sealed);
+        expect((await readLocal(owner))!.pending).toEqual(local.pending);
+        expect(() => previewRetiredReplicaTransferCoverage(local, cloud,
+            control({ lastSeq: local.pending[0].seq }), catalog)).toThrow(/causale/);
+    });
+
+    it('preserves independent edits of different existing nutrition days in one month', async () => {
+        const firstDate = '2026-11-13';
+        const secondDate = '2026-11-14';
+        const baseline = UserDataSchema.parse({ ...data(170), nutrition: {
+            [firstDate]: { date: firstDate, weight: 70 },
+            [secondDate]: { date: secondDate, weight: 72 },
+        } }) as unknown as UserData;
+        const desired = UserDataSchema.parse({ ...baseline, nutrition: {
+            ...baseline.nutrition, [firstDate]: { date: firstDate, weight: 71 },
+        } }) as unknown as UserData;
+        const remote = UserDataSchema.parse({ ...baseline, nutrition: {
+            ...baseline.nutrition, [secondDate]: { date: secondDate, weight: 73 },
+        } }) as unknown as UserData;
+        const { local, cloud } = await competingEntitySources({ baseline, desired, remote,
+            changedPath: ['nutrition_months/2026-11', secondDate, 'weight'] });
+        const sealed = await get(storageKey);
+        const plan = previewRetiredReplicaTransferCoverage(local, cloud, control(), catalog);
+        const selected = plan.proposedDocuments.get('nutrition_months/2026-11')!;
+        expect(selected[firstDate]).toMatchObject({ weight: 71 });
+        expect(selected[secondDate]).toMatchObject({ weight: 73 });
+        expect(plan.originalPending).toEqual(local.pending);
+        expect(cloud.documents.get('nutrition_months/2026-11')?.business[firstDate])
+            .toMatchObject({ weight: 70 });
+        expect(await get(storageKey)).toBe(sealed);
+    });
+
+    it('includes an explicit same-day combined choice while retaining all source versions', async () => {
+        const date = '2026-11-13';
+        const baseline = UserDataSchema.parse({ ...data(170), nutrition: {
+            [date]: { date, weight: 70, sleepHours: '07:00' },
+        } }) as unknown as UserData;
+        const desired = UserDataSchema.parse({ ...baseline, nutrition: {
+            [date]: { ...baseline.nutrition![date], weight: 71 },
+        } }) as unknown as UserData;
+        const remote = UserDataSchema.parse({ ...baseline, nutrition: {
+            [date]: { ...baseline.nutrition![date], sleepHours: '08:00' },
+        } }) as unknown as UserData;
+        const { local, cloud } = await competingEntitySources({ baseline, desired, remote,
+            changedPath: ['nutrition_months/2026-11', date, 'sleepHours'] });
+        await updateArchiveRecord(owner, () => local);
+        const capsule = buildRetiredReplicaConflictCapsule(uid, local, cloud, control(), catalog);
+        await stageRetiredReplicaConflictCapsule(owner, local, capsule, () => true);
+        const before = (await readLocal(owner))!;
+        expect(() => previewRetiredReplicaTransferCoverage(before, cloud, control(), catalog))
+            .toThrow(/tutti/);
+        const identity = { kind: 'nutrition' as const, entityId: date };
+        await recordRetiredReplicaConflictDecision(owner, before.revision,
+            { ...identity, choice: 'combined' }, identity, legal, expectedFrontier, () => true);
+        const saved = (await readLocal(owner))!;
+        const plan = previewRetiredReplicaTransferCoverage(saved, cloud, control(), catalog);
+        expect(plan.proposedDocuments.get('nutrition_months/2026-11')?.[date])
+            .toMatchObject({ weight: 71, sleepHours: '08:00' });
+        expect(plan.selectedConflicts).toHaveLength(1);
+        expect(plan.originalPending).toEqual(capsule.sourcePending);
+        expect((await readLocal(owner))!.retiredReplicaConflictCapsule).toEqual(capsule);
+    });
+
+    it('rejects unresolved root conflict and causal edits with zero final business difference', async () => {
+        const local = (await readLocal(owner))!;
+        const changedMeta: SyncMeta = { ...emptyMeta, clock: { s01: 1 }, fields: {
+            [fieldKey(['profile', 'height'])]: { actorId: 's01', seq: 1, clock: { s01: 1 } },
+        }, writer: { slot: 's01', replicaId: 'other-replica', generation: 1, seq: 1, consentRevision: 1 } };
+        const differentCloud = await checkpoint(projectDocuments(data(180), catalog).get('')!, changedMeta);
+        expect(() => previewRetiredReplicaTransferCoverage(local, differentCloud, control(), catalog))
+            .toThrow(/root/);
+        const originalCloud = await checkpoint();
+        await commitLocal(owner, data(170), data(171));
+        const noEffect = (await readLocal(owner))!;
+        expect(projectDocuments(noEffect.baseline, catalog).get(''))
+            .toEqual(projectDocuments(noEffect.data, catalog).get(''));
+        expect(() => previewRetiredReplicaTransferCoverage(noEffect, originalCloud, control(), catalog))
+            .toThrow(/senza effetto/);
+    });
+
+    it('retains independent stamped remote root fields and rejects unclassified ABA changes', async () => {
+        const local = (await readLocal(owner))!;
+        const updatedRoot = projectDocuments(data(170), catalog).get('')!;
+        const peerRoot = structuredClone(updatedRoot);
+        peerRoot.profile = { ...(peerRoot.profile as Record<string, unknown>), gender: 'other' };
+        const stamped: SyncMeta = { ...emptyMeta, clock: { s01: 1 }, fields: {
+            [fieldKey(['profile', 'gender'])]: { actorId: 's01', seq: 1, clock: { s01: 1 } },
+        }, writer: { slot: 's01', replicaId: 'other-replica', generation: 1, seq: 1, consentRevision: 1 } };
+        const peer = await checkpoint(peerRoot, stamped);
+        const plan = previewRetiredReplicaTransferCoverage(local, peer, control(), catalog);
+        expect(plan.proposedDocuments.get('')?.profile).toMatchObject({ height: '171', gender: 'other' });
+        expect(peer.documents.get('')?.business.profile).toMatchObject({ height: '170', gender: 'other' });
+        const unclassified: SyncMeta = { ...emptyMeta, clock: { s01: 1 }, fields: {} };
+        const aba = await checkpoint(updatedRoot, unclassified);
+        expect(() => previewRetiredReplicaTransferCoverage(local, aba, control(), catalog))
+            .toThrow(/provenienza/);
     });
 });
 
