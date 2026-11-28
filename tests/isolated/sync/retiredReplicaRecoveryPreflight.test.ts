@@ -737,6 +737,14 @@ describe('retired replica recovery preflight, no mutation or new causal identity
         expect(previewRetiredReplicaConflictResolution(arrays)).toEqual([{
             kind: 'manual-required', entityKind: 'nutrition', entityId: date,
         }]);
+        const oneChangedList = structuredClone(capsule);
+        const baseList = { date, meals: [{ id: 'meal-1', amount: 10 }] };
+        oneChangedList.entries[0].baseline!.value = baseList;
+        oneChangedList.entries[0].device!.value = { date, meals: [{ id: 'meal-1', amount: 20 }] };
+        oneChangedList.entries[0].cloud!.value = { ...baseList, sleepHours: '08:00' };
+        expect(previewRetiredReplicaConflictResolution(oneChangedList)).toEqual([{
+            kind: 'manual-required', entityKind: 'nutrition', entityId: date,
+        }]);
         const fieldRemoval = structuredClone(capsule);
         fieldRemoval.entries[0].baseline!.value = { date, weight: 70, sleepHours: '07:00' };
         fieldRemoval.entries[0].device!.value = { date, sleepHours: '07:00' };

@@ -21,7 +21,7 @@ cifrata senza cambiarla: il confronto a tre vie baseline/device/cloud
 propone una composizione soltanto per campi indipendenti nella stessa
 giornata o seduta rimasta nello stesso mese, con output senza perdita
 secondo lo schema business. Stesso campo discordante, array modificati
-da entrambi, creazione concorrente, delete, spostamenti tra mesi e
+anche da una sola parte, creazione concorrente, delete, spostamenti tra mesi e
 `activeWorkout` restano manuali. La UI **soltanto candidata** espone
 conteggi aggregati dopo il commit di conservazione, non i valori salute;
 nessuna scelta, nuovo actor, claim, invio, ACK o modifica del cloud deriva

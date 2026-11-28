@@ -14,6 +14,12 @@ const object = (value: unknown): value is Record<string, unknown> =>
 const missing = Symbol('missing-field');
 
 function mergeField(base: unknown, device: unknown, cloud: unknown): MergeResult {
+    // Lists carry ordering, item IDs and potentially derived totals. Even a
+    // one-sided edit cannot be combined with another device's scalar change
+    // without a domain-specific revalidation of the whole collection.
+    if (Array.isArray(base) || Array.isArray(device) || Array.isArray(cloud)) {
+        return equal(base, device) && equal(base, cloud) ? { safe: true, value: base } : { safe: false };
+    }
     if (equal(device, cloud)) return { safe: true, value: device };
     if (equal(device, base)) return { safe: true, value: cloud };
     if (equal(cloud, base)) return { safe: true, value: device };
