@@ -338,13 +338,13 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
                         ? `preferenza ${current.choice === 'device' ? 'dispositivo' : current.choice === 'cloud'
                             ? 'cloud' : 'combinazione'} conservata` : 'nessuna preferenza scelta'}.</p>
                     <p>Confronta le versioni qui sotto prima di scegliere. Il cloud potrebbe già essere cambiato: questa scelta non recupera, cancella o sincronizza nulla.</p>
-                    <details><summary>Versione originale del dispositivo</summary>
+                    <details><summary className="disclosure-summary">Versione originale del dispositivo</summary>
                         <pre>{JSON.stringify(entry.device?.value ?? null, null, 2)}</pre></details>
-                    <details><summary>Versione osservata nel cloud</summary>
+                    <details><summary className="disclosure-summary">Versione osservata nel cloud</summary>
                         <pre>{JSON.stringify(entry.cloud?.value ?? null, null, 2)}</pre></details>
-                    <details><summary>Versione precedente comune</summary>
+                    <details><summary className="disclosure-summary">Versione precedente comune</summary>
                         <pre>{JSON.stringify(entry.baseline?.value ?? null, null, 2)}</pre></details>
-                    {combinable && <details><summary>Proposta di combinazione dei campi</summary>
+                    {combinable && <details><summary className="disclosure-summary">Proposta di combinazione dei campi</summary>
                         <pre>{JSON.stringify(drafts[conflictIndex].kind === 'automatic-candidate'
                             ? drafts[conflictIndex].value : null, null, 2)}</pre></details>}
                     <button type="button" className="btn" disabled={disabled}
