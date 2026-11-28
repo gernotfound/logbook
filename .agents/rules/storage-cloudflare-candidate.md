@@ -106,6 +106,10 @@ cloud invariata senza una voce di slot, con generazione regredita o
 stessa generazione ma replicaId differente non prova neppure la continuità
 del contatore: il preflight restituisce `unverifiable-lineage`, conserva
 le pending e non presenta la situazione come candidata al trasferimento.
+Lo stesso esito vale se una generazione successiva riusa il medesimo
+`replicaId` (vietato dal ledger SQL), oppure se `lastSeq` dello slot è
+inferiore alla sequenza già attestata da clock o writer nei metadati
+della baseline locale: il contatore D1 è monotono anche dopo il riuso.
 Il percorso rimane di sola lettura. Una baseline divergente, un documento
 extra/mancante o metadato avanzato anche con stesso
 valore business (ABA), transizione pendente o replay locale incongruente

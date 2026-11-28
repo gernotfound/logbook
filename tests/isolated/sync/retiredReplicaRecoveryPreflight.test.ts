@@ -9,6 +9,7 @@ import { sealCloudDocument } from '../../../src/lib/sync/cloudDocumentCipher';
 import type { CloudReplicaControlSnapshot } from '../../../src/lib/sync/cloudReplicaTransport';
 import { projectDocuments } from '../../../src/lib/sync/documentProjection';
 import { adoptReplicaCheckpoint, commitLocal, initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
+import { validateLocalEnvelope } from '../../../src/lib/sync/localEnvelopeValidation';
 import { preflightRetiredReplicaRecovery } from '../../../src/lib/sync/retiredReplicaRecoveryPreflight';
 import { REPLICA_CLOCK_SKEW_MARGIN_MS } from '../../../src/lib/sync/replicaProtocol';
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
@@ -241,6 +242,44 @@ describe('retired replica recovery preflight, no mutation or new causal identity
         }
         expect(await get(storageKey)).toBe(sealed);
         expect(await readLocal(owner)).toEqual(local);
+    });
+
+    it('rejects a reused replica ID in a newer generation, forbidden by the D1 history ledger', async () => {
+        const local = (await readLocal(owner))!;
+        const sealed = await get(storageKey);
+        expect(preflightRetiredReplicaRecovery(uid, local, await checkpoint(), control({
+            generation: replica.generation + 1,
+        }), catalog)).toEqual({ kind: 'reconciliation-required', reason: 'unverifiable-lineage' });
+        expect(await get(storageKey)).toBe(sealed);
+    });
+
+    it('requires the slot counter to cover the already authenticated baseline frontier', async () => {
+        const original = (await readLocal(owner))!;
+        const sealed = await get(storageKey);
+        for (const meta of [
+            { ...emptyMeta, clock: { s03: 2 }, writer: { ...emptyMeta.writer!, seq: 2 } },
+            { ...emptyMeta, clock: { s03: 1 }, writer: { ...emptyMeta.writer!, seq: 2 } },
+        ] satisfies SyncMeta[]) {
+            const local = validateLocalEnvelope({
+                ...original,
+                actorSeq: 3, clock: { s03: 3 },
+                pending: original.pending.map(operation => ({
+                    ...operation, seq: 3, clock: { s03: 3 },
+                })),
+                syncMetaByDocument: { '': meta },
+            }, owner)!;
+            const cloud = await checkpoint(undefined, meta);
+
+            expect(preflightRetiredReplicaRecovery(uid, local, cloud,
+                control({ lastSeq: 1 }), catalog)).toEqual({
+                kind: 'reconciliation-required', reason: 'unverifiable-lineage',
+            });
+            expect(preflightRetiredReplicaRecovery(uid, local, cloud,
+                control({ lastSeq: 2 }), catalog)).toEqual({
+                kind: 'baseline-unchanged', pendingOperations: local.pending.length, cloudRevision: 8,
+            });
+        }
+        expect(await get(storageKey)).toBe(sealed);
     });
 
     it('rejects owner/fence mismatch, bad ciphertext and unfinished mutation before recovery', async () => {
