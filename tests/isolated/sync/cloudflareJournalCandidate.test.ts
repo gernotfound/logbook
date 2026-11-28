@@ -143,7 +143,7 @@ const context = {
     owner, storeKey, adk, profile, seed, transport, savedDelivery, changedRemote,
     deliverCloudflareJournalCandidate, stageCloudflareDelivery,
     CloudReplicaTransportError, updateArchiveRecord, readLocal, commitLocal,
-    initializeLocal, readAccountCloudDocument, parseSyncMeta, sealCloudDocument,
+    initializeLocal, adoptReplicaCheckpoint, readAccountCloudDocument, parseSyncMeta, sealCloudDocument,
 };
 export type CandidateJournalTestContext = typeof context;
 
