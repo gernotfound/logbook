@@ -7,6 +7,7 @@ import { verifyPrivateKindeWorker } from '../../scripts/verify-cloudflare-kinde-
 const account = '0123456789abcdef0123456789abcdef';
 const worker = 'thelogbook-cf03-kinde-http-isolated';
 const prefix = '/client/v4/accounts/' + account + '/workers/scripts/' + worker;
+const domainsPath = '/client/v4/accounts/' + account + '/workers/domains';
 const id = '9aa51833-8adc-495f-bdfc-93b5542e8023';
 const bindings = [
   { name: 'DB', type: 'd1', id, database_id: id },
@@ -20,8 +21,11 @@ function fakeClient(changes = {}) {
   const request = async (url, init) => {
     const path = new URL(url).pathname;
     calls.push({ path, init });
-    const item = changes[path] ?? { success: true, result: path.endsWith('/settings')
-      ? { bindings } : { enabled: false, previews_enabled: false } };
+    const item = changes[path] ?? { success: true, result: path === domainsPath
+      ? [{ service: 'thelogbook-frontend', hostname: 'thelogbook.me' }]
+      : path.endsWith('/settings') ? { bindings }
+        : path.endsWith('/schedules') ? { schedules: [] }
+          : { enabled: false, previews_enabled: false } };
     return { ok: (item.status ?? 200) < 400, status: item.status ?? 200,
       json: async () => item };
   };
@@ -34,7 +38,7 @@ void test('reads exact private binding set and URL isolation, without SQL writes
   const client = fakeClient();
   await verifyPrivateKindeWorker(args(client));
   assert.deepEqual(client.calls.map(c => c.path).sort(),
-    [prefix + '/settings', prefix + '/subdomain']);
+    [prefix + '/settings', prefix + '/subdomain', prefix + '/schedules', domainsPath].sort());
   assert.ok(client.calls.every(c => c.init.method === 'GET'
     && c.init.headers.Authorization === 'Bearer synthetic-bearer'));
 });
@@ -81,6 +85,22 @@ void test('fails closed on public workers.dev, preview and unverified provider r
     success: false, result: { bindings },
   } });
   await assert.rejects(verifyPrivateKindeWorker(args(malformed)), /readback failed/);
+});
+
+void test('fails closed on an attached domain, scheduled trigger or missing provider inventories', async () => {
+  for (const result of [
+    [{ service: worker, hostname: 'unapproved.example' }],
+    null, {}, [{ hostname: 'unknown.example' }],
+  ]) {
+    const client = fakeClient({ [domainsPath]: { success: true, result } });
+    await assert.rejects(verifyPrivateKindeWorker(args(client)), /domain|readback failed/);
+  }
+  for (const result of [{ schedules: [{ cron: '0 0 * * *' }] }, {}, null]) {
+    const client = fakeClient({ [prefix + '/schedules']: { success: true, result } });
+    await assert.rejects(verifyPrivateKindeWorker(args(client)), /scheduled trigger|readback failed/);
+  }
+  const denied = fakeClient({ [domainsPath]: { status: 403, success: false } });
+  await assert.rejects(verifyPrivateKindeWorker(args(denied)), /HTTP 403/);
 });
 
 void test('deployment changes only Kinde Worker after exact-main verification and no public route', () => {

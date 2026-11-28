@@ -7,12 +7,19 @@ const db = '9aa51833-8adc-495f-bdfc-93b5542e8023';
 const registry = '19dad53f-0dda-4503-b161-758ac8cb7b21';
 const gate = 'thelogbook-cf03-auth-gate-isolated';
 const dataWorker = 'thelogbook-api-isolated';
+const legal = [
+  { name: 'API_ORIGIN', type: 'plain_text', text: 'https://thelogbook.me' },
+  { name: 'CONSENT_PRIVACY_VERSION', type: 'plain_text', text: '1.3.9' },
+  { name: 'CONSENT_TERMS_VERSION', type: 'plain_text', text: '1.2.5' },
+];
 const settings = {
   [gate]: { bindings: [
+    ...legal,
     { type: 'd1', name: 'DB', id: db, database_id: db },
     { type: 'ratelimit', name: 'API_RATE_LIMITER', namespace_id: '31003' },
   ] },
   [dataWorker]: { bindings: [
+    ...legal,
     { type: 'd1', name: 'DB', id: db, database_id: db },
     { type: 'd1', name: 'RECOVERY_DB', id: registry, database_id: registry },
     { type: 'service', name: 'AUTH_GATE', service: gate },
@@ -27,8 +34,11 @@ function cloudflareMock(overrides = {}) {
     calls.push({ path, method: init.method, headers: init.headers });
     const worker = path.includes('/workers/scripts/' + gate + '/')
       ? gate : dataWorker;
-    const result = path.endsWith('/settings') ? settings[worker]
-      : { enabled: false, previews_enabled: false };
+    const result = path.endsWith('/workers/domains')
+      ? [{ service: 'thelogbook-frontend', hostname: 'thelogbook.me' }]
+      : path.endsWith('/settings') ? settings[worker]
+        : path.endsWith('/schedules') ? { schedules: [] }
+          : { enabled: false, previews_enabled: false };
     const value = overrides[path] ?? { success: true, result };
     return { ok: value.httpStatus === undefined || value.httpStatus < 400,
       status: value.httpStatus ?? 200, json: async () => value };
@@ -44,8 +54,8 @@ function args(mock) {
 void test('verifies real Worker binding shapes and uses no D1 SQL permissions', async () => {
   const mock = cloudflareMock();
   await verifyPrivateWorkerBindings(args(mock));
-  assert.equal(mock.calls.length, 4);
-  assert.ok(mock.calls.every(call => call.path.includes('/workers/scripts/')));
+  assert.equal(mock.calls.length, 7);
+  assert.equal(mock.calls.filter(call => call.path.endsWith('/workers/domains')).length, 1);
   assert.ok(mock.calls.every(call => call.method === 'GET'));
   assert.ok(mock.calls.every(call => call.headers.Authorization === 'Bearer synthetic-test'));
 });
@@ -56,7 +66,7 @@ void test('rejects absent D1 binding, authorization service or limiter', async (
     const path = '/client/v4/accounts/0123456789abcdef0123456789abcdef/workers/scripts/' + name + '/settings';
     const bindings = settings[name].bindings.filter(item => item.name !== bindingName);
     const mock = cloudflareMock({ [path]: { success: true, result: { bindings } } });
-    await assert.rejects(verifyPrivateWorkerBindings(args(mock)), /absent|incorrect|independent recovery D1/);
+    await assert.rejects(verifyPrivateWorkerBindings(args(mock)), /binding|absent|incorrect/);
   }
 });
 
@@ -99,7 +109,7 @@ void test('fails closed when KEK is missing, plaintext, duplicated or provider p
   ];
   for (const bindings of candidates) {
     const mock = cloudflareMock({ [path]: { success: true, result: { bindings } } });
-    await assert.rejects(verifyPrivateWorkerBindings(args(mock)), /KEK/);
+    await assert.rejects(verifyPrivateWorkerBindings(args(mock)), /KEK|binding/);
   }
   for (const failed of [
     { success: false, result: null },
@@ -136,5 +146,46 @@ void test('rejects substituted or main-DB alias recovery bindings', async () => 
       success: true, result: { bindings: broken },
     } });
     await assert.rejects(verifyPrivateWorkerBindings(args(mock)), /independent erasure D1/);
+  }
+});
+
+void test('refuses custom-domain exposure, scheduled jobs and missing account-wide inventories', async () => {
+  const prefix = '/client/v4/accounts/0123456789abcdef0123456789abcdef/workers/';
+  for (const name of [gate, dataWorker]) {
+    const custom = cloudflareMock({ [prefix + 'domains']: { success: true,
+      result: [{ service: name, hostname: 'unapproved.example' }] } });
+    await assert.rejects(verifyPrivateWorkerBindings(args(custom)), /public custom domain/);
+    const scheduled = cloudflareMock({ [prefix + 'scripts/' + name + '/schedules']: { success: true,
+      result: { schedules: [{ cron: '* * * * *' }] } } });
+    await assert.rejects(verifyPrivateWorkerBindings(args(scheduled)), /scheduled trigger/);
+  }
+  for (const result of [null, {}, [{ hostname: 'unknown.example' }]]) {
+    const missing = cloudflareMock({ [prefix + 'domains']: { success: true, result } });
+    await assert.rejects(verifyPrivateWorkerBindings(args(missing)), /domains inventory/);
+  }
+  const denied = cloudflareMock({ [prefix + 'domains']: { success: false, httpStatus: 403 } });
+  await assert.rejects(verifyPrivateWorkerBindings(args(denied)), /HTTP 403/);
+  const missingSchedule = cloudflareMock({ [prefix + 'scripts/' + gate + '/schedules']: {
+    success: true, result: {},
+  } });
+  await assert.rejects(verifyPrivateWorkerBindings(args(missingSchedule)), /scheduled trigger/);
+});
+
+void test('rejects extra, duplicate or changed legal/version bindings in private API and gate', async () => {
+  const prefix = '/client/v4/accounts/0123456789abcdef0123456789abcdef/workers/scripts/';
+  for (const name of [gate, dataWorker]) {
+    for (const bindings of [
+      [...settings[name].bindings, { name: 'UNEXPECTED', type: 'plain_text', text: 'x' }],
+      [...settings[name].bindings, settings[name].bindings[0]],
+      settings[name].bindings.map(binding => binding.name === 'CONSENT_PRIVACY_VERSION'
+        ? { ...binding, text: '0.0.0' } : binding),
+      settings[name].bindings.map(binding => binding.name === 'API_ORIGIN'
+        ? { ...binding, type: 'secret_text' } : binding),
+    ]) {
+      const mock = cloudflareMock({ [prefix + name + '/settings']: {
+        success: true, result: { bindings },
+      } });
+      await assert.rejects(verifyPrivateWorkerBindings(args(mock)), /binding|legal version/);
+    }
   }
 });
