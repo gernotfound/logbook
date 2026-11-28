@@ -4,6 +4,30 @@
 
 ## CF-04 · Frontend identity-only verificato · 28 novembre 2026
 
+**Readback verificato dopo [PR #1528](https://github.com/gernotfound/logbook/pull/1528):**
+[`main` `e95523747c178317c35d6b021962083ee43e99cf`](https://github.com/gernotfound/logbook/commit/e95523747c178317c35d6b021962083ee43e99cf),
+v2.789.0, tree `b7c5d62fa62ee38286cdac9ec279caf21166574b`
+identico al candidato PR `6c3957e672d3236aaeab6ce96fbb21d0153c0eb9`.
+[PR Canonical/CodeQL/otto E2E](https://github.com/gernotfound/logbook/actions/runs/46167030558),
+[Main Release Gate/CodeQL](https://github.com/gernotfound/logbook/actions/runs/46167381577),
+[Static Assets/smoke HTTPS](https://github.com/gernotfound/logbook/actions/runs/46167609598)
+`success`. Cloudflare frontend: deployment
+`6960dd5e-19c5-4fc5-b994-31122ed6b17f`, versione
+`182fc51e-3918-41cc-8587-6e26f2dcf1cc` 100%, binding `APP_ORIGIN`,
+`ASSETS`, `KINDE_HTTP`, **nessun `D1_API`**. Anche i workflow delle
+[API D1 private](https://github.com/gernotfound/logbook/actions/runs/46167609646)
+e del [Kinde HTTP privato](https://github.com/gernotfound/logbook/actions/runs/46167609602)
+sono `success`; provider: `thelogbook-api-isolated` deployment
+`f678246c-3445-41b3-9628-5b822890574b`, Auth Gate
+`9f3394ae-ae8b-4b62-ba42-283b8dfaabeb`, Kinde HTTP
+`306f02a0-d5b7-4d3d-afbd-25d8e6d0f556`. Nessun nuovo binding
+pubblico o attivazione del fitness; le prove di commit/ACK su dispositivi
+reali e backup/restore rimangono assenti. Il candidato di recupero
+offline su nuova replica è ora integrato ma **SYNC-7D/E, SYNC-1–6 e GO
+fitness sono ancora PARZIALI**. Per i dettagli consultare [#1058](https://github.com/gernotfound/logbook/issues/1058).
+
+**Checkpoint precedente:**
+
 **Readback più recente verificato dopo [PR #1527](https://github.com/gernotfound/logbook/pull/1527):**
 `main` [`96e5aadf575455b7c5a51496c84122a59d809f86`](https://github.com/gernotfound/logbook/commit/96e5aadf575455b7c5a51496c84122a59d809f86),
 v2.788.0, tree `a82b10690f731a58847b3fce521b9ff8a140a301`;
@@ -15,11 +39,11 @@ e [Static Assets/smoke HTTPS](https://github.com/gernotfound/logbook/actions/run
 `ba350514-50f3-4070-9797-f27406029c02` al 100%, `APP_ORIGIN`, `ASSETS`,
 `KINDE_HTTP`, **nessun `D1_API`**. Deploy privati API/Kinde `skipped`.
 La bozza di recupero #1527 è locale, cifrata e non modifica provider.
-Il candidato v2.789.0 introduce il recupero causale sul nuovo actor solo
+Il successivo rilascio v2.789.0 introduce il recupero causale sul nuovo actor solo
 nel percorso fitness Kinde isolato e la preparazione AEAD per il normale
 commit D1, senza nuovo binding, DNS, costo o scritture remote in questa
-fase di sviluppo; CI, merge, deploy e runtime del candidato devono essere
-attestati separatamente. **SYNC-7D/7E e fitness Production NO-GO.**
+fase di sviluppo; CI, merge e deploy successivi sono attestati nel
+checkpoint iniziale. **SYNC-7D/7E e fitness Production NO-GO.**
 
 **Checkpoint storico precedente:**
 
