@@ -2,6 +2,7 @@ import { get } from 'idb-keyval';
 import { describe, expect, it } from 'vitest';
 import { UserDataSchema } from '../../../src/lib/schema';
 import type { UserData } from '../../../src/types';
+import { projectDocuments } from '../../../src/lib/sync/documentProjection';
 import { fieldKey } from '../../../src/lib/sync/semanticProjection/metadata';
 import { applySemanticOperations, diffDocuments } from '../../../src/lib/sync/semanticProjection';
 import type { CandidateJournalTestContext } from './cloudflareJournalCandidate.test';
@@ -19,6 +20,85 @@ export function registerCandidateJournalRebaseCases({
     });
     const history = (sessions: ReturnType<typeof workout>[]): UserData =>
         UserDataSchema.parse({ history: sessions }) as unknown as UserData;
+    const nutritionMonth = 'nutrition_months/2026-11';
+    const monthlyCatalog = { exercises: [], foods: [], manifest: {
+        version: 'fixture', updatedAt: '2026-11-14T00:00:00.000Z', schemaVersion: 1,
+        docRefs: { exercises: 'fixture/e', foods: 'fixture/f' },
+        itemCounts: { exercises: 0, foods: 0 },
+    }, cachedAt: 0 };
+    const nutritionDay = (date: string, weight: number, kcal = 0) => ({ date, weight, kcal });
+    const nutrition = (days: ReturnType<typeof nutritionDay>[]): UserData => UserDataSchema.parse({
+        nutrition: Object.fromEntries(days.map(day => [day.date, day])),
+    }) as unknown as UserData;
+
+    async function stagedNutrition() {
+        const first = nutritionDay('2026-11-07', 70);
+        const second = nutritionDay('2026-11-08', 80);
+        const base = nutrition([first, second]);
+        const desired = nutrition([nutritionDay(first.date, 71), second]);
+        await initializeLocal(owner, base);
+        const now = Date.now();
+        const replica = { slot: 's00', replicaId: 'cf04-candidate-device', generation: 1,
+            checkpointAtMs: now, leaseUntilMs: now + 86_400_000 };
+        const baseMeta = { protocolVersion: 3 as const, clock: {}, fields: {},
+            writer: { slot: 's00', replicaId: replica.replicaId, generation: 1,
+                seq: 0, consentRevision: 1 } };
+        await adoptReplicaCheckpoint(owner, { identity: replica, baseSeq: 0 },
+            { clock: {}, syncMetaByDocument: { [nutritionMonth]: baseMeta } });
+        await commitLocal(owner, desired, base);
+        const local = (await readLocal(owner))!;
+        expect(local.pending.length).toBeGreaterThan(0);
+        expect(local.pending.every(op => op.docPath === nutritionMonth
+            && op.path[0] === first.date)).toBe(true);
+        const control = { uid: owner.slice(5), revision: 1, fenceEpoch: 5, consentRevision: 1,
+            replicas: { s00: { ...replica, lastSeq: 0, status: 'active' as const,
+                checkpointClock: {} } } };
+        const snapshot = { revision: 1, fenceEpoch: 5, consentRevision: 1,
+            documents: [{ path: nutritionMonth, revision: 1,
+                document: sealCloudDocument(adk, owner.slice(5), nutritionMonth,
+                    projectDocuments(base, monthlyCatalog).get(nutritionMonth)!, baseMeta) }] };
+        await stageCloudflareDelivery(owner, local.pending, snapshot, control,
+            replica, 'batch000000009920', adk, () => true);
+        return { local, control, snapshot, base, first, second };
+    }
+
+    function competingNutrition(setup: Awaited<ReturnType<typeof stagedNutrition>>, options: {
+        date?: string; weight?: number; kcal?: number; missingStamp?: boolean; unexplainedClock?: boolean;
+        newDay?: boolean; deletedDay?: boolean;
+    } = {}) {
+        const date = options.date ?? setup.second.date;
+        const changed = nutrition([
+            nutritionDay(setup.first.date, date === setup.first.date ? options.weight ?? 72 : 70),
+            ...(options.deletedDay ? [] : [nutritionDay(setup.second.date,
+                date === setup.second.date && !options.newDay ? options.weight ?? 81 : 80,
+                date === setup.second.date ? options.kcal ?? 0 : 0)]),
+            ...(options.newDay ? [nutritionDay('2026-11-09', 60)] : []),
+        ]);
+        const originalDocs = projectDocuments(setup.base, monthlyCatalog);
+        const peerDocs = projectDocuments(changed, monthlyCatalog);
+        const ops = diffDocuments(originalDocs, peerDocs, 's01', 1, { s01: 1 });
+        const merged = applySemanticOperations(originalDocs, ops);
+        const document = options.newDay ? peerDocs.get(nutritionMonth)! : merged.documents.get(nutritionMonth)!;
+        // The remote value may contain a change to calculated totals, ignored
+        // by the semantic diff, even when a legitimate weight stamp exists.
+        if (options.kcal !== undefined) {
+            (document[setup.second.date] as Record<string, unknown>).kcal = options.kcal;
+        }
+        const sync = { ...merged.syncMetas[nutritionMonth],
+            clock: { s01: options.unexplainedClock ? 2 : 1 },
+            fields: options.missingStamp ? {} : merged.syncMetas[nutritionMonth].fields,
+            writer: { slot: 's01', replicaId: 'other-device', generation: 1,
+                seq: 1, consentRevision: 1 } };
+        const now = Date.now();
+        return { control: { ...setup.control, revision: 2, replicas: {
+            ...setup.control.replicas,
+            s01: { slot: 's01', replicaId: 'other-device', generation: 1,
+                status: 'active' as const, lastSeq: 1, checkpointClock: { s01: 1 },
+                checkpointAtMs: now, leaseUntilMs: now + 86_400_000 },
+        } }, scan: { revision: 2, fenceEpoch: 5, consentRevision: 1,
+            documents: [{ path: nutritionMonth, revision: 2,
+                document: sealCloudDocument(adk, owner.slice(5), nutritionMonth, document, sync) }] } };
+    }
 
     async function stagedHistory() {
         const original = workout('baseline', 'existing');
@@ -80,6 +160,50 @@ export function registerCandidateJournalRebaseCases({
         return { control, scan: { revision: 2, fenceEpoch: 5, consentRevision: 1,
             documents: [{ path: month, revision: 2, document: doc }] } };
     }
+
+    it('preserves independently updated nutrition days in one D1 monthly document', async () => {
+        const setup = await stagedNutrition();
+        const { control, scan } = competingNutrition(setup);
+        const remote = transport(setup.control, setup.snapshot);
+        remote.commit.mockRejectedValueOnce(new CloudReplicaTransportError(409));
+        remote.commitOutcome.mockResolvedValueOnce({ outcome: 'not-committed', currentRevision: 2 });
+        remote.control.mockResolvedValue(control);
+        remote.scanAll.mockResolvedValue(scan);
+
+        expect(await deliverCloudflareJournalCandidate(owner, adk, remote, 'csrf-session', () => true))
+            .toBe('retry-staged');
+        expect((await readLocal(owner))?.pending).toEqual(setup.local.pending);
+        const replacement = (await readLocal(owner))!.cloudflareDelivery!.batch.documents[0];
+        const opened = readAccountCloudDocument(replacement.document, 'independent nutrition rebase',
+            owner.slice(5), nutritionMonth, adk);
+        expect(opened.business[setup.first.date]).toMatchObject({ weight: 71 });
+        expect(opened.business[setup.second.date]).toMatchObject({ weight: 81 });
+        expect(remote.commit).toHaveBeenCalledOnce();
+    });
+
+    it.each([
+        { label: 'same day', options: { date: '2026-11-07' } },
+        { label: 'unwitnessed weight', options: { missingStamp: true } },
+        { label: 'hidden computed total', options: { kcal: 120 } },
+        { label: 'unaccounted document clock', options: { unexplainedClock: true } },
+        { label: 'new nutrition day', options: { newDay: true } },
+        { label: 'deleted nutrition day', options: { deletedDay: true } },
+    ])('retains the exact encrypted nutrition journal for $label', async ({ options }) => {
+        const setup = await stagedNutrition();
+        const { control, scan } = competingNutrition(setup, options);
+        const remote = transport(setup.control, setup.snapshot);
+        remote.commit.mockRejectedValueOnce(new CloudReplicaTransportError(409));
+        remote.commitOutcome.mockResolvedValueOnce({ outcome: 'not-committed', currentRevision: 2 });
+        remote.control.mockResolvedValue(control);
+        remote.scanAll.mockResolvedValue(scan);
+        const stored = await get(storeKey);
+
+        expect(await deliverCloudflareJournalCandidate(owner, adk, remote, 'csrf-session', () => true))
+            .toBe('reconciliation-required');
+        expect(await get(storeKey)).toBe(stored);
+        expect((await readLocal(owner))?.pending).toEqual(setup.local.pending);
+        expect(remote.commit).toHaveBeenCalledOnce();
+    });
 
     it('conserves two different workouts edited offline in the same cloud month', async () => {
         const setup = await stagedHistory();
