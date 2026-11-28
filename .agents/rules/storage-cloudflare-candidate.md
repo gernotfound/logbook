@@ -14,6 +14,29 @@ avere le stesse revisioni, lo stesso epoch e registri di replica equivalenti.
 
 ## Checkpoint candidati CF-03/04
 
+### CF-04 — Esportazione volontaria delle versioni di replica ritirata (candidato 28/11/2026)
+
+La schermata **esclusivamente candidata** può preparare, su richiesta
+esplicita e dopo aver diagnosticato `retired-pending`, un JSON di evidenze
+che mantiene **separati** il checkpoint cloud AEAD completo a revisione
+osservata, il journal locale originale, la proiezione business del dispositivo,
+la baseline, gli intenti e le bozze/testimoni recuperabili. Nessuna versione
+viene scelta, persa o ricombinata; l'archivio cifrato in IndexedDB resta
+immutato. Una nuova diagnosi owner-bound della membership precede l'export;
+la lettura delle fonti controlla consenso, cookie, epoch Auth, vault e
+stabilità locale prima/dopo. La ADK è richiesta soltanto con
+`recovery-inspect`, che non emette chiavi mancanti: `sync` sarebbe una
+scrittura nel ledger, anche in un percorso nominalmente di lettura.
+La chiave device effimera viene bloccata alla fine della preparazione.
+
+Il file contiene **dati sanitari in chiaro** e non è un backup importabile:
+`restorableBackup=false`, `atomicAcrossSources=false`, perché D1, IndexedDB
+e localStorage non condividono una transazione. Il download richiede un
+secondo gesto utente; nessuna API browser prova il salvataggio del file.
+Questa misura conserva evidenze manuali, **non** trasferisce le pending né
+risolve automaticamente versioni concorrenti SYNC-7D/7E. Non attiva il
+fitness pubblico, non crea claim/actor, ACK, commit o provision ADK.
+
 ### CF-04 — Ricevuta storica di invio cifrato già sigillato (candidato)
 
 `recoverKindeCandidateStagedReceipt()` è disponibile soltanto nella

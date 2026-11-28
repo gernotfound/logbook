@@ -28,11 +28,14 @@ export type KindeCandidateCheckpointObservation = {
  */
 export async function inspectKindeCandidateCloudCheckpoint({
     stillCurrent, expected, send = fetch, browserCookies = () => document.cookie,
+    keyPurpose = 'sync',
 }: {
     stillCurrent: () => boolean;
     expected?: Readonly<Principal>;
     send?: typeof fetch;
     browserCookies?: () => string;
+    /** Evidence-only reads must not issue a missing cloud key. */
+    keyPurpose?: 'sync' | 'recovery-inspect';
 }): Promise<KindeCandidateCheckpointObservation> {
     const fence = captureKindeCandidateSessionFence({ stillCurrent, browserCookies });
     const current = () => {
@@ -58,7 +61,7 @@ export async function inspectKindeCandidateCloudCheckpoint({
     }
     const accountKey = await acquireCloudflareAccountKeyCandidate({
         expected: { uid, fenceEpoch, consentRevision: healthConsentRevision },
-        purpose: 'sync', stillCurrent: current,
+        purpose: keyPurpose, stillCurrent: current,
         csrfToken: () => fence.csrfToken, send,
     });
 

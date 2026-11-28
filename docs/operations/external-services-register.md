@@ -2,6 +2,22 @@
 
 **Stato di riferimento:** per l'ultimo readback Cloudflare consultare [quadro operativo](cloudflare-current-state.md). I valori sotto sono checkpoint datati, non una fotografia aggiornata automaticamente del provider.
 
+## CF-04 · Frontend identity-only verificato · 28 novembre 2026
+
+Dopo [PR #1521](https://github.com/gernotfound/logbook/pull/1521), `main`
+`ad59c77dbb255d27d5633ccfb2b336dbf4fe9e52`, v2.782.0:
+[Main Release Gate e CodeQL](https://github.com/gernotfound/logbook/actions/runs/46139946182)
+e [smoke HTTPS byte-esatto](https://github.com/gernotfound/logbook/actions/runs/46140117595)
+`success`. Readback provider di sola lettura: `thelogbook-frontend`
+deployment `35a4cc14-634f-4f76-bd8c-4837f2b33b44`, versione
+`3ac81715-3445-44f5-9af2-24e3fae93f1b` al 100%; binding
+`APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`, **nessun `D1_API`**. Non risultano
+attivate le API fitness sul frontend. Il passaggio candidato v2.783.0
+progetta una copia delle evidenze cloud/device su richiesta esplicita;
+non autorizza scritture provider, non è recovery SYNC-7D/7E e non
+modifica l'inventario servizi. Nessuna nuova scrittura sui provider in
+questo incremento di sola UI/letture.
+
 ## CF-04 · Frontend e confine di sincronizzazione · 28 novembre 2026
 
 Readback diretto e **di sola lettura** del provider dopo il rilascio

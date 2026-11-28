@@ -3,6 +3,7 @@ import type { useKindeAccountSession } from '../../contexts/auth/useKindeAccount
 import type { CloudReplicaControlSnapshot } from '../../lib/sync/cloudReplicaTransport';
 import type { CandidateReplicaRetirementWitness } from '../../lib/sync/kindeCandidateReplicaRetirementBridge';
 import type { CandidatePendingReplicaMutation } from '../../lib/sync/kindeCandidateReplicaCancellationBridge';
+import { KindeCandidateJsonPanel } from './KindeCandidateJsonPanel';
 import './kinde-replica-registry.css';
 
 type Session = ReturnType<typeof useKindeAccountSession>;
@@ -212,6 +213,16 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
                 {offlineState.result.kind === 'retired-pending' && <p role="alert"><strong>Recupero necessario:</strong> {offlineState.result.pendingOperations} operazioni restano nel journal locale senza ACK verificato della replica {offlineState.result.slot} (generazione {offlineState.result.generation}). La sua registrazione non è più utilizzabile ({offlineState.result.reason === 'retired' ? 'ritirata' : offlineState.result.reason === 'replaced' ? 'sostituita' : offlineState.result.reason === 'expired' ? 'scaduta' : 'non presente nel registro'}). Non eliminare l’archivio e non tentare di riattribuire automaticamente le modifiche: la riconciliazione causale è ancora da completare.</p>}
                 {offlineState.result.kind === 'retired-pending' && <button className="btn" type="button" disabled={disabled}
                     onClick={inspectRecovery}>Analizza la copia cloud e i possibili conflitti</button>}
+                {offlineState.result.kind === 'retired-pending' && <KindeCandidateJsonPanel
+                    label="Copia di sicurezza delle versioni per replica ritirata"
+                    prepareLabel="Prepara copia delle versioni offline e cloud"
+                    downloadLabel="Scarica le versioni separate"
+                    errorMessage="Impossibile preparare una copia verificata: sessione, registro o dati potrebbero essere cambiati. L’archivio locale non è stato modificato."
+                    sessionBusy={session.busy || disabled}
+                    prepareFile={session.prepareCandidateRetiredReplicaEvidence}>
+                    <p>Questa esportazione facoltativa conserva in un file JSON separato le versioni del cloud e di questo dispositivo, il journal non confermato e le bozze disponibili. <strong>Non recupera né sincronizza le modifiche</strong> e non sostituisce un backup ripristinabile.</p>
+                    <p>Il file contiene dati sanitari in chiaro: salvalo in un luogo protetto e non condividerlo. Dopo il download, conserva anche l’archivio originale su questo dispositivo: il browser non può confermare che il file sia stato effettivamente salvato.</p>
+                </KindeCandidateJsonPanel>}
                 <p>Il controllo del journal è di sola lettura: il cloud può evolvere successivamente. La verifica separata di una ricevuta può confermare solo un invio originale già effettuato, senza cancellare bozze o operazioni successive.</p>
             </div>}
             {receiptState === 'working' && <p role="status">Verifica della ricevuta storica in corso, senza ritrasmissioni al cloud…</p>}

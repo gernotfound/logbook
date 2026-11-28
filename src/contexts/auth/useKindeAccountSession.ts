@@ -520,6 +520,41 @@ export function useKindeAccountSession({
         }
     };
 
+    /** Retired-device evidence is optional and never replaces a recovery ACK. */
+    const prepareCandidateRetiredReplicaEvidence = async () => {
+        if (identityOnly || !candidatePreparationEnabled || !canAct()
+            || view.phase !== 'consent-confirmed' || !view.principal.emailVerified
+            || view.principal.healthConsentRevision < 1) throw new KindeCandidateBoundaryError();
+        const session = observed.current;
+        if (!session?.csrfToken || !session.stillCurrent()) throw new KindeCandidateBoundaryError();
+        const expected = {
+            uid: view.principal.uid, fenceEpoch: view.principal.fenceEpoch,
+            healthConsentRevision: view.principal.healthConsentRevision,
+        };
+        const current = () => viewIsCurrent() && session.stillCurrent();
+        busyRef.current = true;
+        setBusy(true);
+        try {
+            const [{ prepareKindeCandidateRetiredReplicaEvidenceJson },
+                { createKindeCandidatePreparedJson }, { isKindeAccountLocalFitnessClear }] = await Promise.all([
+                import('../../lib/auth/kindeCandidateRetiredReplicaEvidence'),
+                import('../../lib/auth/kindeCandidatePreparedJson'),
+                import('../../lib/sync/kindeOwnerLocalFitnessFence'),
+            ]);
+            const allowed = () => current()
+                && isKindeAccountLocalFitnessClear('user:' + expected.uid, expected.healthConsentRevision);
+            if (!allowed()) throw new KindeCandidateBoundaryError();
+            const file = await prepareKindeCandidateRetiredReplicaEvidenceJson({
+                expected, stillCurrent: allowed,
+            });
+            if (!allowed()) throw new KindeCandidateBoundaryError();
+            return createKindeCandidatePreparedJson(file, allowed);
+        } finally {
+            busyRef.current = false;
+            if (mounted.current) setBusy(false);
+        }
+    };
+
     /**
      * Destructive Kinde consent withdrawal remains behind a second,
      * explicit candidate lifecycle flag. The caller must have shown the
@@ -684,7 +719,7 @@ export function useKindeAccountSession({
         inspectCandidateReplicas, inspectCandidateOfflineReplicaJournal, inspectCandidateRetiredReplicaPreflight,
         recoverCandidateStagedReceipt,
         manageCandidateReplicaRetirement, manageCandidateReplicaCancellation,
-        prepareCandidateBackup,
+        prepareCandidateBackup, prepareCandidateRetiredReplicaEvidence,
         restoreCandidateBackup,
         withdrawCandidateConsent, reconcileCandidateWithdrawal, prepareCandidateRightsJson,
         retry: async () => { if (canAct()) await refresh(); },
