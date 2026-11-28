@@ -42,6 +42,7 @@ La selezione completa dei contratti resta in [AGENTS](../AGENTS.md). Qui si indi
 | [Setup Kinde](operations/kinde-auth-setup.md) | Onboarding provider, application type, autenticazione email/Google e gate ancora aperti | CF-03, solo configurazione Kinde |
 | [Quadro operativo Cloudflare](operations/cloudflare-current-state.md) | Mappa compatta di runtime attivo, candidati e prove mancanti | Tutti i task CF-00…09 |
 | [Inventario dati D1](operations/cloudflare-d1-data-inventory.json) | Classificazione tecnica verificata dallo schema sintetico; retention legale e provider separati | CF-06/CF-08: ownership, erasure, prove mantenute e restore |
+| [Decisione e prove di recupero D1](operations/cloudflare-d1-recovery.md) | Guida di sicurezza e matrice di prove, nessun restore autorizzato | CF-08: Time Travel, rollback multi-owner, KEK, RPO/RTO e limiti Free |
 | [Runbook Cloudflare](operations/cloudflare-workers-migration.md) | Procedure e checkpoint datati, non prova dello stato corrente | Workers/D1, Auth, privacy e release |
 | [Collaudi E2E e affidabilità](operations/e2e-reliability.md) | Guida corrente sui limiti delle prove; collaudi live separati | CI sintetica, dispositivi reali e perimetro Production |
 

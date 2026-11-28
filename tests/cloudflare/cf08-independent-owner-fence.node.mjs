@@ -10,6 +10,7 @@ import { runOneHealthErasureStep } from '../../cloudflare/jobs/health-erasure-wo
 import { inspectRestoredD1Census } from '../../cloudflare/recovery/restore-census.mjs';
 import { armIndependentAccountErasureDenial } from '../../cloudflare/recovery/account-erasure-denials.mjs';
 import { deriveKindeOwnerId } from '../../cloudflare/auth/kinde-owner-id.mjs';
+import { issueVerifiedSession } from '../../cloudflare/auth/session-issuer.mjs';
 import { createKindeErasureTargetCodec } from '../../cloudflare/jobs/kinde-erasure-target.mjs';
 import { createKindeErasureTargetWriter } from '../../cloudflare/jobs/kinde-erasure-target-store.mjs';
 import { acceptKindeAccountErasure, recordKindeAccountErasureIntent } from '../../cloudflare/jobs/kinde-account-erasure-requests.mjs';
@@ -358,6 +359,46 @@ void test('operator census scans both full D1 tables while sealed, not caller-se
   } finally {
     app.close();
     ledger.close();
+  }
+});
+
+void test('diagnostic census cannot prove that a whole-D1 rollback preserved another owner session', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'logbook-cf08-cross-owner-'));
+  const snapshotPath = join(dir, 'old-application.sqlite');
+  const app = new DatabaseSync(':memory:');
+  const ledger = new DatabaseSync(':memory:');
+  let restored;
+  try {
+    app.exec('PRAGMA foreign_keys=ON');
+    applyCurrentD1Schema(app);
+    applyCurrentD1RecoverySchema(ledger);
+    const recovery = new D1Sqlite(ledger);
+    for (const uid of ['owner-a', 'owner-b']) {
+      addOwner(app, uid);
+      await enrollIndependentOwner(recovery, uid);
+      await recordVerifiedInitialConsent(new D1Sqlite(app), recovery, uid);
+    }
+    app.prepare('VACUUM INTO ?').run(snapshotPath);
+
+    // A legitimate account session arrives after the snapshot; neither
+    // health-consent floor changes, so the independent ledger cannot witness it.
+    await issueVerifiedSession(new D1Sqlite(app), 'owner-b');
+    const sessions = db => db.prepare('SELECT COUNT(*) AS n FROM auth_sessions WHERE uid = ?')
+      .get('owner-b').n;
+    assert.equal(sessions(app), 1);
+
+    restored = new DatabaseSync(snapshotPath);
+    restored.exec('PRAGMA foreign_keys=ON');
+    assert.equal(sessions(restored), 0);
+    assert.deepEqual(await inspectRestoredD1Census(new D1Sqlite(restored), recovery), {
+      outcome: 'consistent-for-diagnostics-only',
+    });
+    assert.equal(sessions(app), 1);
+  } finally {
+    restored?.close();
+    app.close();
+    ledger.close();
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 

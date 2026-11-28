@@ -6,6 +6,9 @@ e il registro indipendente sigillato alla generazione 1. Dettagli nel
 [registro servizi](external-services-register.md#cf-08--inventario-d1-del-28-novembre-2026).
 La verifica dei metadati lascia aperta la prova di restore della
 [#1062](https://github.com/gernotfound/logbook/issues/1062).
+La [guida CF-08](cloudflare-d1-recovery.md) esplicita il limite del
+censimento rispetto alle modifiche degli altri owner e la matrice dei
+collaudi richiesti; non autorizza Time Travel su dati reali.
 
 Al checkpoint di [#1513](https://github.com/gernotfound/logbook/pull/1513)
 (`main` `0ae98626`), il provider riporta il deployment frontend
