@@ -166,11 +166,19 @@ export function preflightRetiredReplicaRecovery(
         mutation: { slot: previous.slot, action: 'checkpoint' },
     });
     const entry = parsed.replicas[previous.slot];
+    const baselineSlotSeq = Object.values(local.syncMetaByDocument).reduce((maximum, meta) => Math.max(
+        maximum, meta.clock[previous.slot] ?? 0,
+        meta.writer?.slot === previous.slot ? meta.writer.seq : 0,
+    ), 0);
     // A recorded incarnation must have a monotone successor in the same
-    // slot. Missing or contradictory lineage cannot rule out an old commit,
-    // even if the remote business baseline is still identical.
+    // slot. D1 forbids reusing a replica ID, and atomically advances lastSeq
+    // with each committed writer; that counter also survives slot reuse.
+    // Contradictory lineage cannot rule out an old commit, even if the remote
+    // business baseline is still identical.
     if (!entry || entry.generation < previous.generation
-        || (entry.generation === previous.generation && entry.replicaId !== previous.replicaId)) {
+        || (entry.generation === previous.generation && entry.replicaId !== previous.replicaId)
+        || (entry.generation > previous.generation && entry.replicaId === previous.replicaId)
+        || entry.lastSeq < baselineSlotSeq) {
         return { kind: 'reconciliation-required', reason: 'unverifiable-lineage' };
     }
     const sameIncarnation = entry.replicaId === previous.replicaId
