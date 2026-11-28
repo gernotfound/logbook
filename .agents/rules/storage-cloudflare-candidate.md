@@ -298,6 +298,27 @@ di acquisire membership, produrre una nuova sequenza o scrivere in D1.
 La modalità pubblica `identityOnly` non espone questa azione; nessun
 trasferimento reale né ACK è stato implementato, SYNC-7D/7E restano aperti.
 
+**Handoff causale candidato v2.789.0:** dopo una proposta
+`retiredReplicaTransferDraft` sigillata e intatta, una nuova richiesta di
+membership D1 può essere preparata solo sulla stessa revisione primaria e
+sugli stessi documenti AEAD autenticati. Il limite di cinque repliche è
+enforced dal server; il client non riusa l'ID ritirato. Un vecchio claim
+privo di escrow continua a rifiutare pending della replica precedente.
+La mutationId resta sigillata prima della rete; un 409 ambiguo non autorizza
+un rebase della proposta storica. Solo la receipt request-bound di claim,
+membership attiva e immutata, doppio control e full scan AEAD corrispondente
+agli originali consentono `adoptRetiredReplicaHandoff()`. Il nuovo actor
+viene sequenziato sul checkpoint remoto; il replay di **tutti** i documenti
+proposti deve essere identico nella proiezione business prima del CAS cifrato.
+Il CAS ricontrolla epoch/owner tramite guard, replica/journal di origine,
+intent e revisione osservata; rigetta edit concorrenti senza purge.
+L'escrow, con tutte le versioni originali, resta cifrato nell'archivio anche
+dopo un futuro ACK; l'ACK ordinario richiede una distinta receipt D1
+content-bound. L'accesso candidato non installa un owner fitness pubblico.
+La convergenza tra dispositivi reali, Safari, quota/limite dei grandi
+archivi e conservazione remota delle versioni originali **non sono provate**:
+SYNC-7D/7E e il GO fitness rimangono aperti.
+
 ### CF-04 — Barriera journal per il rientro di una replica ritirata (candidato 27/11/2026)
 
 La diagnostica candidata `inspectKindeCandidateOfflineReplicaJournal()` apre
@@ -316,7 +337,9 @@ al fitness pubblico; un recupero causale esplicito SYNC-7D/7E resta aperto.
 
 Prima di sigillare una nuova richiesta D1, `stageCloudflareReplicaClaim()`
 rifiuta un archivio che possiede sia una replica precedente sia operazioni
-offline nel journal. Una prima registrazione senza replica può invece
+offline nel journal, **eccetto** la richiesta esplicita provata dalla bozza
+cifrata immutabile di handoff, sulla stessa revisione e scansione AEAD.
+Una prima registrazione senza replica può invece
 conservare e successivamente inviare gli intenti già durevoli. Poiché una
 scheda concorrente può aggiungere modifiche **dopo** lo staging,
 `adoptReplicaCheckpoint()` rifiuta anche il commit di una nuova incarnazione
@@ -346,8 +369,10 @@ Lo stesso slot/ID/generazione può riconciliare il proprio checkpoint senza
 riscrivere le sequenze. La barriera non elimina il claim già sigillato,
 il journal o i dati device: il recupero richiede riconciliazione esplicita.
 Le adozioni legacy non Cloudflare rimangono regolate dal proprio contratto.
-Questa protezione **non implementa ancora** il rientro autorizzato dei
-pending né risolve i conflitti semantici: SYNC-7D resta aperto.
+Il rientro della bozza sigillata è una transizione separata e richiede
+`adoptRetiredReplicaHandoff()`, non la scorciatoia del checkpoint ordinario.
+Nessuna delle due operazioni autorizza da sola un ACK o il GO fitness:
+SYNC-7D resta aperto fino alle prove end-to-end.
 
 ### CF-04 — Annullamento esplicito di claim/retirement sigillati (candidato 25/11/2026)
 

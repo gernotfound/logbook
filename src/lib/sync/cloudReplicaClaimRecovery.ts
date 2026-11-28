@@ -13,6 +13,8 @@ import { checkpointFromCloudDocuments, type ReplicaIdentity } from './replicaPro
 import { updateArchiveRecord } from './secureArchiveRepository';
 import { mergeVectors, parseSyncMeta } from './semanticProjection';
 import { validateLocalEnvelope } from './localEnvelopeValidation';
+import { adoptRetiredReplicaHandoff, hasIntactRetiredReplicaHandoff, matchRetiredReplicaDraftCloud } from './retiredReplicaHandoff';
+import { getCachedCatalog } from '../catalog/catalogService';
 
 type Guard = () => boolean;
 type Transport = Pick<ReturnType<typeof createCloudflareReplicaTransport>, 'replayStoredClaim' | 'claimMutationOutcome' | 'control' | 'scanAll'>;
@@ -71,7 +73,10 @@ export async function stageCloudflareReplicaClaim(
         // A retired incarnation's offline operations cannot be assigned a new
         // causal identity until their original frontier has been reconciled.
         // The first claim (replica === null) must still carry new local edits.
-        if (local.replica && local.pending.length > 0) {
+        if (local.replica && local.pending.length > 0
+            && (!hasIntactRetiredReplicaHandoff(local)
+                || local.retiredReplicaTransferDraft?.cloudRevision !== control.revision
+                || !matchRetiredReplicaDraftCloud(local.retiredReplicaTransferDraft, verified))) {
             throw new Error('Replica precedente con journal offline: rientro D1 sospeso per riconciliazione esplicita.');
         }
         const input = parseCloudflareReplicaClaimIntent({
@@ -197,6 +202,8 @@ export async function resumeCloudflareReplicaClaim(
     if (!before) throw new Error('Archivio locale assente: claim sospeso.');
     const intent = before.cloudflareReplicaClaim;
     if (!intent) return 'idle';
+    const transfer = before.pending.length > 0 && hasIntactRetiredReplicaHandoff(before)
+        && before.retiredReplicaTransferDraft?.cloudRevision === intent.expectedRevision;
     if (before.cloudflareReplicaCancellation) return 'reconciliation-required';
     if (before.cloudIntegrityFence || before.cloudflareDelivery || before.cloudflareReplicaRetirement
         || before.consentRevision !== intent.consentRevision) {
@@ -209,7 +216,7 @@ export async function resumeCloudflareReplicaClaim(
     // Only a primary-ledger proof of the original immutable commit guarantees
     // replay cannot make a new membership write. Adoption still needs the
     // original incarnation and the final IndexedDB fence.
-    if (intent.currentReplica && before.pending.length > 0) {
+    if (intent.currentReplica && before.pending.length > 0 && !transfer) {
         if (!equal(tuple(before.replica), intent.currentReplica)) return 'reconciliation-required';
         const control = await transport.control();
         current(guard);
@@ -238,6 +245,7 @@ export async function resumeCloudflareReplicaClaim(
         if (error instanceof CloudReplicaCapacityError) throw error;
         if (!(error instanceof CloudReplicaMutationReconciliationRequiredError)) {
             if (error instanceof CloudReplicaTransportError && error.status === 409) {
+                if (transfer) return 'reconciliation-required';
                 return rebaseUncommittedClaim(owner, uid, intent, accountKey, transport, csrfToken, guard);
             }
             throw error;
@@ -261,7 +269,8 @@ export async function resumeCloudflareReplicaClaim(
         if (!latest || !equal(latest.cloudflareReplicaClaim, intent)
             || !equal(tuple(latest.replica), intent.currentReplica)
             || latest.cloudflareReplicaCancellation || latest.cloudIntegrityFence) return 'reconciliation-required';
-        if (latest.pending.length > 0
+        if (transfer && !hasIntactRetiredReplicaHandoff(latest)) return 'reconciliation-required';
+        if (latest.pending.length > 0 && !transfer
             && (receipt.action !== 'checkpoint' || !equal(tuple(receipt.replica), intent.currentReplica))) {
             return 'reconciliation-required';
         }
@@ -301,6 +310,7 @@ export async function resumeCloudflareReplicaClaim(
     if (entry.leaseUntilMs <= Date.now()) return 'reconciliation-required';
     const liveMembership = () => guard() && entry.leaseUntilMs > Date.now();
     if (!equal(verifiedClock, intent.checkpointClock)) {
+        if (transfer) return 'reconciliation-required';
         // The original claim committed, but independently committed documents
         // advanced. Restage a new request only while the original membership
         // and its receipt metadata still match; no current grant is inferred.
@@ -311,6 +321,28 @@ export async function resumeCloudflareReplicaClaim(
         docMap.set(path, { _sync: doc.sync });
     }
     const checkpoint = checkpointFromCloudDocuments(docMap);
+    if (transfer) {
+        const latest = await readLocal(owner);
+        current(liveMembership);
+        if (!latest || !equal(latest.cloudflareReplicaClaim, intent)
+            || !hasIntactRetiredReplicaHandoff(latest)
+            || !latest.retiredReplicaTransferDraft
+            || !matchRetiredReplicaDraftCloud(latest.retiredReplicaTransferDraft, verified)
+            || receipt.action === 'checkpoint' || !equal(tuple(latest.replica), intent.currentReplica)) {
+            return 'reconciliation-required';
+        }
+        try {
+            const catalog = await getCachedCatalog();
+            current(liveMembership);
+            await adoptRetiredReplicaHandoff(owner, { identity: receipt.replica, baseSeq: receipt.baseSeq },
+                verified, catalog, intent.mutationId, latest, liveMembership);
+        } catch (error) {
+            if (error instanceof ReplicaPendingReconciliationRequiredError) return 'reconciliation-required';
+            throw error;
+        }
+        current(liveMembership);
+        return 'adopted';
+    }
     try {
         await adoptReplicaCheckpoint(owner, {
             identity: receipt.replica, baseSeq: receipt.baseSeq,

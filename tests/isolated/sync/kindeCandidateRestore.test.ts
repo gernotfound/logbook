@@ -245,9 +245,11 @@ describe('CF-05 Kinde Schema 3 restore to encrypted IndexedDB and D1', () => {
             const after = await readLocal(owner);
             expect(after?.data.nutrition?.['2025-09-01']?.weight).toBe(78);
             expect(after?.baseline.nutrition?.['2025-09-01']).toBeUndefined();
-            // The final day is represented by two field-level operations.
-            expect(after?.pending.map(op => op.docPath)).toEqual([
-                'nutrition_months/2025-09', 'nutrition_months/2025-09',
+            // Empty keyed collections are normalized without ancestor stamps;
+            // only actual business edits occupy the causal journal.
+            expect(after?.pending.map(op => [op.docPath, op.path])).toEqual([
+                ['nutrition_months/2025-09', ['2025-09-01', 'date']],
+                ['nutrition_months/2025-09', ['2025-09-01', 'weight']],
             ]);
             expect(outcome).toEqual({ kind: 'local-pending', pendingCount: 2 });
             grant.release();

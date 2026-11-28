@@ -10,6 +10,7 @@ import { isKindeAccountLocalFitnessClear } from './kindeOwnerLocalFitnessFence';
 import { readLocal } from './localArchiveBootstrap';
 import { userOwner } from './owner';
 import { createAndMigrateVault } from './secureArchiveMigration';
+import { hasIntactRetiredReplicaHandoff } from './retiredReplicaHandoff';
 
 type Confirmed = Extract<KindeCandidateAccess, { kind: 'consent-confirmed' }>;
 type Principal = Confirmed['principal'];
@@ -99,7 +100,10 @@ export async function prepareKindeCandidateOwner({
         // Hydration correctly refuses to overwrite a baseline while a claim is
         // staged. Recover that exact request before attempting another scan.
         const recovering = Boolean(previous?.cloudflareReplicaClaim);
-        let hydrated = recovering ? null : await hydrate();
+        // Hydrating the retired actor before its signed handoff would replay
+        // its historical operations against a different cloud frontier.
+        const transferring = Boolean(previous && hasIntactRetiredReplicaHandoff(previous));
+        let hydrated = recovering || transferring ? null : await hydrate();
         const local = hydrated?.envelope ?? previous;
         if (!scoped() || !local || local.consentRevision !== principal.healthConsentRevision
             || !equal(local.data.legalConsent, first.legalConsent)) throw new KindeCandidateBoundaryError();
@@ -108,7 +112,7 @@ export async function prepareKindeCandidateOwner({
             expected: principal, stillCurrent: scoped, send, browserCookies,
         });
         if (!scoped()) throw new KindeCandidateBoundaryError();
-        if (recovering && (replicaOutcome === 'adopted' || replicaOutcome === 'already-active')) {
+        if ((recovering || transferring) && (replicaOutcome === 'adopted' || replicaOutcome === 'already-active')) {
             hydrated = await hydrate();
         }
         const final = await readKindeCandidateAccess(pinnedRequest);

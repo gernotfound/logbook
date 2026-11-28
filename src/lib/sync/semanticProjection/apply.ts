@@ -11,6 +11,14 @@ function normalizeDomainData(docs: Map<string, DocumentData>) {
     for (const [path, doc] of docs.entries()) {
         if (path.startsWith('nutrition_months/')) {
             for (const [, dayData] of Object.entries(doc)) {
+                if (dayData && typeof dayData === 'object' && !Array.isArray(dayData)) {
+                    // Schema defaults are business representation, not causal
+                    // writes. Stamping an empty keyed parent would mask a
+                    // concurrent meal/intake from another device.
+                    for (const key of ['meals', 'supplementsIntake', 'cardioSessions']) {
+                        if (!Object.hasOwn(dayData, key)) setOwnDataProperty(dayData as Record<string, unknown>, key, []);
+                    }
+                }
                 if (dayData && typeof dayData === 'object' && Array.isArray((dayData as any).meals)) {
                     const totals = calculateLoggedMealTotals((dayData as any).meals);
                     (dayData as any).kcal = totals.kcal;
@@ -23,6 +31,7 @@ function normalizeDomainData(docs: Map<string, DocumentData>) {
             for (const [id, workoutData] of Object.entries(doc)) {
                 if (id === '_sync') continue;
                 if (!workoutData || typeof workoutData !== 'object' || !(workoutData as any).id) delete doc[id];
+                else if (!Object.hasOwn(workoutData, 'exercises')) setOwnDataProperty(workoutData as Record<string, unknown>, 'exercises', []);
             }
         }
     }

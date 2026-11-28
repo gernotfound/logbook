@@ -19,6 +19,11 @@ import { materializeRetiredReplicaConflictChoices, previewRetiredReplicaSelected
 import { previewRetiredReplicaTransferCoverage } from '../../../src/lib/sync/retiredReplicaTransferCoverage';
 import { buildRetiredReplicaTransferDraft, stageRetiredReplicaTransferDraft } from '../../../src/lib/sync/retiredReplicaTransferDraft';
 import { parseRetiredReplicaTransferDraft } from '../../../src/lib/sync/retiredReplicaTransferDraftRecord';
+import { adoptRetiredReplicaHandoff, matchRetiredReplicaDraftCloud } from '../../../src/lib/sync/retiredReplicaHandoff';
+import { stageCloudflareReplicaClaim, resumeCloudflareReplicaClaim } from '../../../src/lib/sync/cloudReplicaClaimRecovery';
+import { prepareCloudflareCommit } from '../../../src/lib/sync/cloudReplicaCommit';
+import { readAccountCloudDocument } from '../../../src/lib/sync/cloudDocumentRead';
+import { CloudReplicaCapacityError } from '../../../src/lib/sync/cloudReplicaTransport';
 import { parseRetiredReplicaConflictDecisions } from '../../../src/lib/sync/retiredReplicaConflictDecisionRecord';
 import { inspectRetiredReplicaConflictDecisions, recordRetiredReplicaConflictDecision } from '../../../src/lib/sync/retiredReplicaConflictDecisions';
 import { REPLICA_CLOCK_SKEW_MARGIN_MS } from '../../../src/lib/sync/replicaProtocol';
@@ -497,6 +502,228 @@ describe('retired replica encrypted transfer draft, not claim or ACK', () => {
         expect(later.retiredReplicaTransferDraft).toEqual(plan);
         expect(later.retiredReplicaConflictCapsule).toEqual(capsule);
         expect(later.pending.length).toBeGreaterThan(0);
+    });
+});
+
+describe('retired replica handoff to a new causal actor', () => {
+    const successor = { slot: 's04', replicaId: 'new-device-replica', generation: 1,
+        leaseUntilMs: Date.now() + 86_400_000, checkpointAtMs: Date.now() };
+
+    it('normalizes empty new-day collections without stamping over a concurrent meal', () => {
+        const path = 'nutrition_months/2026-11';
+        const date = '2026-11-14';
+        const base = new Map([[path, {}]]);
+        const empty = new Map([[path, { [date]: { date, weight: 70,
+            meals: [], supplementsIntake: [], cardioSessions: [] } }]]);
+        const withMeal = new Map([[path, { [date]: { date, weight: 70, meals: [{
+            id: 'meal-peer', name: 'Pasto', meal: 'pranzo', quantity: 1,
+            kcal: 100, carbs: 10, pro: 5, fat: 3,
+        }], supplementsIntake: [], cardioSessions: [] } }]]);
+        const mine = diffDocuments(base, empty, 's03', 1, { s03: 1 });
+        const peer = diffDocuments(base, withMeal, 's01', 1, { s01: 1 });
+        expect(mine.some(op => op.path[1] === 'meals')).toBe(false);
+        for (const ordered of [[...mine, ...peer], [...peer, ...mine]]) {
+            const result = applySemanticOperations(base, ordered).documents.get(path)?.[date];
+            expect(result).toMatchObject({ weight: 70, meals: [expect.objectContaining({ id: 'meal-peer' })],
+                supplementsIntake: [], cardioSessions: [] });
+        }
+    });
+
+    async function staged() {
+        const original = (await readLocal(owner))!;
+        const cloud = await checkpoint();
+        const draft = buildRetiredReplicaTransferDraft(uid, original, cloud, control(), catalog);
+        await stageRetiredReplicaTransferDraft(owner, original, draft, () => true);
+        const prepared = (await readLocal(owner))!;
+        const intent = await stageCloudflareReplicaClaim(owner, cloud, control(), successor.replicaId,
+            () => true, prepared.revision);
+        return { cloud, draft, intent, source: (await readLocal(owner))! };
+    }
+
+    it('atomically resequences a recovered business edit and preserves the old journal across a reopened vault', async () => {
+        const { cloud, draft, intent, source } = await staged();
+        lockAllVaults();
+        const grant = await (await import('../../../src/lib/sync/secureArchiveSession')).unlockVaultForOwner(owner);
+        try {
+            const reopened = (await readLocal(owner))!;
+            expect(reopened).toEqual(source);
+            const after = await adoptRetiredReplicaHandoff(owner, { identity: successor, baseSeq: 0 },
+                cloud, catalog, intent.mutationId, reopened, () => true);
+            expect(after.replica).toEqual(successor);
+            expect(after.actorId).toBe('s04');
+            expect(after.actorSeq).toBeGreaterThan(0);
+            expect(after.pending).toEqual(expect.arrayContaining([expect.objectContaining({ actorId: 's04' })]));
+            expect(after.data.profile?.height).toBe('171');
+            expect(after.baseline.profile?.height).toBe('170');
+            expect(after.cloudflareReplicaClaim).toBeUndefined();
+            expect(after.retiredReplicaTransferDraft).toEqual(draft);
+            expect(after.retiredReplicaTransferDraft?.sourcePending).toEqual(source.pending);
+            expect((await readLocal(owner))!).toEqual(after);
+            expect(await get<string>(storageKey)).not.toContain('retiredReplicaTransferDraft');
+        } finally { grant.release(); }
+    });
+
+    it('rejects stale snapshots, foreign claim, changed local journal and session changes without touching ciphertext', async () => {
+        const { cloud, draft, intent, source } = await staged();
+        expect(matchRetiredReplicaDraftCloud(draft, cloud)).toBe(true);
+        const old = await get(storageKey);
+        const wrong = { ...cloud, documents: new Map(cloud.documents) };
+        wrong.documents.set('', { ...cloud.documents.get('')!, business: { profile: { height: '999' } } });
+        await expect(adoptRetiredReplicaHandoff(owner, { identity: successor, baseSeq: 0 },
+            wrong, catalog, intent.mutationId, source, () => true)).rejects.toThrow();
+        await expect(adoptRetiredReplicaHandoff(owner, { identity: successor, baseSeq: 0 },
+            cloud, catalog, 'different-claim', source, () => true)).rejects.toThrow();
+        await expect(adoptRetiredReplicaHandoff(owner, { identity: successor, baseSeq: 0 },
+            cloud, catalog, intent.mutationId, source, () => false)).rejects.toThrow();
+        expect(await get(storageKey)).toBe(old);
+        await commitLocal(owner, data(172), source.data);
+        const changed = await get(storageKey);
+        await expect(adoptRetiredReplicaHandoff(owner, { identity: successor, baseSeq: 0 },
+            cloud, catalog, intent.mutationId, source, () => true)).rejects.toThrow(/concorrente/);
+        expect(await get(storageKey)).toBe(changed);
+    });
+
+    it('replays the exact staged D1 claim, checks the live membership and re-sequences only after AEAD proof', async () => {
+        const { cloud, draft, intent } = await staged();
+        const replicaControl = { ...control(), revision: 9, replicas: {
+            ...control().replicas,
+            s04: { ...successor, status: 'active' as const, lastSeq: 0, checkpointClock: {} },
+        } };
+        const transport = {
+            replayStoredClaim: vi.fn(async () => ({ mutationId: intent.mutationId,
+                action: 'register' as const, revision: 9, currentRevision: 9,
+                reconciliationRequired: false, replayed: true, baseSeq: 0, replica: successor })),
+            claimMutationOutcome: vi.fn(),
+            control: vi.fn(async () => replicaControl),
+            scanAll: vi.fn(async () => ({ revision: 9, fenceEpoch: 5, consentRevision: 1,
+                documents: [...cloud.documents].map(([path, document]) => ({ path, revision: 9,
+                    document: sealCloudDocument(accountKey, uid, path, document.business, parseSyncMeta(document.sync)) })),
+            })),
+        };
+        const outcome = await resumeCloudflareReplicaClaim(owner, accountKey, transport,
+            'csrf-token', () => true);
+        expect(outcome).toBe('adopted');
+        expect(transport.replayStoredClaim).toHaveBeenCalledWith(intent, 'csrf-token');
+        expect(transport.claimMutationOutcome).not.toHaveBeenCalled();
+        expect(transport.control).toHaveBeenCalledTimes(2);
+        const saved = (await readLocal(owner))!;
+        expect(saved.replica).toEqual(successor);
+        expect(saved.pending.every(op => op.actorId === 's04')).toBe(true);
+        expect(saved.retiredReplicaTransferDraft).toEqual(draft);
+        const { batch } = prepareCloudflareCommit(uid, saved.pending, {
+            revision: 9, fenceEpoch: 5, consentRevision: 1,
+            documents: [{ path: '', revision: 9, document: sealCloudDocument(accountKey, uid, '',
+                cloud.documents.get('')!.business, parseSyncMeta(cloud.documents.get('')!.sync)) }],
+        }, replicaControl, successor, 'handoff-batch-0001', accountKey, () => true);
+        expect(batch.replica).toEqual({ slot: 's04', replicaId: successor.replicaId, generation: 1 });
+        expect(batch.lastSeq).toBe(saved.actorSeq);
+        expect(readAccountCloudDocument(batch.documents[0].document, 'retired handoff test', uid, '', accountKey)
+            .business.profile).toMatchObject({ height: '171' });
+    });
+
+    it('stops after an unexpected concurrent old-actor edit even if the claim response was successful', async () => {
+        const { cloud, intent, source } = await staged();
+        const transport = {
+            replayStoredClaim: vi.fn(async () => {
+                await commitLocal(owner, data(172), source.data);
+                return { mutationId: intent.mutationId, action: 'register' as const,
+                    revision: 9, currentRevision: 9, reconciliationRequired: false,
+                    replayed: false, baseSeq: 0, replica: successor };
+            }),
+            claimMutationOutcome: vi.fn(),
+            control: vi.fn(async () => ({ ...control(), revision: 9, replicas: {
+                ...control().replicas,
+                s04: { ...successor, status: 'active' as const, lastSeq: 0, checkpointClock: {} },
+            } })),
+            scanAll: vi.fn(async () => ({ revision: 9, fenceEpoch: 5, consentRevision: 1,
+                documents: [...cloud.documents].map(([path, document]) => ({ path, revision: 9,
+                    document: sealCloudDocument(accountKey, uid, path, document.business, parseSyncMeta(document.sync)) })),
+            })),
+        };
+        expect(await resumeCloudflareReplicaClaim(owner, accountKey, transport, 'csrf-token', () => true))
+            .toBe('reconciliation-required');
+        expect(transport.scanAll).not.toHaveBeenCalled();
+        const after = (await readLocal(owner))!;
+        expect(after.replica).toEqual(source.replica);
+        expect(after.cloudflareReplicaClaim).toEqual(intent);
+        expect(after.data.profile?.height).toBe('172');
+    });
+
+    it('keeps the old encrypted actor, journal, and exact claim when D1 rejects the sixth active replica', async () => {
+        const { intent, source } = await staged();
+        const sealed = await get(storageKey);
+        const transport = {
+            replayStoredClaim: vi.fn(async () => { throw new CloudReplicaCapacityError(); }),
+            claimMutationOutcome: vi.fn(), control: vi.fn(), scanAll: vi.fn(),
+        };
+        await expect(resumeCloudflareReplicaClaim(owner, accountKey, transport, 'csrf-token', () => true))
+            .rejects.toBeInstanceOf(CloudReplicaCapacityError);
+        expect(transport.replayStoredClaim).toHaveBeenCalledWith(intent, 'csrf-token');
+        expect(transport.scanAll).not.toHaveBeenCalled();
+        expect(await get(storageKey)).toBe(sealed);
+        expect((await readLocal(owner))!).toEqual(source);
+    });
+
+    it('re-sequences the chosen same-day combination, keeping the three historic versions in encrypted escrow', async () => {
+        const date = '2026-11-13';
+        const baseline = UserDataSchema.parse({ ...data(170), nutrition: {
+            [date]: { date, weight: 70, sleepHours: '07:00' },
+        } }) as unknown as UserData;
+        const desired = UserDataSchema.parse({ ...baseline, nutrition: {
+            [date]: { ...baseline.nutrition![date], weight: 71 },
+        } }) as unknown as UserData;
+        const remote = UserDataSchema.parse({ ...baseline, nutrition: {
+            [date]: { ...baseline.nutrition![date], sleepHours: '08:00' },
+        } }) as unknown as UserData;
+        const sources = await competingEntitySources({ baseline, desired, remote,
+            changedPath: ['nutrition_months/2026-11', date, 'sleepHours'] });
+        await updateArchiveRecord(owner, () => sources.local);
+        const capsule = buildRetiredReplicaConflictCapsule(uid, sources.local, sources.cloud, control(), catalog);
+        await stageRetiredReplicaConflictCapsule(owner, sources.local, capsule, () => true);
+        const chosen = (await readLocal(owner))!;
+        const identity = { kind: 'nutrition' as const, entityId: date };
+        await recordRetiredReplicaConflictDecision(owner, chosen.revision,
+            { ...identity, choice: 'combined' }, identity, legal, expectedFrontier, () => true);
+        const withChoice = (await readLocal(owner))!;
+        const draft = buildRetiredReplicaTransferDraft(uid, withChoice, sources.cloud, control(), catalog);
+        await stageRetiredReplicaTransferDraft(owner, withChoice, draft, () => true);
+        const escrow = (await readLocal(owner))!;
+        const intent = await stageCloudflareReplicaClaim(owner, sources.cloud, control(), successor.replicaId,
+            () => true, escrow.revision);
+        const saved = await adoptRetiredReplicaHandoff(owner, { identity: successor, baseSeq: 0 },
+            sources.cloud, catalog, intent.mutationId, (await readLocal(owner))!, () => true);
+        expect(saved.data.nutrition?.[date]).toMatchObject({ weight: 71, sleepHours: '08:00' });
+        expect(saved.baseline.nutrition?.[date]).toMatchObject({ weight: 70, sleepHours: '08:00' });
+        expect(saved.pending.length).toBeGreaterThan(0);
+        expect(saved.pending.every(op => op.actorId === 's04')).toBe(true);
+        expect(saved.retiredReplicaConflictCapsule?.entries[0]).toMatchObject({
+            baseline: { value: { weight: 70 } }, device: { value: { weight: 71 } },
+            cloud: { value: { sleepHours: '08:00' } },
+        });
+        expect(saved.retiredReplicaTransferDraft).toEqual(draft);
+    });
+
+    it('creates a new month with its own causal pending operation when the recovered workout was not in the cloud', async () => {
+        const original = (await readLocal(owner))!;
+        const workout = { id: 'new-workout', date: '2026-12-01', sessionNote: 'offline', exercises: [] };
+        const desired = UserDataSchema.parse({ ...original.data, history: [workout] }) as unknown as UserData;
+        await commitLocal(owner, desired, original.data);
+        const before = (await readLocal(owner))!;
+        const cloud = await checkpoint();
+        expect(applySemanticOperations(projectDocuments(before.baseline, catalog), before.pending, before.syncMetaByDocument).documents)
+            .toEqual(projectDocuments(before.data, catalog));
+        expect(preflightRetiredReplicaRecovery(uid, before, cloud, control(), catalog)).toEqual({ kind: 'baseline-unchanged', pendingOperations: before.pending.length, cloudRevision: 8 });
+        const draft = buildRetiredReplicaTransferDraft(uid, before, cloud, control(), catalog);
+        expect(draft.proposedDocuments.some(doc => doc.path === 'history_months/2026-12')).toBe(true);
+        await stageRetiredReplicaTransferDraft(owner, before, draft, () => true);
+        const escrow = (await readLocal(owner))!;
+        const intent = await stageCloudflareReplicaClaim(owner, cloud, control(), successor.replicaId,
+            () => true, escrow.revision);
+        const adopted = await adoptRetiredReplicaHandoff(owner, { identity: successor, baseSeq: 0 },
+            cloud, catalog, intent.mutationId, (await readLocal(owner))!, () => true);
+        expect(adopted.data.history).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'new-workout' })]));
+        expect(adopted.pending.some(op => op.docPath === 'history_months/2026-12')).toBe(true);
+        expect(adopted.completeMonths).toContain('2026-12');
     });
 });
 
