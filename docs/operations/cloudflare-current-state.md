@@ -1,24 +1,25 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
-**Ultimo rilascio verificato 28/11/2026, CF-04 #1521:** [`main`
-`ad59c77dbb255d27d5633ccfb2b336dbf4fe9e52`](https://github.com/gernotfound/logbook/commit/ad59c77dbb255d27d5633ccfb2b336dbf4fe9e52),
-v2.782.0, con [CI PR](https://github.com/gernotfound/logbook/actions/runs/46139640867),
-[Main Release Gate e CodeQL](https://github.com/gernotfound/logbook/actions/runs/46139946182)
-e [Static Assets/smoke byte-esatto](https://github.com/gernotfound/logbook/actions/runs/46140117595)
+**Ultimo rilascio verificato prima di questo candidato, 28/11/2026, CF-04 #1522:** [`main`
+`dd108cc46197e807e3fa3331a34474abde488e6c`](https://github.com/gernotfound/logbook/commit/dd108cc46197e807e3fa3331a34474abde488e6c),
+v2.783.0, con [CI PR Canonical/CodeQL e otto E2E](https://github.com/gernotfound/logbook/actions/runs/46141263688),
+[Main Release Gate e CodeQL](https://github.com/gernotfound/logbook/actions/runs/46141573639)
+e [Static Assets/smoke HTTPS byte-esatto](https://github.com/gernotfound/logbook/actions/runs/46141775983)
 riusciti. Il readback Cloudflare ha riportato `thelogbook-frontend`
-deployment `35a4cc14-634f-4f76-bd8c-4837f2b33b44`, versione
-`3ac81715-3445-44f5-9af2-24e3fae93f1b` al 100%, soli binding
+deployment `12e27812-46d5-48c8-89f1-4604cc3eadf3`, versione
+`e70e1f8e-3d84-471d-8b77-861490190d0b` al 100%, soli binding
 `APP_ORIGIN`, `ASSETS`, `KINDE_HTTP`, senza `D1_API`. Il cambiamento
-rafforza il preflight causale della replica ritirata; **non** completa
+conserva una copia JSON volontaria delle versioni separate; **non** completa
 SYNC-7D/7E. Il frontend resta identity-only e il fitness è **NO-GO**.
 
-**Incremento in lavorazione, v2.783.0:** un export candidato volontario
-di evidenze conserva versioni cloud e device separatamente, con journal e
-bozze locali, soltanto dopo verifica di replica ritirata. Non è un backup
-importabile, non crea chiavi e non equivale a recupero/sincronizzazione.
-I risultati di PR, CI e rilascio di questo incremento devono essere
-registrati separatamente dopo verifica exact-SHA; il presente paragrafo
-non ne attesta ancora la pubblicazione.
+**Incremento candidato v2.784.0 (non ancora attestato qui come integrato):**
+la nuova capsula owner-scoped conserva nell'archivio cifrato del dispositivo
+le alternative della stessa giornata o seduta, provenienza e journal
+originale, dopo full scan AEAD e commit locale a revisione esatta. La
+schermata Kinde candidata offre un gesto esplicito; non crea un nuovo actor,
+non sceglie un winner e non invia/ACKa modifiche a D1. Test locali e futuri
+gate exact-SHA sono evidenze separate; trasferimento SYNC-7D, risoluzione
+esplicita SYNC-7E e GO fitness restano aperti.
 
 **Checkpoint verificato 28/11/2026, CF-04 #1520:** [`main`
 `d211565e38e0422250e871ef4e0aa107f464de7e`](https://github.com/gernotfound/logbook/commit/d211565e38e0422250e871ef4e0aa107f464de7e),

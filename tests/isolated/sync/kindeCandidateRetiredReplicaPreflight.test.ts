@@ -8,10 +8,14 @@ import { sealCloudDocument } from '../../../src/lib/sync/cloudDocumentCipher';
 import { projectDocuments } from '../../../src/lib/sync/documentProjection';
 import { inspectKindeCandidateRetiredReplicaPreflight } from '../../../src/lib/sync/kindeCandidateRetiredReplicaPreflight';
 import { inspectKindeCandidateRetiredReplicaWithExistingKey } from '../../../src/lib/sync/kindeCandidateRetiredReplicaReadOnly';
+import { preserveKindeCandidateRetiredReplicaConflicts } from '../../../src/lib/sync/kindeCandidateRetiredReplicaConflictRecovery';
 import { adoptReplicaCheckpoint, commitLocal, initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults, unlockVaultForOwner, vaultControlKey } from '../../../src/lib/sync/secureArchiveSession';
 import type { SyncMeta } from '../../../src/lib/sync/semanticProjection';
+import { diffDocuments } from '../../../src/lib/sync/semanticProjection';
+import { updateArchiveRecord } from '../../../src/lib/sync/secureArchiveRepository';
+import { validateLocalEnvelope } from '../../../src/lib/sync/localEnvelopeValidation';
 import type { CachedGlobalCatalog, UserData } from '../../../src/types';
 
 const catalogSource = vi.hoisted(() => ({ read: vi.fn() }));
@@ -74,10 +78,11 @@ function network({
         if (path === '/v1/sync/control') return response(controlReads++ === 0 ? before : after);
         if (path === '/v1/sync/scan') {
             if (onScan) await onScan();
-            const business = projectDocuments(remote, catalog).get('')!;
+            const documents = projectDocuments(remote, catalog);
             return response({ revision: before.revision, fenceEpoch: 5, consentRevision: 1,
-                documents: [{ path: '', revision: before.revision,
-                    document: sealCloudDocument(key, corrupt ? 'wrong-owner' : uid, '', business, meta) }],
+                documents: [...documents].map(([docPath, business]) => ({ path: docPath,
+                    revision: before.revision,
+                    document: sealCloudDocument(key, corrupt ? 'wrong-owner' : uid, docPath, business, meta) })),
                 complete: true, nextAfter: null });
         }
         throw Error('Unexpected mutation or key provisioning: ' + path);
@@ -264,5 +269,68 @@ describe('Kinde candidate: authenticated retired replica preflight', () => {
         })).rejects.toThrow();
         expect(await get(storage)).toBe(sealed);
         expect(vi.mocked(send).mock.calls.some(([input]) => String(input).startsWith('/v1/sync/'))).toBe(false);
+    });
+
+    it('saves authenticated competing day versions only in the encrypted owner vault', async () => {
+        const original = (await readLocal(owner))!;
+        const baseline = UserDataSchema.parse({ ...data(170), nutrition: {
+            '2026-11-13': { date: '2026-11-13', weight: 70, sleepHours: '07:00' },
+        } }) as unknown as UserData;
+        const desired = UserDataSchema.parse({ ...baseline, nutrition: {
+            '2026-11-13': { ...baseline.nutrition!['2026-11-13'], weight: 71 },
+        } }) as unknown as UserData;
+        const remote = UserDataSchema.parse({ ...baseline, nutrition: {
+            '2026-11-13': { ...baseline.nutrition!['2026-11-13'], sleepHours: '08:00' },
+        } }) as unknown as UserData;
+        const seq = original.actorSeq + 1;
+        const local = validateLocalEnvelope({ ...original, baseline, data: desired,
+            actorSeq: seq, clock: { ...original.clock, [original.actorId]: seq },
+            pending: diffDocuments(projectDocuments(baseline, catalog), projectDocuments(desired, catalog),
+                original.actorId, seq, { ...original.clock, [original.actorId]: seq }),
+            syncMetaByDocument: { '': meta, 'nutrition_months/2026-11': meta },
+        }, owner)!;
+        await updateArchiveRecord(owner, () => local);
+        const transient = key.slice();
+        accountKeySource.acquire.mockImplementation(async (request: { purpose: string }) => {
+            expect(request.purpose).toBe('recovery-inspect');
+            return transient;
+        });
+        const send = network({ remote });
+        const result = await preserveKindeCandidateRetiredReplicaConflicts({
+            expected, stillCurrent: () => true, send,
+            browserCookies: () => '__Host-logbook_csrf=' + csrf,
+        });
+        expect(result).toEqual({ preservedEntities: 1, cloudRevision: 8 });
+        const reopened = await unlockVaultForOwner(owner);
+        const after = (await readLocal(owner))!;
+        expect(after.pending).toEqual(local.pending);
+        expect(after.replica).toEqual(local.replica);
+        expect(after.retiredReplicaConflictCapsule?.entries[0]).toMatchObject({
+            kind: 'nutrition', entityId: '2026-11-13',
+            device: { value: { weight: 71 } }, cloud: { value: { sleepHours: '08:00' } },
+        });
+        reopened.release();
+        expect(Array.from(transient)).toEqual(Array(32).fill(0));
+        expect(vi.mocked(send).mock.calls.map(([input]) => String(input)).every(path =>
+            !/cloud-key|commit|claim|retire|receipt/.test(path))).toBe(true);
+    });
+
+    it('does not stage a stale conflict after a concurrent offline edit during the authenticated scan', async () => {
+        const before = (await readLocal(owner))!;
+        const send = network({ remote: data(172), onScan: async () => {
+            await commitLocal(owner, data(172), data(171));
+        } });
+        const transient = key.slice();
+        accountKeySource.acquire.mockResolvedValue(transient);
+        await expect(preserveKindeCandidateRetiredReplicaConflicts({
+            expected, stillCurrent: () => true, send,
+            browserCookies: () => '__Host-logbook_csrf=' + csrf,
+        })).rejects.toThrow();
+        const reopened = await unlockVaultForOwner(owner);
+        const after = (await readLocal(owner))!;
+        expect(after.pending.length).toBeGreaterThan(before.pending.length);
+        expect(after.retiredReplicaConflictCapsule).toBeUndefined();
+        reopened.release();
+        expect(Array.from(transient)).toEqual(Array(32).fill(0));
     });
 });

@@ -14,6 +14,32 @@ avere le stesse revisioni, lo stesso epoch e registri di replica equivalenti.
 
 ## Checkpoint candidati CF-03/04
 
+### CF-04 — Copia durevole delle versioni concorrenti (candidato 28/11/2026)
+
+Dopo la diagnosi `retired-pending`, la schermata **solo candidata** può
+richiedere un nuovo controllo autenticato con ADK `recovery-inspect` già
+emessa, doppio registro D1 stabile, full scan AEAD, consenso/epoch/CSRF e
+inventario locale stabile. Soltanto quando il preflight dimostra una
+divergenza con versioni business concorrenti della stessa giornata o seduta,
+`stageRetiredReplicaConflictCapsule()` conserva **nello stesso archivio
+device cifrato** le alternative baseline, dispositivo e cloud, con percorsi e
+metadati causali di origine, baseline e versioni device dei documenti
+toccati dalle pending, journal originale, replica, clock, revisione,
+consenso e epoch osservati. Un nuovo edit durante la scansione o prima del
+commit IndexedDB invalida l'esatta revisione; un archivio già dotato di
+capsula non viene sovrascritto. Massimo 128 entità e 2 MiB serializzati:
+oltre il limite si rifiuta lo staging senza scartare gli originali.
+
+La capsula è una **testimonianza storica locale**, non un nuovo checkpoint:
+un cambio remoto successivo non viene fittiziamente sincronizzato con la
+copia salvata. La funzione non sceglie una versione, non esegue merge,
+claim, commit, ACK o provisioning ADK e non libera posti D1. Gli editor
+ordinari conservano la capsula tramite l'envelope; una successiva risoluzione
+esplicita e il trasferimento di pending a nuova membership restano da
+implementare e collaudare. Non attivare questo percorso nel fitness pubblico
+né dichiarare conclusi SYNC-7D/7E: è una protezione preliminare delle
+alternative, non una procedura di recupero completo.
+
 ### CF-04 — Esportazione volontaria delle versioni di replica ritirata (candidato 28/11/2026)
 
 La schermata **esclusivamente candidata** può preparare, su richiesta

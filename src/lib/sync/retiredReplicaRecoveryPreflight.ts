@@ -72,8 +72,9 @@ function hasUnexplainedBusinessChange(
     }
 }
 
-function monthlyEntities(documents: ReadonlyMap<string, DocumentData>, collection: string): Map<string, unknown> {
-    const entities = new Map<string, unknown>();
+type LocatedEntity = { docPath: string; value: unknown };
+function monthlyEntities(documents: ReadonlyMap<string, DocumentData>, collection: string): Map<string, LocatedEntity> {
+    const entities = new Map<string, LocatedEntity>();
     for (const [path, document] of documents) {
         if (!path.startsWith(`${collection}/`)) continue;
         for (const [id, value] of Object.entries(document)) {
@@ -81,23 +82,28 @@ function monthlyEntities(documents: ReadonlyMap<string, DocumentData>, collectio
             // the same workout ID in different months. A diagnosis cannot
             // safely choose one when provenance is ambiguous.
             if (entities.has(id)) throw new Error('Identità business duplicata nella scansione cloud.');
-            entities.set(id, value);
+            entities.set(id, { docPath: path, value });
         }
     }
     return entities;
 }
 
-/**
- * Same-entity changes can conflict even when their field stamps are disjoint.
- * This count compares authenticated business versions, never timestamps or
- * stamp overlap, and does not declare either version the winner.
- */
-function countCompetingEntityVersions(
+/** Business alternatives can conflict even with disjoint field stamps. */
+export type RetiredReplicaCompetingEntity = Readonly<{
+    kind: 'history' | 'nutrition' | 'active-workout';
+    entityId: string;
+    baseline: LocatedEntity | null;
+    device: LocatedEntity | null;
+    cloud: LocatedEntity | null;
+}>;
+
+/** Preserve original business alternatives with their document locations. */
+export function collectRetiredReplicaCompetingEntities(
     local: LocalEnvelope,
     base: ReadonlyMap<string, DocumentData>,
     desired: ReadonlyMap<string, DocumentData>,
     remote: ReadonlyMap<string, DocumentData>,
-): number {
+): RetiredReplicaCompetingEntity[] {
     const touched = new Map<string, Set<string>>();
     let activeWorkoutTouched = false;
     for (const operation of local.pending) {
@@ -115,17 +121,31 @@ function countCompetingEntityVersions(
         }
         touched.set(collection, ids);
     }
-    let competing = 0;
+    const competing: RetiredReplicaCompetingEntity[] = [];
     for (const [collection, ids] of touched) {
         const before = monthlyEntities(base, collection);
         const mine = monthlyEntities(desired, collection);
         const theirs = monthlyEntities(remote, collection);
         for (const id of ids) {
-            if (!equal(before.get(id), theirs.get(id)) && !equal(mine.get(id), theirs.get(id))) competing++;
+            if (!equal(before.get(id)?.value, mine.get(id)?.value)
+                && !equal(before.get(id)?.value, theirs.get(id)?.value)
+                && !equal(mine.get(id)?.value, theirs.get(id)?.value)) {
+                competing.push({ kind: collection === 'history_months' ? 'history' : 'nutrition',
+                    entityId: id, baseline: before.get(id) ?? null,
+                    device: mine.get(id) ?? null, cloud: theirs.get(id) ?? null });
+            }
         }
     }
-    if (activeWorkoutTouched && !equal(base.get('')?.activeWorkout, remote.get('')?.activeWorkout)
-        && !equal(desired.get('')?.activeWorkout, remote.get('')?.activeWorkout)) competing++;
+    if (activeWorkoutTouched && !equal(base.get('')?.activeWorkout, desired.get('')?.activeWorkout)
+        && !equal(base.get('')?.activeWorkout, remote.get('')?.activeWorkout)
+        && !equal(desired.get('')?.activeWorkout, remote.get('')?.activeWorkout)) {
+        const located = (document: DocumentData | undefined): LocatedEntity | null =>
+            document && Object.hasOwn(document, 'activeWorkout')
+                ? { docPath: '', value: document.activeWorkout } : null;
+        competing.push({ kind: 'active-workout', entityId: 'activeWorkout',
+            baseline: located(base.get('')), device: located(desired.get('')),
+            cloud: located(remote.get('')) });
+    }
     return competing;
 }
 
@@ -193,8 +213,8 @@ function describeCloudDivergence(
     }
     return { changedCloudFieldStamps,
         pendingWithOverlappingCloudStamps: overlappingPending.size, unclassifiedDocuments,
-        entitiesWithCompetingVersions: countCompetingEntityVersions(local, base, desired,
-            new Map([...cloud.documents].map(([path, document]) => [path, document.business]))) };
+        entitiesWithCompetingVersions: collectRetiredReplicaCompetingEntities(local, base, desired,
+            new Map([...cloud.documents].map(([path, document]) => [path, document.business]))).length };
 }
 
 /**

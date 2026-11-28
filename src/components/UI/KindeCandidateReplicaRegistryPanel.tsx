@@ -15,6 +15,8 @@ type OfflineState = { kind: 'idle' | 'loading' | 'unavailable' }
     | { kind: 'observed'; result: Awaited<ReturnType<Session['inspectCandidateOfflineReplicaJournal']>> };
 type RecoveryState = { kind: 'idle' | 'loading' | 'unavailable' }
     | { kind: 'observed'; result: Awaited<ReturnType<Session['inspectCandidateRetiredReplicaPreflight']>> };
+type ConflictPreservationState = { kind: 'idle' | 'working' | 'unavailable' }
+    | { kind: 'saved'; count: number; revision: number };
 
 function dateText(milliseconds: number): string {
     const date = new Date(milliseconds);
@@ -33,6 +35,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
     const [cancelOutcome, setCancelOutcome] = useState<'idle' | 'working' | 'cancelled' | 'committed' | 'pending' | 'unknown'>('idle');
     const [offlineState, setOfflineState] = useState<OfflineState>({ kind: 'idle' });
     const [recoveryState, setRecoveryState] = useState<RecoveryState>({ kind: 'idle' });
+    const [conflictPreservation, setConflictPreservation] = useState<ConflictPreservationState>({ kind: 'idle' });
     const [receiptState, setReceiptState] = useState<'idle' | 'working' | 'acknowledged' | 'unconfirmed' | 'none' | 'unknown'>('idle');
     const mounted = useRef(false);
     const running = useRef(false);
@@ -53,6 +56,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
         setCancelOutcome('idle');
         setOfflineState({ kind: 'idle' });
         setRecoveryState({ kind: 'idle' });
+        setConflictPreservation({ kind: 'idle' });
         setReceiptState('idle');
         setState({ kind: 'loading' });
         void session.inspectCandidateReplicas().then(observed => {
@@ -71,6 +75,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
         setCancelOutcome('idle');
         setOfflineState({ kind: 'idle' });
         setRecoveryState({ kind: 'idle' });
+        setConflictPreservation({ kind: 'idle' });
         setReceiptState('idle');
         void session.manageCandidateReplicaRetirement(witness).then(outcome => {
             if (!mounted.current) return;
@@ -101,6 +106,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
         setCancelOutcome('idle');
         setOfflineState({ kind: 'idle' });
         setRecoveryState({ kind: 'idle' });
+        setConflictPreservation({ kind: 'idle' });
         setReceiptState('idle');
         setPendingState({ kind: 'loading' });
         void session.manageCandidateReplicaCancellation().then(mutation => {
@@ -136,6 +142,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
         setCancelOutcome('idle');
         setOfflineState({ kind: 'loading' });
         setRecoveryState({ kind: 'idle' });
+        setConflictPreservation({ kind: 'idle' });
         setReceiptState('idle');
         void session.inspectCandidateOfflineReplicaJournal().then(result => {
             if (mounted.current) setOfflineState({ kind: 'observed', result });
@@ -149,10 +156,26 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
             || offlineState.result.kind !== 'retired-pending') return;
         running.current = true;
         setRecoveryState({ kind: 'loading' });
+        setConflictPreservation({ kind: 'idle' });
         void session.inspectCandidateRetiredReplicaPreflight().then(result => {
             if (mounted.current) setRecoveryState({ kind: 'observed', result });
         }).catch(() => {
             if (mounted.current) setRecoveryState({ kind: 'unavailable' });
+        }).finally(() => { running.current = false; });
+    };
+
+    const preserveConflicts = () => {
+        if (running.current || session.busy || recoveryState.kind !== 'observed'
+            || recoveryState.result.kind !== 'reconciliation-required'
+            || recoveryState.result.reason !== 'cloud-diverged'
+            || recoveryState.result.evidence.entitiesWithCompetingVersions === 0) return;
+        running.current = true;
+        setConflictPreservation({ kind: 'working' });
+        void session.preserveCandidateRetiredReplicaConflicts().then(result => {
+            if (mounted.current) setConflictPreservation({ kind: 'saved',
+                count: result.preservedEntities, revision: result.cloudRevision });
+        }).catch(() => {
+            if (mounted.current) setConflictPreservation({ kind: 'unavailable' });
         }).finally(() => { running.current = false; });
     };
 
@@ -178,6 +201,7 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
     const disabled = session.busy || state.kind === 'loading' || pendingState.kind === 'loading'
         || offlineState.kind === 'loading'
         || recoveryState.kind === 'loading'
+        || conflictPreservation.kind === 'working'
         || receiptState === 'working'
         || maintenance === 'working' || cancelOutcome === 'working';
 
@@ -244,8 +268,17 @@ export function KindeCandidateReplicaRegistryPanel({ session }: { session: Sessi
                                     : recoveryState.result.reason === 'local-replay-diverged' ? 'il journal non riproduce esattamente lo stato locale.'
                                         : recoveryState.result.reason === 'no-old-replica' ? 'manca un’identità causale originale verificabile.'
                                             : 'non esistono più operazioni pendenti nella copia riletta.'}</p>}
+                {recoveryState.result.kind === 'reconciliation-required'
+                    && recoveryState.result.reason === 'cloud-diverged'
+                    && recoveryState.result.evidence.entitiesWithCompetingVersions > 0
+                    && <button type="button" className="btn" disabled={disabled || conflictPreservation.kind === 'saved'}
+                        onClick={preserveConflicts}>Conserva le versioni concorrenti nell’archivio cifrato</button>}
                 <p>Diagnosi temporanea di sola lettura: nessun ACK, claim, scelta di conflitto o riattribuzione del journal. Non cancellare questa copia finché il recupero non sarà disponibile.</p>
             </div>}
+            {conflictPreservation.kind === 'working' && <p role="status">Nuovo confronto autenticato e salvataggio cifrato delle versioni: nessuna modifica inviata al cloud…</p>}
+            {conflictPreservation.kind === 'saved' && <p role="status">{conflictPreservation.count === 1
+                ? 'Conservata 1 entità con versioni concorrenti' : `Conservate ${conflictPreservation.count} entità con versioni concorrenti`}, insieme alle alternative e al journal originale, nell’archivio cifrato di questo dispositivo (revisione cloud osservata {conflictPreservation.revision}). È una copia storica: nessuna versione è stata scelta o sincronizzata. Conserva questo dispositivo.</p>}
+            {conflictPreservation.kind === 'unavailable' && <p role="alert">Conservazione non confermata: una scheda concorrente, la sessione, il consenso o la copia cloud potrebbero essere cambiati. Verifica nuovamente l’archivio prima di riprovare. Non eliminare il journal originale.</p>}
             {pendingState.kind === 'loading' && <p role="status">Lettura della richiesta cifrata in corso…</p>}
             {pendingState.kind === 'none' && <p role="status">Nessuna richiesta di registrazione o ritiro in sospeso in questo archivio.</p>}
             {pendingState.kind === 'unavailable' && <p role="alert">Impossibile verificare una richiesta locale: nessun annullamento eseguito.</p>}
