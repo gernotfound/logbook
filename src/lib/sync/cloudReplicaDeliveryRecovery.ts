@@ -1,11 +1,12 @@
 import equal from 'fast-deep-equal';
+import { getCachedCatalog } from '../catalog/catalogService';
 import { assertCloudBusinessPreserved } from './cloudBusinessIntegrity';
 import { readAccountCloudDocument } from './cloudDocumentRead';
 import { readAuthenticatedCloudflareCheckpoint } from './cloudReplicaCheckpoint';
 import { prepareCloudflareCommit } from './cloudReplicaCommit';
 import { parseCloudflareDeliveryIntent, type CloudflareDeliveryIntent } from './cloudReplicaDeliveryRecord';
 import { normalizeRemote } from './cloudMergeEngine';
-import { rootDocument } from './documentProjection';
+import { projectDocuments, rootDocument, type DocumentData } from './documentProjection';
 import type {
     CloudReplicaCompleteScan, createCloudflareReplicaTransport,
 } from './cloudReplicaTransport';
@@ -14,8 +15,8 @@ import { normalizeStorageOwner } from './owner';
 import { updateArchiveRecord } from './secureArchiveRepository';
 import { validateLocalEnvelope } from './localEnvelopeValidation';
 import type { LocalEnvelope } from './localEnvelopeValidation';
-import { coversVectorClock, mergeVectors, parseSyncMeta } from './semanticProjection';
-import { pathFromFieldKey } from './semanticProjection/metadata';
+import { applySemanticOperations, coversVectorClock, diffDocuments, mergeVectors, parseSyncMeta } from './semanticProjection';
+import { fieldKey, pathFromFieldKey } from './semanticProjection/metadata';
 import type { NormalizedCloudDocument } from '../schemaEvolution';
 
 type Transport = Pick<ReturnType<typeof createCloudflareReplicaTransport>,
@@ -80,6 +81,84 @@ function independentProfileRebase(
     }
     expected.profile = expectedProfile;
     return equal(expected, remote);
+}
+
+/**
+ * Workout history is sharded by month but causally keyed by workout ID. Two
+ * independent upserts in the SAME month can be restaged without replacing
+ * one another. Overlapping workout IDs, incomplete stamps, peer deletes and
+ * unaccounted clocks must stay pending for explicit reconciliation.
+ */
+function independentHistoryEntityRebase(
+    local: LocalEnvelope,
+    operations: CloudflareDeliveryIntent['operations'],
+    path: string,
+    staged: NormalizedCloudDocument | undefined,
+    verified: NormalizedCloudDocument | undefined,
+    baseline: DocumentData,
+    allDocuments: ReadonlyMap<string, NormalizedCloudDocument>,
+): boolean {
+    if (!path.startsWith('history_months/') || !staged || !verified
+        || !operations.length || operations.some(op => op.docPath !== path || op.path.length < 1
+            || op.guard || op.isDelete)) return false;
+
+    const touched = new Set(operations.map(op => op.path[0]));
+    const original = normalizeRemote(path, staged.business);
+    const remote = normalizeRemote(path, verified.business);
+    assertCloudBusinessPreserved(path, staged.business, original);
+    assertCloudBusinessPreserved(path, verified.business, remote);
+
+    // The original immutable ciphertext must be exactly the replay of the
+    // current durable baseline and original operations, not a substitute for
+    // a missing cloud snapshot or a hidden local overwrite.
+    const replay = applySemanticOperations(new Map([[path, baseline]]), operations,
+        local.syncMetaByDocument).documents.get(path);
+    if (!equal(replay, original)) return false;
+
+    const changed = new Set<string>();
+    for (const id of new Set([...Object.keys(baseline), ...Object.keys(remote)])) {
+        if (equal(baseline[id], remote[id])) continue;
+        if (touched.has(id) || !Object.hasOwn(remote, id)) return false;
+        changed.add(id);
+    }
+    if (!changed.size) return false;
+    // A workout ID is globally stable even though its storage is monthly.
+    // A competing move or duplicate ID in another month cannot be treated as
+    // an independent insertion in this shard.
+    for (const [otherPath, document] of allDocuments) {
+        if (otherPath === path || !otherPath.startsWith('history_months/')) continue;
+        if ([...touched, ...changed].some(id => Object.hasOwn(document.business, id))) return false;
+    }
+
+    // Use the SAME semantic diff policy as production, and demand a current
+    // field stamp for every changed path. A stamp on one field of a workout
+    // cannot account for changed sibling fields or an ignored mutation.
+    let remoteChanges;
+    try {
+        remoteChanges = diffDocuments(new Map([[path, baseline]]), new Map([[path, remote]]),
+            'diagnostic', 1, { diagnostic: 1 });
+    } catch { return false; }
+    if (!remoteChanges.length || remoteChanges.some(op => op.isDelete
+        || !changed.has(op.path[0]) || touched.has(op.path[0]))) return false;
+    const witnessed = new Set(remoteChanges.map(op => fieldKey(op.path)));
+
+    const previous = parseSyncMeta(local.syncMetaByDocument[path]);
+    const current = parseSyncMeta(verified.sync);
+    if (!coversVectorClock(current.clock, previous.clock)) return false;
+    let accountedClock = mergeVectors(previous.clock, ...operations.map(op => op.clock));
+    const observed = new Set<string>();
+    for (const key of new Set([...Object.keys(previous.fields), ...Object.keys(current.fields)])) {
+        if (equal(previous.fields[key], current.fields[key])) continue;
+        const recordPath = pathFromFieldKey(key);
+        if (!recordPath.length || !changed.has(recordPath[0]) || !witnessed.has(key)) return false;
+        const stamp = current.fields[key];
+        if (!stamp || stamp.deleted || stamp.deleteClock || stamp.guard || stamp.candidates?.length
+            || !Object.hasOwn(remote, recordPath[0])) return false;
+        observed.add(key);
+        accountedClock = mergeVectors(accountedClock, stamp.clock);
+    }
+    if (observed.size !== witnessed.size) return false;
+    return coversVectorClock(accountedClock, current.clock);
 }
 
 /**
@@ -159,16 +238,28 @@ export async function restageUncommittedCloudflareDelivery(
 
     const byPath = new Map(scan.documents.map(item => [item.path, item]));
     const paths = [...new Set(original.operations.map(operation => operation.docPath))];
+    const stagedByPath = new Map(original.batch.documents.map(document => [document.path, document.document]));
     // Every D1 document write records the committing control revision.
     // Unchanged documents can be safely re-sealed; changed documents need
     // actual causal and business witnesses, not just a successful AEAD scan.
-    const originalRoot = original.batch.documents.find(document => document.path === '');
+    const originalRoot = stagedByPath.get('');
     const openedOriginalRoot = originalRoot ? readAccountCloudDocument(
-        originalRoot.document, 'D1 original recovery intent', uid, '', accountKey,
+        originalRoot, 'D1 original recovery intent', uid, '', accountKey,
     ) : undefined;
+    const changedHistory = paths.some(path => path.startsWith('history_months/')
+        && (byPath.get(path)?.revision ?? 0) > original.batch.expectedRevision);
+    const catalog = changedHistory ? await getCachedCatalog() : undefined;
+    requireCurrent(guard);
+    const baselineDocuments = catalog ? projectDocuments(local.baseline, catalog) : new Map<string, DocumentData>();
     if (paths.some(path => (byPath.get(path)?.revision ?? 0) > original.batch.expectedRevision
-        && (path !== '' || !openedOriginalRoot || !independentProfileRebase(local,
-            original.operations, openedOriginalRoot, checkpoint.documents.get(path))))) {
+        && !(path === '' && openedOriginalRoot && independentProfileRebase(local,
+            original.operations, openedOriginalRoot, checkpoint.documents.get(path)))
+        && !(path.startsWith('history_months/') && independentHistoryEntityRebase(
+            local, original.operations.filter(op => op.docPath === path), path,
+            stagedByPath.has(path)
+                ? readAccountCloudDocument(stagedByPath.get(path),
+                    'D1 original history recovery intent', uid, path, accountKey) : undefined,
+            checkpoint.documents.get(path), baselineDocuments.get(path) ?? {}, checkpoint.documents)))) {
         return 'reconciliation-required';
     }
     const snapshot = {

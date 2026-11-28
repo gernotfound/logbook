@@ -1,14 +1,151 @@
 import { get } from 'idb-keyval';
 import { describe, expect, it } from 'vitest';
+import { UserDataSchema } from '../../../src/lib/schema';
+import type { UserData } from '../../../src/types';
+import { fieldKey } from '../../../src/lib/sync/semanticProjection/metadata';
+import { applySemanticOperations, diffDocuments } from '../../../src/lib/sync/semanticProjection';
 import type { CandidateJournalTestContext } from './cloudflareJournalCandidate.test';
 
 export function registerCandidateJournalRebaseCases({
     owner, storeKey, adk, profile, savedDelivery, changedRemote, transport,
     readLocal, deliverCloudflareJournalCandidate, CloudReplicaTransportError,
     readAccountCloudDocument, parseSyncMeta, sealCloudDocument, commitLocal,
-    seed, updateArchiveRecord, stageCloudflareDelivery,
+    seed, updateArchiveRecord, stageCloudflareDelivery, initializeLocal, adoptReplicaCheckpoint,
 }: CandidateJournalTestContext): void {
     describe('verified 409 rebase, AEAD and competing-device recovery', () => {
+    const month = 'history_months/2026-11';
+    const workout = (id: string, note: string) => ({ id, date: '2026-11-07', sessionNote: note,
+        exercises: [{ id: `${id}-row`, exId: 'bench', sets: [{ id: `${id}-set`, kg: '40', reps: '8' }] }],
+    });
+    const history = (sessions: ReturnType<typeof workout>[]): UserData =>
+        UserDataSchema.parse({ history: sessions }) as unknown as UserData;
+
+    async function stagedHistory() {
+        const original = workout('baseline', 'existing');
+        const offline = workout('offline', 'my local session');
+        const base = history([original]);
+        await initializeLocal(owner, base);
+        const now = Date.now();
+        const replica = { slot: 's00', replicaId: 'cf04-candidate-device', generation: 1,
+            checkpointAtMs: now, leaseUntilMs: now + 86_400_000 };
+        const baseMeta = { protocolVersion: 3 as const, clock: {}, fields: {},
+            writer: { slot: 's00', replicaId: replica.replicaId, generation: 1, seq: 0,
+                consentRevision: 1 } };
+        await adoptReplicaCheckpoint(owner, { identity: replica, baseSeq: 0 },
+            { clock: {}, syncMetaByDocument: { [month]: baseMeta } });
+        await commitLocal(owner, history([original, offline]), base);
+        const local = (await readLocal(owner))!;
+        expect(local.pending.length).toBeGreaterThan(0);
+        expect(local.pending.every(op => op.docPath === month && op.path[0] === 'offline')).toBe(true);
+        const control = { uid: owner.slice(5), revision: 1, fenceEpoch: 5, consentRevision: 1,
+            replicas: { s00: { ...replica, lastSeq: 0, status: 'active' as const,
+                checkpointClock: {} } } };
+        const snapshot = { revision: 1, fenceEpoch: 5, consentRevision: 1,
+            documents: [{ path: month, revision: 1, document: sealCloudDocument(adk, owner.slice(5),
+                month, { baseline: original }, baseMeta) }] };
+        await stageCloudflareDelivery(owner, local.pending, snapshot, control,
+            replica, 'batch000000009919', adk, () => true);
+        return { local, control, snapshot, original, offline };
+    }
+
+    function competingHistory(setup: Awaited<ReturnType<typeof stagedHistory>>, options: {
+        peerId?: string; stampPath?: string[] | null; unexplainedClock?: boolean;
+        peerValue?: ReturnType<typeof workout>;
+    } = {}) {
+        const peerId = options.peerId ?? 'peer';
+        const peer = options.peerValue ?? workout(peerId, 'other device session');
+        const now = Date.now();
+        const control = { ...setup.control, revision: 2, replicas: {
+            ...setup.control.replicas,
+            s01: { slot: 's01', replicaId: 'other-device-replica', generation: 1,
+                status: 'active' as const, lastSeq: 1, checkpointClock: { s01: 1 },
+                checkpointAtMs: now, leaseUntilMs: now + 86_400_000 },
+        } };
+        const baseDoc = { baseline: history([setup.original]).history![0] };
+        const desiredDoc = { ...baseDoc, [peerId]: history([peer]).history![0] };
+        const originalDocs = new Map([[month, baseDoc]]);
+        const operations = diffDocuments(originalDocs, new Map([[month, desiredDoc]]),
+            's01', 1, { s01: 1 });
+        const computed = applySemanticOperations(originalDocs, operations);
+        const business = computed.documents.get(month)!;
+        const sync = computed.syncMetas[month];
+        const fields = options.stampPath === undefined ? sync.fields
+            : options.stampPath === null ? {}
+                : { [fieldKey(options.stampPath)]: sync.fields[fieldKey(options.stampPath)] };
+        const doc = sealCloudDocument(adk, owner.slice(5), month, business, {
+            ...sync, clock: { s01: options.unexplainedClock ? 2 : 1 }, fields,
+            writer: { slot: 's01', replicaId: 'other-device-replica', generation: 1,
+                seq: 1, consentRevision: 1 },
+        });
+        return { control, scan: { revision: 2, fenceEpoch: 5, consentRevision: 1,
+            documents: [{ path: month, revision: 2, document: doc }] } };
+    }
+
+    it('conserves two different workouts edited offline in the same cloud month', async () => {
+        const setup = await stagedHistory();
+        const { control, scan } = competingHistory(setup);
+        const remote = transport(setup.control, setup.snapshot);
+        remote.commit.mockRejectedValueOnce(new CloudReplicaTransportError(409));
+        remote.commitOutcome.mockResolvedValueOnce({ outcome: 'not-committed', currentRevision: 2 });
+        remote.control.mockResolvedValue(control);
+        remote.scanAll.mockResolvedValue(scan);
+
+        expect(await deliverCloudflareJournalCandidate(owner, adk, remote, 'csrf-session', () => true))
+            .toBe('retry-staged');
+        expect((await readLocal(owner))!.pending).toEqual(setup.local.pending);
+        const replacement = (await readLocal(owner))!.cloudflareDelivery!.batch.documents[0];
+        const decrypted = readAccountCloudDocument(replacement.document, 'independent history rebase',
+            owner.slice(5), month, adk);
+        expect(Object.keys(decrypted.business).sort()).toEqual(['baseline', 'offline', 'peer']);
+        expect(decrypted.business.offline).toMatchObject({ id: 'offline', sessionNote: 'my local session' });
+        expect(decrypted.business.peer).toMatchObject({ id: 'peer', sessionNote: 'other device session' });
+        expect(remote.commit).toHaveBeenCalledTimes(1);
+        expect(remote.scanAll).toHaveBeenCalledOnce();
+    });
+
+    it.each([
+        { label: 'same-workout update', peerId: 'offline', stampPath: ['offline', 'sessionNote'] },
+        { label: 'unwitnessed peer update', stampPath: null },
+        { label: 'one nested witness for several changed fields', stampPath: ['peer', 'sessionNote'] },
+        { label: 'extra unaccounted causal frontier', unexplainedClock: true },
+    ])('keeps the original ciphertext on $label', async ({ peerId, stampPath, unexplainedClock }) => {
+        const setup = await stagedHistory();
+        const { control, scan } = competingHistory(setup, { peerId, stampPath, unexplainedClock });
+        const remote = transport(setup.control, setup.snapshot);
+        remote.commit.mockRejectedValueOnce(new CloudReplicaTransportError(409));
+        remote.commitOutcome.mockResolvedValueOnce({ outcome: 'not-committed', currentRevision: 2 });
+        remote.control.mockResolvedValue(control);
+        remote.scanAll.mockResolvedValue(scan);
+        const originalCiphertext = await get(storeKey);
+
+        expect(await deliverCloudflareJournalCandidate(owner, adk, remote, 'csrf-session', () => true))
+            .toBe('reconciliation-required');
+        expect(await get(storeKey)).toBe(originalCiphertext);
+        expect((await readLocal(owner))!.pending).toEqual(setup.local.pending);
+    });
+
+    it('rejects a competing cross-month workout ID even if local and peer edits are disjoint', async () => {
+        const setup = await stagedHistory();
+        const { control, scan } = competingHistory(setup);
+        const remote = transport(setup.control, setup.snapshot);
+        remote.commit.mockRejectedValueOnce(new CloudReplicaTransportError(409));
+        remote.commitOutcome.mockResolvedValueOnce({ outcome: 'not-committed', currentRevision: 2 });
+        remote.control.mockResolvedValue(control);
+        const conflictingSession = { ...history([setup.offline]).history![0], date: '2026-10-07' };
+        remote.scanAll.mockResolvedValue({ ...scan, documents: [...scan.documents, {
+            path: 'history_months/2026-10', revision: 2,
+            document: sealCloudDocument(adk, owner.slice(5), 'history_months/2026-10',
+                { offline: conflictingSession }, { protocolVersion: 3, clock: { s01: 1 }, fields: {
+                    [fieldKey(['offline'])]: { actorId: 's01', seq: 1, clock: { s01: 1 } },
+                }, writer: { slot: 's01', replicaId: 'other-device-replica', generation: 1,
+                    seq: 1, consentRevision: 1 } }),
+        }] });
+        const before = await get(storeKey);
+
+        expect(await deliverCloudflareJournalCandidate(owner, adk, remote, 'csrf-session', () => true))
+            .toBe('reconciliation-required');
+        expect(await get(storeKey)).toBe(before);
+    });
     it('rebases a provably uncommitted 409 only after full AEAD scan and two stable controls', async () => {
         const setup = await savedDelivery();
         const before = (await readLocal(owner))!.cloudflareDelivery!.batch;
