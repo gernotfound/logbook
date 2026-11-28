@@ -20,12 +20,21 @@ function mergeField(base: unknown, device: unknown, cloud: unknown): MergeResult
     if (Array.isArray(base) || Array.isArray(device) || Array.isArray(cloud)) {
         return equal(base, device) && equal(base, cloud) ? { safe: true, value: base } : { safe: false };
     }
-    if (equal(device, cloud)) return { safe: true, value: device };
-    if (equal(device, base)) return { safe: true, value: cloud };
-    if (equal(cloud, base)) return { safe: true, value: device };
-    // Two independently inserted objects under the same business ID may have
-    // different authors/meaning: a field union would invent a single entity.
-    if (!object(base) || !object(device) || !object(cloud)) return { safe: false };
+    // Replacing/creating/removing a nested object also changes structure.
+    // A scalar shortcut must not turn that into an implicit deletion.
+    if ((object(base) || object(device) || object(cloud))
+        && (!object(base) || !object(device) || !object(cloud))) {
+        return equal(base, device) && equal(base, cloud) ? { safe: true, value: base } : { safe: false };
+    }
+    if (!object(base) || !object(device) || !object(cloud)) {
+        if (equal(device, cloud)) return { safe: true, value: device };
+        if (equal(device, base)) return { safe: true, value: cloud };
+        if (equal(cloud, base)) return { safe: true, value: device };
+        // A union of independently created objects would invent one entity.
+        return { safe: false };
+    }
+    // Recurse even when one whole nested object matches the baseline: a fast
+    // equality shortcut would hide edits to its descendant arrays/deletions.
     const merged: Record<string, unknown> = {};
     for (const key of new Set([...Object.keys(base), ...Object.keys(device), ...Object.keys(cloud)])) {
         const pick = (source: Record<string, unknown>) => Object.hasOwn(source, key) ? source[key] : missing;

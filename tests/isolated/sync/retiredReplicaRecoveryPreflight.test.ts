@@ -745,11 +745,36 @@ describe('retired replica recovery preflight, no mutation or new causal identity
         expect(previewRetiredReplicaConflictResolution(oneChangedList)).toEqual([{
             kind: 'manual-required', entityKind: 'nutrition', entityId: date,
         }]);
+        const nestedList = structuredClone(capsule);
+        const nestedBase = { date, weight: 70, group: { meals: [{ id: 'meal-1', amount: 10 }] } };
+        nestedList.entries[0].baseline!.value = nestedBase;
+        nestedList.entries[0].device!.value = { ...nestedBase,
+            group: { meals: [{ id: 'meal-1', amount: 20 }] },
+        };
+        nestedList.entries[0].cloud!.value = { ...nestedBase, weight: 71 };
+        expect(previewRetiredReplicaConflictResolution(nestedList)).toEqual([{
+            kind: 'manual-required', entityKind: 'nutrition', entityId: date,
+        }]);
         const fieldRemoval = structuredClone(capsule);
         fieldRemoval.entries[0].baseline!.value = { date, weight: 70, sleepHours: '07:00' };
         fieldRemoval.entries[0].device!.value = { date, sleepHours: '07:00' };
         fieldRemoval.entries[0].cloud!.value = { date, weight: 70, sleepHours: '08:00' };
         expect(previewRetiredReplicaConflictResolution(fieldRemoval)).toEqual([{
+            kind: 'manual-required', entityKind: 'nutrition', entityId: date,
+        }]);
+        const nestedRemoval = structuredClone(capsule);
+        const nestedBefore = { date, weight: 70, notes: { a: 'old', b: 'keep' } };
+        nestedRemoval.entries[0].baseline!.value = nestedBefore;
+        nestedRemoval.entries[0].device!.value = { ...nestedBefore, notes: { b: 'keep' } };
+        nestedRemoval.entries[0].cloud!.value = { ...nestedBefore, weight: 71 };
+        expect(previewRetiredReplicaConflictResolution(nestedRemoval)).toEqual([{
+            kind: 'manual-required', entityKind: 'nutrition', entityId: date,
+        }]);
+        const replacedObject = structuredClone(capsule);
+        replacedObject.entries[0].baseline!.value = nestedBefore;
+        replacedObject.entries[0].device!.value = { ...nestedBefore, notes: null };
+        replacedObject.entries[0].cloud!.value = { ...nestedBefore, weight: 71 };
+        expect(previewRetiredReplicaConflictResolution(replacedObject)).toEqual([{
             kind: 'manual-required', entityKind: 'nutrition', entityId: date,
         }]);
         const active = structuredClone(capsule);
