@@ -37,6 +37,13 @@ stesso UID non adotta intenti sigillati sotto un epoch precedente.
 Questa capacità non trasferisce pending mai inviate né risolve conflitti
 SYNC-7D/7E e non è montata nel fitness pubblico `identityOnly`.
 
+La diagnosi offline distingue `transition-pending` con `sealed-delivery`
+dalle richieste `replica-management` (claim, ritiro e annullamento).
+La schermata candidata propone il controllo della ricevuta soltanto per il
+primo caso; le richieste di gestione conservano il proprio percorso di
+riconciliazione. La distinzione non sostituisce la verifica della ricevuta
+né concede permesso di ACK o ritrasmissione.
+
 ### CF-04 — Bridge preflight autenticato, senza provisioning ADK (27/11/2026)
 
 La schermata di registro **solo candidata** espone ora, soltanto dopo aver

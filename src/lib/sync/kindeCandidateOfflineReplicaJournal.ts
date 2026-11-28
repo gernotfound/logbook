@@ -17,7 +17,8 @@ type Principal = Confirmed['principal'];
 export type CandidateOfflineReplicaJournalObservation =
     | { kind: 'no-pending' }
     | { kind: 'archived-consent-pending'; archivedOperations: number }
-    | { kind: 'transition-pending'; pendingOperations: number }
+    | { kind: 'transition-pending'; pendingOperations: number;
+        transition: 'sealed-delivery' | 'replica-management' }
     | { kind: 'first-claim-pending'; pendingOperations: number }
     | { kind: 'active-pending'; pendingOperations: number; slot: string; generation: number }
     | { kind: 'retired-pending'; pendingOperations: number; slot: string; generation: number;
@@ -82,7 +83,8 @@ export async function inspectKindeCandidateOfflineReplicaJournal({
         let observedActiveMembership: ReplicaControlEntry | null = null;
         if (local.cloudflareDelivery || local.cloudflareReplicaClaim || local.cloudflareReplicaRetirement
             || local.cloudflareReplicaCancellation) {
-            result = { kind: 'transition-pending', pendingOperations: count };
+            result = { kind: 'transition-pending', pendingOperations: count,
+                transition: local.cloudflareDelivery ? 'sealed-delivery' : 'replica-management' };
         } else if (!count && archivedCount > 0) {
             result = { kind: 'archived-consent-pending', archivedOperations: archivedCount };
         } else if (!count) {
